@@ -1,0 +1,19 @@
+name: "Publish to PyPI"
+description: "Downloads artifacts and publishes to PyPI"
+runs:
+  using: "composite"
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: dist
+        path: dist/
+
+    - name: Publish distribution 📦 to PyPI
+      shell: bash
+      run: uv publish

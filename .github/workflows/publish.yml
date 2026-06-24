@@ -1,0 +1,82 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+" # e.g. v1.2.3
+      - "v[0-9]+.[0-9]+.[0-9]+-*" # e.g. v1.2.3-rc1
+
+  pull_request:
+    types: [closed]
+    branches: [master, main]
+
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Force the publish step to run even if the tag is not a release tag"
+        required: false
+        type: boolean
+        default: false
+
+# ── jobs ──────────────────────────────────────────────────────────────────────
+
+jobs:
+  # Runs only when a PR is merged. Bumps the patch version, commits back to the
+  # base branch with [skip ci], and pushes a vX.Y.Z tag to trigger the release.
+  bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Bump version
+        id: bump
+        uses: ./.github/actions/bump-version
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_number: ${{ github.event.pull_request.number }}
+
+  # Builds the wheel. Runs after a successful bump, on a tag push, or on
+  # workflow_dispatch. Skips entirely for PRs that were closed without merging.
+  build:
+    name: Build distribution
+    needs: bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Use the newly-created tag when bump ran; otherwise the triggering ref.
+          ref: ${{ needs.bump.outputs.tag || github.ref }}
+
+      - name: Build
+        uses: ./.github/actions/build-dist
+
+  publish:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    # only publish to PyPI on tag pushes, OR workflow_dispatch with dry_run=false
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/py-exegia
+    permissions:
+      actions: read
+      id-token: write # IMPORTANT: mandatory for trusted publishing
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish
+        uses: ./.github/actions/publish-pypi

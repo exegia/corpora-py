@@ -1,0 +1,49 @@
+// Project tasks configuration. See https://zed.dev/docs/tasks for documentation.
+//
+[
+  {
+    "label": "Start",
+    "command": "uv",
+    "args": ["run", "scripts/start"],
+    // Env overrides for the command, will be appended to the terminal's environment from the settings.
+    "env": { "foo": "bar" },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    // Where to place the task's terminal item after starting the task:
+    "reveal_target": "dock",
+    // What to do with the terminal pane and tab, after the command had finished:
+    "hide": "never",
+    "shell": "system",
+    // Whether to show the task line in the output of the spawned task, defaults to `true`.
+    "show_summary": true,
+    // Whether to show the command line in the output of the spawned task, defaults to `true`.
+    "show_command": true,
+    // Which edited buffers to save before running the task:
+    "save": "none",
+    // Represents the tags for inline runnable indicators, or spawning multiple tasks at once.
+    "tags": ["start"]
+  },
+  {
+    "label": "Setup",
+    "command": "uv",
+    "args": ["run", "scripts/setup"],
+    // Env overrides for the command, will be appended to the terminal's environment from the settings.
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    // Where to place the task's terminal item after starting the task:
+    "reveal_target": "dock",
+    // What to do with the terminal pane and tab, after the command had finished:
+    "hide": "never",
+    "shell": "system",
+    // Whether to show the task line in the output of the spawned task, defaults to `true`.
+    "show_summary": true,
+    // Whether to show the command line in the output of the spawned task, defaults to `true`.
+    "show_command": true,
+    // Which edited buffers to save before running the task:
+    "save": "none",
+    // Represents the tags for inline runnable indicators, or spawning multiple tasks at once.
+    "tags": ["start"]
+  },
+]

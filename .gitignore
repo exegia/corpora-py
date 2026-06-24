@@ -1,0 +1,53 @@
+# dependencies (bun install)
+node_modules
+**/__pycache__/
+
+# output
+out
+dist
+*.tgz
+
+# code coverage
+coverage
+*.lcov
+
+**/*.sql
+
+# logs
+logs
+_.log
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+.env.production
+.venv/
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# Supabase
+src/exegia/supabase/.branches
+src/exegia/supabase/.temp
+src/exegia/supabase/*.pem
+
+# publish credentials
+.env.publish
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local
+src/exegia/supabase/seeds/*_rows.sql

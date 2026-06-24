@@ -1,0 +1,63 @@
+name: 'Bump Version'
+description: 'Bumps the version in pyproject.toml and __init__.py, commits, and tags'
+inputs:
+  github_token:
+    description: 'GitHub Token'
+    required: true
+  pr_number:
+    description: 'Pull Request Number'
+    required: true
+  base_ref:
+    description: 'Base branch to push the version bump commit to'
+    required: false
+outputs:
+  tag:
+    description: 'The new version tag'
+    value: ${{ steps.bump.outputs.tag }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Bump version
+      id: bump
+      shell: bash
+      run: |
+        VERSION=$(grep -m1 '^version' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+        NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+        TAG="v$NEW_VERSION"
+
+        sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
+        sed -i "s/__version__ = \"$VERSION\"/__version__ = \"$NEW_VERSION\"/" src/exegia/__init__.py
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add pyproject.toml src/exegia/__init__.py
+        git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+        git tag "$TAG"
+
+        # Determine the base branch from action input, current ref, or PR base ref
+        BASE_REF="${{ inputs.base_ref }}"
+        if [ -z "$BASE_REF" ]; then
+          BASE_REF="${GITHUB_REF_NAME}"
+        fi
+        if [ -z "$BASE_REF" ]; then
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+        fi
+        if [ -z "$BASE_REF" ]; then
+          echo "Unable to determine base branch. Set the 'base_ref' input when using this action outside pull_request events." >&2
+          exit 1
+        fi
+
+        git push origin HEAD:$BASE_REF
+        git push origin "$TAG"
+
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        echo "Bumped $VERSION → $NEW_VERSION (tag $TAG)"
+
+    - name: Add version label to PR
+      shell: bash
+      run: |
+        gh label create "${{ steps.bump.outputs.tag }}" --color 0e8a16 --description "Released version" || true
+        gh pr edit ${{ inputs.pr_number }} --add-label "${{ steps.bump.outputs.tag }}"
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
