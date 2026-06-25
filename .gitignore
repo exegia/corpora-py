@@ -49,3 +49,4 @@ src/exegia/supabase/*.pem
 .env.keys
 .env.*.local
 src/exegia/supabase/seeds/*_rows.sql
+src/corpora_py.egg-info/
