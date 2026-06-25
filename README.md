@@ -1,47 +1,20 @@
 # Exegia Backend
 
-> Graph-based biblical and religious text study API — powered by Context-Fabric, FastAPI, Strawberry GraphQL, and FastMCP.
+> Graph-based biblical and religious text study API — powered by Context-Fabric, Supabase and FastMCP.
 
 ---
 
 ## What is this?
 
-Exegia is a backend for studying annotated religious texts (Bible, Quran, Tanakh, commentaries, lexicons). It exposes corpus data through two surfaces:
+Exegia is a backend for studying annotated religious texts (Bible, Quran, Tanakh, commentaries, lexicons). It exposes
+corpus data through two surfaces:
 
-| Surface         | Technology           | Use case                          |
-| --------------- | -------------------- | --------------------------------- |
-| **GraphQL API** | Strawberry + FastAPI | Frontend apps, structured queries |
-| **MCP server**  | FastMCP              | AI assistants (Claude, GPT, etc.) |
+| Surface        | Technology | Use case                          |
+|----------------|------------|-----------------------------------|
+| **MCP server** | FastMCP    | AI assistants (Claude, GPT, etc.) |
 
-Corpora are loaded from [Context-Fabric](https://context-fabric.ai) — a graph-based annotated text engine. Every word, verse, chapter, and book is a typed node in a graph with queryable features (lemma, morphology, gloss, etc.).
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Clients                             │
-│       Frontend     │   AI Assistant    │   CLI / Script     │
-└────────┬───────────┴────────┬──────────┴────────┬───────────┘
-         │                    │                   │
-   GraphQL (Strawberry)  MCP (FastMCP)      REST (FastAPI)
-         │                    │                   │
-┌────────▼────────────────────▼───────────────────▼───────────┐
-│                       exegia package                        │
-│    .graphql   │   .mcp   │   .corpus   │   .utils          │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-           ┌────────────────▼────────────────┐
-           │      Context-Fabric (cfabric)    │
-           │   F · E · L · T · S · N · C     │
-           └────────────────┬────────────────┘
-                            │
-           ┌────────────────▼────────────────┐
-           │         corpus datasets          │
-           │   ~/.exegia/datasets/...         │
-           └─────────────────────────────────┘
-```
+Corpora are loaded from [Context-Fabric](https://context-fabric.ai) — a graph-based annotated text engine. Every word,
+verse, chapter, and book is a typed node in a graph with queryable features (lemma, morphology, gloss, etc.).
 
 ---
 
@@ -50,9 +23,8 @@ Corpora are loaded from [Context-Fabric](https://context-fabric.ai) — a graph-
 Everything lives in the `exegia` namespace (`src/exegia/`):
 
 | Module           | Purpose                                         |
-| ---------------- | ----------------------------------------------- |
+|------------------|-------------------------------------------------|
 | `exegia.mcp`     | FastMCP server — 11 corpus tools for AI clients |
-| `exegia.graphql` | Strawberry GraphQL schema over corpus data      |
 | `exegia.corpus`  | Fetch TF datasets from git repositories         |
 | `exegia.utils`   | EPUB / HTML → Text-Fabric converters            |
 | `exegia.models`  | Shared enums and data model definitions         |
@@ -64,8 +36,6 @@ Everything lives in the `exegia` namespace (`src/exegia/`):
 ## Tech stack
 
 - **Python 3.13+** with [uv](https://docs.astral.sh/uv/) for dependency management
-- **FastAPI** — HTTP framework
-- **Strawberry GraphQL** — schema-first GraphQL with full type safety
 - **FastMCP 2** — MCP server for AI clients
 - **Context-Fabric** (`cfabric`) — graph corpus engine (fork of Text-Fabric)
 
@@ -93,73 +63,12 @@ cp .env.example .env
 # fill in any required environment variables
 ```
 
-### Run the API
-
-```bash
-uv run uvicorn main:app --reload
-```
-
----
-
-## GraphQL API
-
-The schema exposes a corpus hierarchy: `Corpus → Book → Chapter → Verse → Word`.
-
-**Endpoint:** `POST /graphql`
-
-### Example queries
-
-```graphql
-# Fetch a passage
-query {
-  passage(corpus: "BHSA", reference: "Genesis 1:1-3") {
-    reference
-    text
-    words {
-      text
-      lemma
-      partOfSpeech
-      gloss
-    }
-  }
-}
-
-# Morphological word search
-query {
-  words(corpus: "BHSA", filter: { book: "Genesis", partOfSpeech: "verb", verbTense: "perfect" }, limit: 50) {
-    text
-    lemma
-    gloss
-  }
-}
-
-# Raw Context-Fabric pattern search
-query {
-  search(corpus: "BHSA", pattern: "word pos=verb\n  book name=Genesis") {
-    reference
-    text
-  }
-}
-```
-
-### GraphQL types
-
-| Type          | Key fields                                                                                                        |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `Corpus`      | `name`, `nodeTypes`, `featureCount`, `books`                                                                      |
-| `Book`        | `name`, `chapters`                                                                                               |
-| `Chapter`     | `reference`, `verses`                                                                                            |
-| `Verse`       | `reference`, `text`, `words`                                                                                     |
-| `Word`        | `text`, `lemma`, `partOfSpeech`, `gloss`, `gender`, `number`, `person`, `verbStem`, `verbTense`, `feature(name)` |
-| `SearchMatch` | `reference`, `text`                                                                                              |
-
-Field names use natural language (`lemma`, `partOfSpeech`) instead of raw corpus shorthand (`lex`, `sp`). Use the `feature(name)` escape hatch to access any raw feature directly.
-
 ---
 
 ## MCP server
 
-The MCP server lets AI assistants query corpora directly via the [Model Context Protocol](https://modelcontextprotocol.io).
+The MCP server lets AI assistants query corpora directly via
+the [Model Context Protocol](https://modelcontextprotocol.io).
 
 ### Start the server
 
@@ -179,7 +88,7 @@ uv run cf-mcp \
 ### Available tools (11)
 
 | Category  | Tool                  | Description                                              |
-| --------- | --------------------- | -------------------------------------------------------- |
+|-----------|-----------------------|----------------------------------------------------------|
 | Discovery | `list_corpora`        | List loaded corpora and the active one                   |
 | Discovery | `describe_corpus`     | Node types with counts, section hierarchy                |
 | Discovery | `list_features`       | Browse features, filter by node type                     |
@@ -253,7 +162,7 @@ book
         word       (slot — smallest unit)
 ```
 
-The output directory is a valid TF dataset, loadable by the MCP server or GraphQL API immediately:
+The output directory is a valid TF dataset, loadable by the MCP server:
 
 ```bash
 uv run cf-mcp --corpus ~/.exegia/datasets/books/my-commentary
@@ -302,7 +211,6 @@ backend/
     └── exegia/
         ├── auth/        # Auth utilities
         ├── corpus/      # Git dataset fetching
-        ├── graphql/     # Strawberry GraphQL schema
         ├── mcp/         # FastMCP server (cf-mcp entrypoint)
         ├── models/      # Enums and data model definitions
         ├── schemas/     # Pydantic API schemas
