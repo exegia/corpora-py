@@ -9,12 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 
-DIRS_TO_REMOVE = [
-    ".venv",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".pytest_cache",
-]
+DIRS_TO_REMOVE = [".venv", ".mypy_cache", ".ruff_cache", ".pytest_cache"]
 
 GLOB_PATTERNS = [
     "**/__pycache__",
@@ -22,6 +17,7 @@ GLOB_PATTERNS = [
     "**/.temp",
     "**/dist",
     "**/build",
+    "**/node_modules",
 ]
 
 
