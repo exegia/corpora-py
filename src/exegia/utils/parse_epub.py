@@ -1,42 +1,71 @@
-cd .."""
+"""
 EPUB service — opens a local or remote EPUB file, extracts metadata and page
 content, and tracks extraction progress via a simple callback.
 """
+
 import re
-import tempfile
-import urllib.request
 from typing import Any, Callable
-from urllib.parse import urlparse
 
 import ebooklib
 from bs4 import BeautifulSoup, NavigableString, Tag
-from ebooklib import epub
 
 # ── HTML cleaner ──────────────────────────────────────────────────────────────
 
 # Tags whose content is kept and rendered as-is (no attribute stripping needed
 # beyond what the allow-list below handles).
 _SEMANTIC_TAGS = {
-    "article", "section", "main",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "p", "blockquote", "pre", "code",
-    "ul", "ol", "li",
-    "dl", "dt", "dd",
-    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
-    "figure", "figcaption",
-    "strong", "b", "em", "i", "u", "s", "mark", "small", "sub", "sup",
-    "hr", "br",
-    "a", "img",
+    "article",
+    "section",
+    "main",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "blockquote",
+    "pre",
+    "code",
+    "ul",
+    "ol",
+    "li",
+    "dl",
+    "dt",
+    "dd",
+    "table",
+    "thead",
+    "tbody",
+    "tfoot",
+    "tr",
+    "th",
+    "td",
+    "figure",
+    "figcaption",
+    "strong",
+    "b",
+    "em",
+    "i",
+    "u",
+    "s",
+    "mark",
+    "small",
+    "sub",
+    "sup",
+    "hr",
+    "br",
+    "a",
+    "img",
 }
 
 # Per-tag attributes that are meaningful and should be kept.
 _ALLOWED_ATTRS: dict[str, set[str]] = {
-    "a":   {"href", "title", "lang"},
+    "a": {"href", "title", "lang"},
     "img": {"src", "alt", "title", "width", "height"},
-    "td":  {"colspan", "rowspan"},
-    "th":  {"colspan", "rowspan", "scope"},
-    "ol":  {"start", "type"},
-    "li":  {"value"},
+    "td": {"colspan", "rowspan"},
+    "th": {"colspan", "rowspan", "scope"},
+    "ol": {"start", "type"},
+    "li": {"value"},
     "blockquote": {"cite"},
     "del": {"datetime"},
     "ins": {"datetime"},
@@ -46,8 +75,19 @@ _ALLOWED_ATTRS: dict[str, set[str]] = {
 _DROP_TAGS = {"script", "style", "head", "meta", "link", "noscript", "svg", "math"}
 
 # Tags that are unwrapped — their children are kept but the tag itself is removed.
-_UNWRAP_TAGS = {"span", "div", "font", "center", "section", "article", "main",
-                "header", "footer", "nav", "aside"}
+_UNWRAP_TAGS = {
+    "span",
+    "div",
+    "font",
+    "center",
+    "section",
+    "article",
+    "main",
+    "header",
+    "footer",
+    "nav",
+    "aside",
+}
 
 
 def _clean_html(html_bytes: bytes) -> str:
@@ -88,7 +128,11 @@ def _clean_html(html_bytes: bytes) -> str:
     # 5. Drop tags that are now empty (no text, no children) except void elements.
     _VOID = {"br", "hr", "img"}
     for tag in reversed(soup.find_all(True)):
-        if tag.name not in _VOID and not tag.get_text(strip=True) and not tag.find("img"):
+        if (
+            tag.name not in _VOID
+            and not tag.get_text(strip=True)
+            and not tag.find("img")
+        ):
             tag.decompose()
 
     # 6. Render only what sits inside <body>; fall back to the whole document.
@@ -115,7 +159,11 @@ def get_metadata(path: str) -> dict[str, Any]:
     book = _load_book(path)
 
     def _meta(namespace: str, name: str) -> list[str]:
-        return [v for v, _ in book.get_metadata(namespace, name)] if book.get_metadata(namespace, name) else []
+        return (
+            [v for v, _ in book.get_metadata(namespace, name)]
+            if book.get_metadata(namespace, name)
+            else []
+        )
 
     items = [
         {"id": item.get_id(), "name": item.get_name(), "type": item.media_type}
@@ -162,9 +210,7 @@ def extract_pages(
     book = _load_book(path)
 
     documents = [
-        item
-        for item in book.get_items()
-        if item.get_type() == ebooklib.ITEM_DOCUMENT
+        item for item in book.get_items() if item.get_type() == ebooklib.ITEM_DOCUMENT
     ]
     total = len(documents)
     pages: list[dict[str, Any]] = []
