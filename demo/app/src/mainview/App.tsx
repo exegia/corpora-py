@@ -6,7 +6,7 @@ import { Button } from "@heroui/react";
 function App() {
 
 	return (
-    <div>
+	<main className="flex min-h-screen items-center justify-center">
       <Surface>
         <Typography>Login</Typography>
         <Button className="w-full" variant="tertiary">
@@ -20,7 +20,7 @@ function App() {
             </Button>
 
       </Surface>
-			</div>
+			</main>
 	);
 }
 

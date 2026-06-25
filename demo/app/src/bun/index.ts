@@ -28,7 +28,7 @@ const mainWindow = new BrowserWindow({
 	title: "CorporaPy testing",
   url,
   titleBarStyle: 'hiddenInset',
-  trafficLightOffset: { x: 24, y: 24 },
+  passthrough: true,
 	frame: {
 		width: 900,
 		height: 700,
