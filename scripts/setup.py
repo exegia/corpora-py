@@ -32,19 +32,25 @@ def ensure_uv() -> None:
 
 
 def sync_dependencies() -> None:
-    print("\n[1/2] Syncing workspace dependencies...")
+    print("\n[1/3] Syncing workspace dependencies...")
     run(["uv", "sync"])
 
 
 def install_dotenvx() -> None:
-    print("\n[2/2] Installing dotenvx (encrypted .env loader)...")
+    print("\n[2/3] Installing dotenvx (encrypted .env loader)...")
     run(["uv", "add", "dotenvx"])
+
+
+def install_demo_deps() -> None:
+    print("\n[3/3] Installing the demo app dependencies...")
+    run(cmd=["bun", "install", "--no-cache", "--cwd", "demo/app"])
 
 
 def main() -> None:
     ensure_uv()
     sync_dependencies()
     install_dotenvx()
+    install_demo_deps()
 
     print("\nSetup complete.")
 
