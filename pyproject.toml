@@ -37,6 +37,7 @@ dependencies = [
     "lxml>=5.0.0",
     "black>=26.5.1",
     "supabase>=2.31.0",
+    "watchfiles>=1.2.0",
 ]
 
 [project.scripts]
