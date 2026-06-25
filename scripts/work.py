@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 import datetime
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 # Configuration
 ALLOWED_TYPES = ["fix", "test", "doc", "feature", "cicd", "refactor", "chore"]
-REPO_OWNER = "mannydefreitas7"
-DEFAULT_BRANCH = "master"
+REPO_OWNER = "exegia"
+DEFAULT_BRANCH = "main"
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def run(cmd, check=True):
     """Utility to run shell commands and return output."""
-    result = subprocess.run(
-        cmd, shell=True, text=True, capture_output=True, cwd=ROOT
-    )
+    result = subprocess.run(cmd, shell=True, text=True, capture_output=True, cwd=ROOT)
     if check and result.returncode != 0:
         print(f"Error: Command failed -> {cmd}")
         if result.stderr:
@@ -80,7 +78,10 @@ def main():
     # 5. Execute Git flow
     print(f"  - Creating branch...")
     # Determine base branch before switching
-    base = run("git remote show origin | grep 'HEAD branch' | cut -d' ' -f5", check=False) or DEFAULT_BRANCH
+    base = (
+        run("git remote show origin | grep 'HEAD branch' | cut -d' ' -f5", check=False)
+        or DEFAULT_BRANCH
+    )
     run(f"git checkout -b {branch_name}")
 
     print(f"  - Committing...")
