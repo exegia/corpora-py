@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Graph-based biblical and religious text study platform"
 readme = "README.md"
 license = { text = "Proprietary" }
-repository = { url = "https://github.com/exegia/corpora-py" }
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
 requires-python = ">=3.13"
 keywords = ["exegia", "bible", "corpus", "text-fabric", "context-fabric", "mcp", "graphql"]
