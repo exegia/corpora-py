@@ -27,32 +27,35 @@ class Settings(BaseSettings):
     )
 
     # Supabase
-    supabase_url: str = ""
-    supabase_storage_bucket: str = ""
-    supabase_publishable_key: str = ""
-    supabase_secret_key: str = ""
-    project_ref: str = ""
+    supabase_url: str = model_config.get("SUPABASE_URL", "")
+    supabase_storage_bucket: str = "corpora"
+    supabase_publishable_key: str = model_config.get("SUPABASE_PUBLISHABLE_KEY", "")
+    supabase_secret_key: str = model_config.get("SUPABASE_SECRET_KEY", "")
+    project_ref: str = model_config.get("PROJECT_REF", "")
 
     # Database
-    supabase_db_url: str = ""
-    supabase_db_password: str = ""
-    supabase_db_user: str = ""
+    supabase_db_url: str = model_config.get("SUPABASE_DB_URL", "")
+    supabase_db_password: str = model_config.get("SUPABASE_DB_PASSWORD", "")
+    supabase_db_user: str = model_config.get("SUPABASE_DB_USER", "")
 
     # Storage
-    supabase_storage_access_key: str = ""
-    supabase_storage_secret_key: str = ""
+    supabase_storage_access_key: str = model_config.get(
+        "SUPABASE_STORAGE_ACCESS_KEY", ""
+    )
+    supabase_storage_secret_key: str = model_config.get(
+        "SUPABASE_STORAGE_SECRET_KEY", ""
+    )
 
     # Application
-    datasets_base_path: str = ""
-    environment: str = "development"
-    cors_origins: str = ""
+    environment: str = model_config.get("ENVIRONMENT", "development")
+    cors_origins: str = model_config.get("CORS_ORIGINS", "")
 
     # AI
-    open_ai_key: str = ""
+    open_ai_key: str = model_config.get("OPENAI_KEY", "")
 
     # Apple
-    development_team: str = ""
-    apple_team_id: str = ""
+    development_team: str = model_config.get("DEVELOPMENT_TEAM", "")
+    apple_team_id: str = model_config.get("APPLE_TEAM_ID", "")
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -74,12 +77,14 @@ settings = get_settings()
 PROJECT_REF = settings.project_ref
 
 SUPABASE_STUDIO_URL = "supabase_studio_" + settings.project_ref + ".orb.local"
+# API gateway (Kong) — the base URL the Supabase client talks to.
+SUPABASE_API_URL = "https://supabase_kong_" + settings.project_ref + ".orb.local"
 SUPABASE_STORAGE_BUCKET = settings.supabase_storage_bucket
 SUPABASE_PUBLISHABLE_KEY = settings.supabase_publishable_key
 SUPABASE_SECRET_KEY = settings.supabase_secret_key
 
 # Database
-SUPABASE_DB_URL = "supabase_db_" + settings.project_ref + "orb.local"
+SUPABASE_DB_URL = "supabase_db_" + settings.project_ref + ".orb.local"
 SUPABASE_DB_PASSWORD = settings.supabase_db_password
 SUPABASE_DB_USER = settings.supabase_db_user
 
@@ -88,7 +93,6 @@ SUPABASE_STORAGE_ACCESS_KEY = settings.supabase_storage_access_key
 SUPABASE_STORAGE_SECRET_KEY = settings.supabase_storage_secret_key
 
 # Application
-DATASETS_BASE_PATH = settings.datasets_base_path
 ENVIRONMENT = settings.environment
 CORS_ORIGINS = settings.cors_origins
 CORS_ORIGINS_LIST = settings.cors_origins_list
@@ -104,7 +108,6 @@ __all__ = [
     "APPLE_TEAM_ID",
     "CORS_ORIGINS",
     "CORS_ORIGINS_LIST",
-    "DATASETS_BASE_PATH",
     "DEVELOPMENT_TEAM",
     "ENVIRONMENT",
     "OPENAI_KEY",
@@ -113,6 +116,7 @@ __all__ = [
     "SUPABASE_DB_PASSWORD",
     "SUPABASE_DB_URL",
     "SUPABASE_DB_USER",
+    "SUPABASE_API_URL",
     "SUPABASE_PUBLISHABLE_KEY",
     "SUPABASE_SECRET_KEY",
     "SUPABASE_STORAGE_ACCESS_KEY",

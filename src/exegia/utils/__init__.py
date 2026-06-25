@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from utils!")
+from exegia.utils import constant
+
+__all__ = ["constant"]
