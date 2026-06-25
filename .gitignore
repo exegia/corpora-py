@@ -24,7 +24,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.test.local
 .env.production.local
 .env.local
-.env.production
 .venv/
 
 # caches
@@ -48,6 +47,5 @@ src/exegia/supabase/*.pem
 
 # dotenvx
 .env.keys
-.env.local
 .env.*.local
 src/exegia/supabase/seeds/*_rows.sql

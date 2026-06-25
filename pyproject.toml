@@ -1,11 +1,11 @@
 [project]
-name = "py-exegia"
-version = "0.1.11"
+name = "corpora-py"
+version = "0.1.0"
 description = "Graph-based biblical and religious text study platform"
 readme = "README.md"
 license = { text = "Proprietary" }
-repository = { url = "https://github.com/Mannydefreitas7/exegia-api-py" }
-authors = [{ name = "Emmanuel De Freitas", email = "manny.defreitas7@me.com" }]
+repository = { url = "https://github.com/exegia/corpora-py" }
+authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
 requires-python = ">=3.13"
 keywords = ["exegia", "bible", "corpus", "text-fabric", "context-fabric", "mcp", "graphql"]
 classifiers = [
@@ -15,11 +15,6 @@ classifiers = [
     "Programming Language :: Python :: 3.13"
 ]
 dependencies = [
-    # Web framework
-    "fastapi[standard]>=0.115.0",
-    "uvicorn[standard]>=0.30.0",
-    # GraphQL
-    "strawberry-graphql[fastapi]>=0.314.0",
     # MCP server
     "fastmcp>=2.0",
     # Corpus
@@ -49,7 +44,3 @@ cf-mcp = "exegia.mcp:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/exegia"]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
