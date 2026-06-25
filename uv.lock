@@ -389,6 +389,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "supabase" },
     { name = "text-fabric" },
+    { name = "watchfiles" },
 ]
 
 [package.metadata]
@@ -410,6 +411,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "supabase", specifier = ">=2.31.0" },
     { name = "text-fabric", specifier = ">=13.0.0" },
+    { name = "watchfiles", specifier = ">=1.2.0" },
 ]
 
 [[package]]
