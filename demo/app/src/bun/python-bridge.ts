@@ -10,21 +10,31 @@ export class PythonBridge {
   private decoder = new TextDecoder();
 
   constructor() {
-    const base = PATHS.RESOURCES_FOLDER;
-    this.pythonHome = `${base}/python`;
-    this.pythonBin = `${this.pythonHome}/bin/python3`;
+    // Dev override (used by Docker + SSH dev environments)
+    // Set DEV_PYTHON_BIN (and optionally DEV_PYTHON_HOME) to use a system / venv Python
+    // that has the local exegia/corpora-py package available.
+    const devPythonBin = process.env.DEV_PYTHON_BIN;
+    if (devPythonBin) {
+      this.pythonBin = devPythonBin;
+      this.pythonHome = process.env.DEV_PYTHON_HOME || "";
+    } else {
+      const base = PATHS.RESOURCES_FOLDER;
+      this.pythonHome = `${base}/python`;
+      this.pythonBin = `${this.pythonHome}/bin/python3`;
+    }
   }
 
   async init(): Promise<void> {
+      const spawnEnv: Record<string, string> = { ...process.env };
+      if (this.pythonHome) {
+        spawnEnv.PYTHONHOME = this.pythonHome;
+        spawnEnv.PYTHONNOUSERSITE = "1";
+      }
       this.proc = spawn([this.pythonBin, "-u", "-c", SUBPROCESS_SCRIPT], {
         stdin: "pipe",
         stdout: "pipe",
         stderr: "inherit",
-        env: {
-          ...process.env,
-          PYTHONHOME: this.pythonHome,
-          PYTHONNOUSERSITE: "1",
-        },
+        env: spawnEnv,
       });
       if (!this.proc || !this.proc.stdout) throw new Error("Failed to spawn Python subprocess");
       const stdout = this.proc.stdout;

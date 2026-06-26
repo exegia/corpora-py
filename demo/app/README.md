@@ -59,3 +59,65 @@ When you run `bun run dev` (without HMR):
 - **Vite settings**: Edit `vite.config.ts`
 - **Window settings**: Edit `src/bun/index.ts`
 - **App metadata**: Edit `electrobun.config.ts`
+
+## Developing with Docker + SSH (recommended for consistent Python + Bun env)
+
+This repo provides a first-class Docker dev environment so the ElectroBun demo can use the local Python `exegia` / `corpora-py` library without manual setup.
+
+### 1. Start the container
+
+```bash
+# From repo root
+docker compose -f demo/app/docker-compose.yml up --build -d
+```
+
+### 2. Connect from your IDE via SSH
+
+Add to your `~/.ssh/config`:
+
+```
+Host corpora-demo
+  HostName localhost
+  Port 2222
+  User dev
+```
+
+Then in VS Code / Cursor:
+
+- Command Palette → **Remote-SSH: Connect to Host** → `corpora-demo`
+
+Default password is `dev` (change it or use key auth).
+
+**Passwordless login (recommended):**
+
+```bash
+export SSH_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)"
+docker compose -f demo/app/docker-compose.yml up --build -d
+```
+
+### 3. Inside the container
+
+```bash
+cd /workspace/demo/app
+
+# Normal dev (no HMR)
+bun run dev
+
+# Recommended (Vite HMR + ElectroBun)
+bun run dev:hmr
+```
+
+The Python bridge automatically uses a dev Python that has the local library installed editable (`import exegia` and submodules like `exegia.auth` just work).
+
+### 4. Rebuilding the Python side
+
+Because we use an editable install, changes to `src/exegia/**/*.py` are reflected immediately (restart the Bun process if you changed top-level imports).
+
+### Files
+
+- `demo/app/Dockerfile`
+- `demo/app/docker-compose.yml`
+- `demo/app/scripts/docker-entrypoint.sh`
+- `.github/workflows/demo-app-docker.yml` (builds + publishes the dev image to GHCR)
+
+The container also exposes the Vite dev server on port 5173 (useful for debugging the webview even if you don't forward the native window).
