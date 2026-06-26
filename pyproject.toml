@@ -1,6 +1,6 @@
 [project]
 name = "corpora-py"
-version = "0.1.0"
+version = "0.1.1"
 description = "Graph-based biblical and religious text study platform"
 readme = "README.md"
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
