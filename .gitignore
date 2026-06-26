@@ -30,6 +30,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .eslintcache
 .cache
 *.tsbuildinfo
+resources/**
 
 # local app state
 .state/
@@ -53,3 +54,5 @@ src/exegia/supabase/*.pem
 .env.*.local
 src/exegia/supabase/seeds/*_rows.sql
 src/corpora_py.egg-info/
+
+
