@@ -1,0 +1,158 @@
+name: Build Sidecar
+
+# Builds corpora-py as a signed, notarized Python bundle for each platform.
+# The resulting zip archives are intended to be embedded as resources in a
+# Tauri application (see https://v2.tauri.app/develop/sidecar/).
+#
+# Triggering:
+#   - On tags (vX.Y.Z) — production builds with signing
+#   - workflow_dispatch — manual runs; pass skip_sign=true for unsigned builds
+#   - workflow_call — lets other workflows (e.g. a Tauri release workflow) invoke this
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+  workflow_dispatch:
+    inputs:
+      skip_sign:
+        description: "Skip code signing (for testing builds without certificates)"
+        required: false
+        type: boolean
+        default: false
+
+  workflow_call:
+    inputs:
+      skip_sign:
+        description: "Skip code signing"
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      artifact_name:
+        description: "Shared artifact name prefix (corpora-py-sidecar-<run_id>)"
+        value: ${{ jobs.bundle.outputs.artifact_prefix }}
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+
+jobs:
+  # ── 1. Build the pure-Python wheel once on a fast Linux runner ───────────────
+  build-wheel:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    outputs:
+      wheel_name: ${{ steps.find.outputs.wheel_name }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build wheel
+        run: uv build --wheel --out-dir dist/
+
+      - name: Find wheel name
+        id: find
+        run: echo "wheel_name=$(ls dist/*.whl | xargs basename)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── 2. Bundle, sign, and archive per platform ─────────────────────────────────
+  bundle:
+    name: Bundle (${{ matrix.platform }})
+    needs: build-wheel
+    outputs:
+      artifact_prefix: corpora-py-sidecar-${{ github.run_id }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            runner: macos-14        # Apple Silicon
+          - platform: macos-x64
+            runner: macos-13        # Intel (use macos-latest-large if macos-13 is retired)
+          - platform: windows-x64
+            runner: windows-latest
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Download wheel
+        uses: actions/download-artifact@v7
+        with:
+          name: wheel
+          path: dist/
+
+      # Cache the standalone-Python tarball — it's ~70 MB and rarely changes.
+      - name: Cache standalone Python
+        uses: actions/cache@v4
+        with:
+          path: .cache/python-standalone
+          key: python-standalone-${{ matrix.platform }}-3.13.14-20260623
+
+      - name: Bundle (unsigned)
+        if: ${{ inputs.skip_sign == true }}
+        run: |
+          uv run python scripts/build.py \
+            --platform ${{ matrix.platform }} \
+            --skip-sign \
+            --skip-build
+        env:
+          APP_IDENTIFIER: ${{ vars.APP_IDENTIFIER }}
+          APP_CHANNEL: ${{ vars.APP_CHANNEL || 'stable' }}
+
+      - name: Bundle + sign (macOS)
+        if: ${{ inputs.skip_sign != true && startsWith(matrix.platform, 'macos') }}
+        run: |
+          uv run python scripts/build.py \
+            --platform ${{ matrix.platform }} \
+            --skip-build
+        env:
+          APP_IDENTIFIER: ${{ vars.APP_IDENTIFIER }}
+          APP_CHANNEL: ${{ vars.APP_CHANNEL || 'stable' }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Bundle + sign (Windows)
+        if: ${{ inputs.skip_sign != true && matrix.platform == 'windows-x64' }}
+        shell: pwsh
+        run: |
+          uv run python scripts/build.py `
+            --platform ${{ matrix.platform }} `
+            --skip-build
+        env:
+          APP_IDENTIFIER: ${{ vars.APP_IDENTIFIER }}
+          APP_CHANNEL: ${{ vars.APP_CHANNEL || 'stable' }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+          WINDOWS_SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: corpora-py-sidecar-${{ github.run_id }}-${{ matrix.platform }}
+          path: dist/corpora-py-${{ matrix.platform }}.zip
+          if-no-files-found: error
+          retention-days: 30
