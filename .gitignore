@@ -40,6 +40,7 @@ resources/**
 
 # Finder (MacOS) folder config
 .DS_Store
+**/.DS_Store
 
 # Supabase
 src/exegia/supabase/.branches
@@ -54,5 +55,5 @@ src/exegia/supabase/*.pem
 .env.*.local
 src/exegia/supabase/seeds/*_rows.sql
 src/corpora_py.egg-info/
-
-
+**/resources/python/
+resources/python/
