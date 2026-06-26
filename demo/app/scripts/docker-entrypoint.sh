@@ -8,6 +8,9 @@
 
 set -euo pipefail
 
+# Ensure system runtimes are in PATH even before profile scripts
+export PATH="/usr/local/bin:${PATH}"
+
 echo "==> Corpora-Py ElectroBun Demo Dev Container"
 
 # 1. Install Python 3.13 via uv (project requires >= 3.13)
@@ -63,6 +66,52 @@ touch "${DEV_HOME}/.ssh/authorized_keys"
 chmod 600 "${DEV_HOME}/.ssh/authorized_keys" || true
 chown -R "${DEV_USER}:${DEV_USER}" "${DEV_HOME}/.ssh" || true
 
+# Setup dev user's shell environment for convenience (idempotent)
+echo "==> Configuring shell environment for ${DEV_USER}..."
+
+# Create a system-wide profile snippet for all users (robust for SSH/login shells)
+cat > /etc/profile.d/corpora-dev.sh << 'EOF'
+# Corpora-Py Demo Dev Environment - Runtime PATH setup
+# Ensures bun, uv, dotenvx and project tools are available
+export PATH="/usr/local/bin:/workspace/demo/app/node_modules/.bin:${PATH}"
+EOF
+chmod +x /etc/profile.d/corpora-dev.sh
+
+# Configure the dev user's .profile (sourced for login shells like SSH)
+if ! grep -q "corpora-dev" "${DEV_HOME}/.profile" 2>/dev/null; then
+  cat >> "${DEV_HOME}/.profile" << 'EOF'
+
+# --- Corpora-Py Demo: explicit runtime PATH ---
+# Make bun, uv (system installs), dotenvx, and local project bins available
+export PATH="/usr/local/bin:/workspace/demo/app/node_modules/.bin:${PATH}"
+
+# Optional: source .bashrc for interactive features
+if [ -f ~/.bashrc ]; then
+  source ~/.bashrc
+fi
+EOF
+fi
+
+# Configure .bashrc for interactive non-login shells (and common aliases)
+if ! grep -q "Corpora-Py Demo" "${DEV_HOME}/.bashrc" 2>/dev/null; then
+  cat >> "${DEV_HOME}/.bashrc" << 'EOF'
+
+# --- Corpora-Py Demo (interactive) ---
+# Project binaries (dotenvx etc.)
+if [ -d /workspace/demo/app/node_modules/.bin ]; then
+  export PATH="/workspace/demo/app/node_modules/.bin:${PATH}"
+fi
+
+# Quick aliases
+alias ll='ls -alF'
+alias dev='cd /workspace/demo/app && bun run dev:hmr'
+alias cdp='cd /workspace/demo/app'
+EOF
+fi
+
+chown -R "${DEV_USER}:${DEV_USER}" "${DEV_HOME}/.bashrc" "${DEV_HOME}/.profile" 2>/dev/null || true
+chown root:root /etc/profile.d/corpora-dev.sh || true
+
 # 6. Prepare the ElectroBun demo app (Bun deps)
 cd /workspace/demo/app
 if [[ ! -d node_modules ]]; then
@@ -71,6 +120,22 @@ if [[ ! -d node_modules ]]; then
 else
   echo "==> node_modules present, skipping bun install"
 fi
+
+# 6b. Expose key binaries (dotenvx, etc.) in the system PATH
+# This ensures `dotenvx run ...` works when running the npm scripts inside the container.
+echo "==> Linking runtime binaries (dotenvx) into /usr/local/bin..."
+ln -sf /workspace/demo/app/node_modules/.bin/dotenvx /usr/local/bin/dotenvx 2>/dev/null || true
+# You can add more if needed, e.g.:
+# ln -sf /workspace/demo/app/node_modules/.bin/vite /usr/local/bin/vite 2>/dev/null || true
+
+# Verify critical runtimes are in PATH (for root during startup)
+for cmd in bun uv dotenvx; do
+  if command -v "$cmd" &> /dev/null; then
+    echo "    ✓ $cmd found at $(command -v $cmd)"
+  else
+    echo "    ⚠ WARNING: '$cmd' not found in PATH"
+  fi
+done
 
 # 7. Helpful env vars for the PythonBridge (see python-bridge.ts update)
 export DEV_PYTHON_BIN="${RESOURCES_PYTHON}/bin/python3"
@@ -85,6 +150,12 @@ echo ""
 echo "==================================================="
 echo " Dev container ready for ElectroBun + Python"
 echo ""
+echo " Runtimes configured in PATH (via /etc/profile.d + ~/.profile):"
+echo "   - bun       (system-wide in /usr/local/bin)"
+echo "   - uv        (system-wide in /usr/local/bin)"
+echo "   - dotenvx   (symlinked from project node_modules/.bin)"
+echo "   - project bins (node_modules/.bin) for the demo app"
+echo ""
 echo " From host (after docker compose up):"
 echo "   ssh -p 2222 dev@localhost          # password: dev"
 echo ""
@@ -98,7 +169,8 @@ echo " Then in VS Code / Cursor: Remote-SSH > Connect to Host > corpora-demo"
 echo ""
 echo " Inside the container:"
 echo "   cd /workspace/demo/app"
-echo "   bun run dev          # or bun run dev:hmr"
+echo "   bun run dev:hmr     # recommended"
+echo "   # or bun run dev"
 echo "==================================================="
 echo ""
 

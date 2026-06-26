@@ -29,7 +29,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     curl \
     ca-certificates \
+    unzip \
+    tar \
     git \
+    # Node will be installed via nodesource for a modern version (required by some CLIs like dotenvx) \
     build-essential \
     pkg-config \
     libssl-dev \
@@ -50,16 +53,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install modern Node.js (20+) via nodesource - required for some package CLIs (e.g. dotenvx)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create SSH run dir
 RUN mkdir -p /var/run/sshd
 
-# Install uv (fast Python + package manager used by the project)
+# Install uv (goes to /root/.local/bin by default)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:/root/.cargo/bin:${PATH}"
+# Make uv available system-wide
+RUN cp /root/.local/bin/uv /usr/local/bin/uv && chmod +x /usr/local/bin/uv
 
-# Install Bun (required by ElectroBun)
-RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:${PATH}"
+# Install Bun system-wide (so all users including 'dev' can use it)
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash
+
+# Ensure /usr/local/bin is early in PATH for all users (login + non-login shells)
+# Additional runtime setup happens in docker-entrypoint.sh + /etc/profile.d/corpora-dev.sh
+ENV PATH="/usr/local/bin:${PATH}"
 
 # Create a dedicated dev user (non-root is better)
 RUN useradd -m -s /bin/bash -G sudo dev \

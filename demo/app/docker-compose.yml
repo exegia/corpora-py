@@ -22,18 +22,16 @@
 #
 # The Python bridge will automatically use the dev Python that has the local library.
 
-version: "3.9"
-
 services:
   demo:
     build:
-      context: ../..          # Build context = monorepo root (so we see the Python package + demo)
+      context: ../.. # Build context = monorepo root (so we see the Python package + demo)
       dockerfile: demo/app/Dockerfile
     image: ghcr.io/exegia/corpora-py-demo-dev:latest
     container_name: corpora-demo-dev
     ports:
-      - "2222:22"             # SSH
-      - "5173:5173"           # Vite HMR (useful even if the native window isn't forwarded)
+      - "2222:22" # SSH
+      - "5173:5173" # Vite HMR (useful even if the native window isn't forwarded)
     environment:
       # Inject your SSH public key for passwordless login (recommended)
       - SSH_PUBKEY=${SSH_PUBKEY:-}
