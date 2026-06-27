@@ -28,10 +28,6 @@ import time
 import webbrowser
 from pathlib import Path
 
-from watchfiles import Change
-
-from watch import observe
-
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = str(ROOT / ".env.development")  # absolute so dotenvx works from any cwd
 DEMO_APP_DIR = "demo/app"
@@ -90,31 +86,10 @@ def is_supabase_running() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _rebuild_electrobun_app() -> None:
-    """Run `bun run start` (vite build + electrobun dev) to rebuild the desktop app."""
-    print("🔨 Rebuilding electrobun app...")
-    result = subprocess.run(
-        dotenvx_wrap(["bun", "run", "start"]),
-        cwd=ROOT / DEMO_APP_DIR,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(f"⚠️  Build failed (exit {result.returncode}) — will retry on next change.")
-
-
-def _src_change_handler(change_type: Change, file_path: str) -> None:
-    """Rebuild the electrobun app when a .ts/.tsx file inside src/ is modified."""
-    if change_type == Change.modified and (
-        file_path.endswith(".ts") or file_path.endswith(".tsx")
-    ):
-        print(f"📝 Changed: {file_path}")
-        _rebuild_electrobun_app()
-
-
 def _run_vite_server() -> None:
     """Target for the background thread: keep the Vite HMR dev server alive."""
     subprocess.run(
-        dotenvx_wrap(["bun", "run", "hmr"]),
+        dotenvx_wrap(["bun", "run", "dev"]),
         cwd=ROOT / DEMO_APP_DIR,
         text=True,
     )
@@ -139,7 +114,9 @@ def start_demo_app() -> None:
       4. Block on the file-watcher — rebuild electrobun whenever .ts/.tsx changes.
     """
     # 1. Vite HMR server
-    vite_thread = threading.Thread(target=_run_vite_server, daemon=True, name="vite-hmr")
+    vite_thread = threading.Thread(
+        target=_run_vite_server, daemon=True, name="vite-hmr"
+    )
     vite_thread.start()
     print("⚡ Vite HMR server starting...")
 
@@ -149,13 +126,11 @@ def start_demo_app() -> None:
     webbrowser.open(VITE_URL)
 
     # 3. Build and launch the electrobun desktop app
-    electrobun_thread = threading.Thread(target=_run_electrobun, daemon=True, name="electrobun")
+    electrobun_thread = threading.Thread(
+        target=_run_electrobun, daemon=True, name="electrobun"
+    )
     electrobun_thread.start()
     print("🖥️  Starting electrobun desktop app...")
-
-    # 4. Watch src/ and rebuild the electrobun app on .ts/.tsx changes
-    print(f"👁️  Watching {DEMO_SRC_DIR} for changes (Ctrl-C to stop)…")
-    observe(dir=DEMO_SRC_DIR, handler=_src_change_handler)
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +147,9 @@ def start() -> None:
         "supabase",
         "Install: https://supabase.com/docs/guides/local-development/cli/getting-started",
     )
-    ensure_tool("docker", "Install Docker Desktop / OrbStack and make sure it is running.")
+    ensure_tool(
+        "docker", "Install Docker Desktop / OrbStack and make sure it is running."
+    )
 
     if is_supabase_running():
         print("✅ Supabase local stack is already running — skipping `supabase start`.")

@@ -17,6 +17,9 @@ GLOB_PATTERNS = [
     "**/.temp",
     "**/dist",
     "**/build",
+    "**/resources/python",
+    "**/.cache",
+    "**/artifacts",
     "**/node_modules",
 ]
 

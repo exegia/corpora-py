@@ -25,7 +25,7 @@ export class PythonBridge {
   }
 
   async init(): Promise<void> {
-      const spawnEnv: Record<string, string> = { ...process.env };
+      const spawnEnv: Record<string, string | undefined> = { ...process.env };
       if (this.pythonHome) {
         spawnEnv.PYTHONHOME = this.pythonHome;
         spawnEnv.PYTHONNOUSERSITE = "1";

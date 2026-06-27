@@ -76,7 +76,7 @@ def main():
     print(f"🚀 Preparing workflow for: {branch_name}")
 
     # 5. Execute Git flow
-    print(f"  - Creating branch...")
+    print("  - Creating branch...")
     # Determine base branch before switching
     base = (
         run("git remote show origin | grep 'HEAD branch' | cut -d' ' -f5", check=False)
@@ -84,11 +84,11 @@ def main():
     )
     run(f"git checkout -b {branch_name}")
 
-    print(f"  - Committing...")
+    print("  - Committing...")
     full_commit_msg = f"{work_type}: {clean_title}"
     run(f'git commit --no-verify -m "{full_commit_msg}"')
 
-    print(f"  - Pushing to remote...")
+    print("  - Pushing to remote...")
     run(f"git push -u origin {branch_name}")
 
     # 6. Create Draft PR using GitHub CLI

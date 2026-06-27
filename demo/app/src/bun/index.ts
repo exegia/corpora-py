@@ -1,7 +1,7 @@
 
 import { BrowserWindow, Updater, Screen } from "electrobun/bun";
 import { retrieve, store } from "./storage";
-import { getAuth, end } from "./example-usage";
+import { getAuth } from "./example-usage";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
