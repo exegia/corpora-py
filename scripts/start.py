@@ -10,7 +10,8 @@ Steps:
     1. Verify `dotenvx`, `supabase`, and `docker` are on PATH.
     2. Check whether the Supabase Studio Docker container is already running (idempotent).
     3. Run `supabase start` from the project root, under dotenvx (if not already up).
-    4. Start the demo app: launch Vite HMR server, open browser, watch src/ for rebuilds.
+    4. Ensure the demo app's embedded Python runtime is built (via root scripts/ if missing).
+    5. Start the demo app: launch Vite HMR server, open browser, watch src/ for rebuilds.
 
 Usage:
     uv run scripts/start.py          # start the local stack + demo app
@@ -20,14 +21,42 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import sys
 import threading
 import time
 
-from utils import SUPABASE_PROJECT_DIR, VITE_URL, ensure_tool, is_supabase_running, run
+from utils import (
+    ROOT,
+    SUPABASE_PROJECT_DIR,
+    VITE_URL,
+    ensure_tool,
+    is_supabase_running,
+    run,
+)
 
 # ---------------------------------------------------------------------------
 # Demo app helpers
 # ---------------------------------------------------------------------------
+
+
+def ensure_demo_python_runtime() -> None:
+    """Ensure the embedded Python runtime for the demo app is built.
+
+    The responsibility for building/bundling the wheel + standalone Python
+    lives in the root scripts/ (build_embedded_python.py + bundle_python.py).
+    We only invoke it here if the runtime is missing.
+    """
+    runtime = ROOT / "demo/app/resources/python/bin/python3"
+    if runtime.exists():
+        print("✅ Demo embedded Python runtime already present.")
+        return
+
+    print("Demo embedded Python runtime not found — building now...")
+    run(
+        [sys.executable, str(ROOT / "scripts/build_embedded_python.py")],
+        dotenvx=False,
+        dir=ROOT,
+    )
 
 
 def _run_vite_server() -> None:
@@ -91,6 +120,10 @@ def start() -> None:
 
     # Print status (URLs + keys) for convenience — non-fatal if it fails.
     run((["supabase", "status"]), check=False, dotenvx=True)
+
+    # Ensure the demo's embedded Python runtime is ready (root-owned bundler)
+    ensure_demo_python_runtime()
+
     start_demo_app()
 
 

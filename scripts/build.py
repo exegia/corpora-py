@@ -38,7 +38,7 @@ import zipfile
 from pathlib import Path
 
 # ── Version pins ──────────────────────────────────────────────────────────────
-# Keep in sync with demo/app/scripts/bundle-python.sh and bundle-python.ts
+# Keep in sync with scripts/bundle_python.py (and the old demo/app/scripts/bundle-python.ts)
 PYTHON_VERSION = "3.13.14"
 STANDALONE_VERSION = "20260623"
 
@@ -63,25 +63,41 @@ PLATFORM_MAP = {
 
 STDLIB_TRIM = [
     # GUI / interactive tooling — never needed in a headless MCP server
-    "tkinter", "idlelib", "turtledemo", "turtle.py", "curses",
+    "tkinter",
+    "idlelib",
+    "turtledemo",
+    "turtle.py",
+    "curses",
     # Test infrastructure
-    "test", "unittest",
+    "test",
+    "unittest",
     # Build / packaging helpers not needed at runtime
-    "ensurepip", "lib2to3",
+    "ensurepip",
+    "lib2to3",
     # Documentation / REPL helpers
-    "pydoc_data", "pydoc.py", "doctest.py",
+    "pydoc_data",
+    "pydoc.py",
+    "doctest.py",
     # Rarely-used stdlib modules not pulled in by any dependency in pyproject.toml
-    "_pydecimal.py", "mailbox.py", "imaplib.py", "nntplib.py", "poplib.py",
-    "smtplib.py", "ftplib.py", "xmlrpc",
+    "_pydecimal.py",
+    "mailbox.py",
+    "imaplib.py",
+    "nntplib.py",
+    "poplib.py",
+    "smtplib.py",
+    "ftplib.py",
+    "xmlrpc",
     # Windows-only asyncio modules (removed on Unix; harmless no-ops if absent on Windows
     # because they are never imported on non-Windows)
-    "asyncio/windows_events.py", "asyncio/windows_utils.py",
+    "asyncio/windows_events.py",
+    "asyncio/windows_utils.py",
     # NOTE: concurrent, multiprocessing, and asyncio are intentionally kept —
     # anyio, starlette, uvicorn, httpx, and fastmcp all import them at runtime.
 ]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def run(cmd: list, **kwargs) -> subprocess.CompletedProcess:
     print(f"  $ {' '.join(str(c) for c in cmd)}")
@@ -142,6 +158,7 @@ def parse_args() -> argparse.Namespace:
 
 # ── Step 1: Build wheel ───────────────────────────────────────────────────────
 
+
 def build_wheel(out_dir: Path) -> Path:
     print("==> Building wheel with uv...")
     run(["uv", "build", "--wheel", f"--out-dir={out_dir}"])
@@ -149,13 +166,16 @@ def build_wheel(out_dir: Path) -> Path:
 
 
 def _find_wheel(out_dir: Path) -> Path:
-    wheels = sorted(out_dir.glob("*.whl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    wheels = sorted(
+        out_dir.glob("*.whl"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
     if not wheels:
         raise SystemExit(f"No wheel found in {out_dir}.")
     return wheels[0]
 
 
 # ── Step 2: Download standalone Python ───────────────────────────────────────
+
 
 def download_standalone_python(platform_key: str, cache_dir: Path) -> Path:
     info = PLATFORM_MAP[platform_key]
@@ -179,6 +199,7 @@ def download_standalone_python(platform_key: str, cache_dir: Path) -> Path:
 
 # ── Step 3: Extract ───────────────────────────────────────────────────────────
 
+
 def extract_python(tarball: Path, dest: Path):
     print("==> Extracting standalone Python...")
     if dest.exists():
@@ -188,6 +209,7 @@ def extract_python(tarball: Path, dest: Path):
 
 
 # ── Step 4: Install wheel + deps ──────────────────────────────────────────────
+
 
 def install_wheel(wheel: Path, python_dir: Path):
     print("==> Installing wheel with uv...")
@@ -199,6 +221,7 @@ def install_wheel(wheel: Path, python_dir: Path):
 
 
 # ── Step 5: Trim stdlib ───────────────────────────────────────────────────────
+
 
 def _pylib_dir(python_dir: Path) -> Path:
     """Return the platform-appropriate stdlib directory.
@@ -225,8 +248,19 @@ def trim_stdlib(python_dir: Path):
 
     if platform.system() != "Windows":
         subprocess.run(
-            ["find", str(python_dir), "-name", "__pycache__", "-type", "d",
-             "-exec", "rm", "-rf", "{}", "+"],
+            [
+                "find",
+                str(python_dir),
+                "-name",
+                "__pycache__",
+                "-type",
+                "d",
+                "-exec",
+                "rm",
+                "-rf",
+                "{}",
+                "+",
+            ],
             capture_output=True,
         )
         subprocess.run(
@@ -254,6 +288,7 @@ def trim_stdlib(python_dir: Path):
 
 
 # ── Step 6: Generate app_paths.py ─────────────────────────────────────────────
+
 
 def generate_app_paths(python_dir: Path):
     identifier = os.environ.get("APP_IDENTIFIER", "io.exegia.Corpora")
@@ -308,6 +343,7 @@ user_logs = logs / IDENTIFIER / CHANNEL
 
 # ── Step 7a: macOS signing ────────────────────────────────────────────────────
 
+
 def _import_macos_cert(tmpdir: Path):
     """Decode APPLE_CERTIFICATE and import it into a temporary keychain."""
     cert_b64 = os.environ.get("APPLE_CERTIFICATE", "")
@@ -324,19 +360,33 @@ def _import_macos_cert(tmpdir: Path):
     run(["security", "create-keychain", "-p", kc_pwd, keychain])
     run(["security", "default-keychain", "-s", keychain])
     run(["security", "unlock-keychain", "-p", kc_pwd, keychain])
-    run([
-        "security", "import", str(cert_file),
-        "-k", keychain,
-        "-P", cert_pwd,
-        "-T", "/usr/bin/codesign",
-        "-T", "/usr/bin/security",
-    ])
-    run([
-        "security", "set-key-partition-list",
-        "-S", "apple-tool:,apple:",
-        "-s", "-k", kc_pwd,
-        keychain,
-    ])
+    run(
+        [
+            "security",
+            "import",
+            str(cert_file),
+            "-k",
+            keychain,
+            "-P",
+            cert_pwd,
+            "-T",
+            "/usr/bin/codesign",
+            "-T",
+            "/usr/bin/security",
+        ]
+    )
+    run(
+        [
+            "security",
+            "set-key-partition-list",
+            "-S",
+            "apple-tool:,apple:",
+            "-s",
+            "-k",
+            kc_pwd,
+            keychain,
+        ]
+    )
 
 
 def _write_entitlements(tmpdir: Path) -> Path:
@@ -371,22 +421,24 @@ def _find_macho_files(python_dir: Path) -> list[Path]:
     """Return all non-symlink Mach-O files under python_dir."""
     result = subprocess.run(
         ["find", str(python_dir), "-type", "f"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     macho = []
     for path_str in result.stdout.splitlines():
         f = Path(path_str)
         if f.is_symlink():
             continue
-        probe = subprocess.run(
-            ["file", str(f)], capture_output=True, text=True
-        )
+        probe = subprocess.run(["file", str(f)], capture_output=True, text=True)
         if "Mach-O" in probe.stdout:
             macho.append(f)
     return macho
 
 
-def sign_macos(python_dir: Path, out_dir: Path, platform_key: str, tmpdir: Path) -> Path:
+def sign_macos(
+    python_dir: Path, out_dir: Path, platform_key: str, tmpdir: Path
+) -> Path:
     """Sign all Mach-O binaries individually, create a ditto zip, then notarize."""
     identity = os.environ.get("APPLE_SIGNING_IDENTITY", "")
     if not identity:
@@ -402,9 +454,12 @@ def sign_macos(python_dir: Path, out_dir: Path, platform_key: str, tmpdir: Path)
         "codesign",
         "--force",
         "--timestamp",
-        "--options", "runtime",
-        "--sign", identity,
-        "--entitlements", str(entitlements),
+        "--options",
+        "runtime",
+        "--sign",
+        identity,
+        "--entitlements",
+        str(entitlements),
     ]
     # Sign deepest paths first so that outer bundles don't invalidate inner sigs.
     for f in sorted(macho_files, key=lambda p: len(p.parts), reverse=True):
@@ -427,13 +482,21 @@ def sign_macos(python_dir: Path, out_dir: Path, platform_key: str, tmpdir: Path)
 
     if apple_id and apple_password and team_id:
         print("==> Notarizing archive (this takes a few minutes)...")
-        run([
-            "xcrun", "notarytool", "submit", str(archive),
-            "--apple-id", apple_id,
-            "--password", apple_password,
-            "--team-id", team_id,
-            "--wait",
-        ])
+        run(
+            [
+                "xcrun",
+                "notarytool",
+                "submit",
+                str(archive),
+                "--apple-id",
+                apple_id,
+                "--password",
+                apple_password,
+                "--team-id",
+                team_id,
+                "--wait",
+            ]
+        )
     else:
         print(
             "    Warning: APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID not set — "
@@ -445,16 +508,20 @@ def sign_macos(python_dir: Path, out_dir: Path, platform_key: str, tmpdir: Path)
 
 # ── Step 7b: Windows signing ──────────────────────────────────────────────────
 
+
 def sign_windows(python_dir: Path, out_dir: Path, platform_key: str) -> Path:
     """Sign .exe/.dll/.pyd files with signtool, then zip."""
     thumbprint = os.environ.get("WINDOWS_CERTIFICATE_THUMBPRINT", "")
     if not thumbprint:
-        raise SystemExit("WINDOWS_CERTIFICATE_THUMBPRINT is required for Windows signing.")
+        raise SystemExit(
+            "WINDOWS_CERTIFICATE_THUMBPRINT is required for Windows signing."
+        )
 
     custom_cmd = os.environ.get("WINDOWS_SIGN_COMMAND", "")
 
     binaries = [
-        f for pattern in ("**/*.exe", "**/*.dll", "**/*.pyd")
+        f
+        for pattern in ("**/*.exe", "**/*.dll", "**/*.pyd")
         for f in python_dir.rglob(pattern)
         if f.is_file() and not f.is_symlink()
     ]
@@ -464,14 +531,21 @@ def sign_windows(python_dir: Path, out_dir: Path, platform_key: str) -> Path:
         if custom_cmd:
             run(custom_cmd.replace("{path}", str(f)).split())
         else:
-            run([
-                "signtool", "sign",
-                "/tr", "http://timestamp.digicert.com",
-                "/td", "sha256",
-                "/fd", "sha256",
-                "/sha1", thumbprint,
-                str(f),
-            ])
+            run(
+                [
+                    "signtool",
+                    "sign",
+                    "/tr",
+                    "http://timestamp.digicert.com",
+                    "/td",
+                    "sha256",
+                    "/fd",
+                    "sha256",
+                    "/sha1",
+                    thumbprint,
+                    str(f),
+                ]
+            )
 
     out_dir.mkdir(parents=True, exist_ok=True)
     archive = out_dir / f"corpora-py-{platform_key}.zip"
@@ -485,6 +559,7 @@ def sign_windows(python_dir: Path, out_dir: Path, platform_key: str) -> Path:
 
 
 # ── Step 7c: Unsigned archive ─────────────────────────────────────────────────
+
 
 def create_unsigned_archive(python_dir: Path, out_dir: Path, platform_key: str) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -503,6 +578,7 @@ def create_unsigned_archive(python_dir: Path, out_dir: Path, platform_key: str) 
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main():
     args = parse_args()
