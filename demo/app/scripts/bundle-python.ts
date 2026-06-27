@@ -105,62 +105,6 @@ await $`rm -rf ${DEST_DIR}/share ${DEST_DIR}/man`.quiet().nothrow();
 await $`rm -rf ${DEST_DIR}/lib/pkgconfig ${DEST_DIR}/include`.quiet().nothrow();
 await $`find ${DEST_DIR}/lib -name "*.a" -delete`.quiet().nothrow();
 
-// --- Generate app_paths.py from version.json ---
-console.log("==> Generating paths config...");
-const versionPath = "version.json";
-
-if (existsSync(versionPath)) {
-  const version = JSON.parse(readFileSync(versionPath, "utf-8"));
-  const identifier = version.identifier ?? "";
-  const channel = version.channel ?? "stable";
-
-  if (identifier) {
-    const appPathsPy = `\
-"""Auto-generated — platform paths matching Electrobun Utils.paths."""
-import os
-from pathlib import Path
-
-_home = Path.home()
-_platform = __import__("sys").platform
-
-IDENTIFIER = "${identifier}"
-CHANNEL = "${channel}"
-
-if _platform == "darwin":
-    app_data = _home / "Library" / "Application Support"
-    cache = _home / "Library" / "Caches"
-    logs = _home / "Library" / "Logs"
-    temp = Path(os.environ.get("TMPDIR", "/tmp"))
-elif _platform == "win32":
-    app_data = Path(os.environ.get("LOCALAPPDATA", str(_home / "AppData" / "Local")))
-    cache = app_data
-    logs = app_data
-    temp = Path(os.environ.get("TEMP", str(app_data / "Temp")))
-else:
-    app_data = Path(os.environ.get("XDG_DATA_HOME", str(_home / ".local" / "share")))
-    cache = Path(os.environ.get("XDG_CACHE_HOME", str(_home / ".cache")))
-    logs = Path(os.environ.get("XDG_STATE_HOME", str(_home / ".local" / "state")))
-    temp = Path("/tmp")
-
-home = _home
-config = app_data
-documents = _home / "Documents"
-downloads = _home / "Downloads"
-desktop = _home / "Desktop"
-
-user_data = app_data / IDENTIFIER / CHANNEL
-user_cache = cache / IDENTIFIER / CHANNEL
-user_logs = logs / IDENTIFIER / CHANNEL
-`;
-
-    writeFileSync(join(pylib, "site-packages", "app_paths.py"), appPathsPy);
-    console.log(`    Identifier: ${identifier}`);
-    console.log(`    Channel: ${channel}`);
-  }
-} else {
-  console.log("    Warning: version.json not found, skipping paths config");
-}
-
 // --- Report sizes ---
 const total = (await $`du -sh ${DEST_DIR}`.text()).split("\t")[0];
 const libSize = (await $`du -sh ${DEST_DIR}/lib/${platformInfo.lib}`.text().catch(() => "N/A")).split("\t")[0];

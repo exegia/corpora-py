@@ -10,25 +10,15 @@ Run via `uv run scripts/setup.py`.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
-import sys
-from pathlib import Path
-
-SCRIPTS_DIR = Path(__file__).resolve().parent
-ROOT = SCRIPTS_DIR.parent
+from utils import ROOT, ensure_tool, run
 
 
-def run(cmd: list[str]) -> None:
-    print(f"$ {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=ROOT)
-    if result.returncode != 0:
-        sys.exit(result.returncode)
-
-
-def ensure_uv() -> None:
-    if shutil.which("uv") is None:
-        sys.exit("error: `uv` is required. Install from https://docs.astral.sh/uv/")
+def is_uv_install() -> None:
+    ensure_tool(
+        "uv",
+        "error: `uv` is required. Install from https://docs.astral.sh/uv/",
+        ["curl", "-LsSf", "https://astral.sh/uv/install.sh", "|", "sh"],
+    )
 
 
 def sync_dependencies() -> None:
@@ -43,11 +33,12 @@ def install_dotenvx() -> None:
 
 def install_demo_deps() -> None:
     print("\n[3/3] Installing the demo app dependencies...")
-    run(cmd=["bun", "install", "--no-cache", "--cwd", "demo/app"])
+    demo_app_dir = ROOT / "demo/app"
+    run(cmd=["bun", "install", "--no-cache"], dir=demo_app_dir)
 
 
 def main() -> None:
-    ensure_uv()
+    is_uv_install()
     sync_dependencies()
     install_dotenvx()
     install_demo_deps()

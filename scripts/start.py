@@ -20,68 +20,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import shutil
-import subprocess
-import sys
 import threading
 import time
-import webbrowser
-from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
-ROOT = SCRIPTS_DIR.parent
-ENV_FILE = str(ROOT / ".env.development")  # absolute so dotenvx works from any cwd
-DEMO_APP_DIR = "demo/app"
-DEMO_SRC_DIR = str(ROOT / "demo/app/src")
-VITE_URL = "http://localhost:5173"
-
-# Match any running Supabase Studio container regardless of project name.
-# If one is up, we reuse it rather than starting a second instance.
-SUPABASE_STUDIO_FILTER = "supabase_studio"
-SUPABASE_PROJECT_DIR = str(ROOT.parent / "corpora-supabase")
-
-
-def dotenvx_wrap(cmd: list[str]) -> list[str]:
-    """Prepend `dotenvx run` so .env.development values are loaded into the command's env.
-
-    `.env.keys` is auto-discovered next to the env file for encrypted values.
-    """
-    return ["dotenvx", "run", "-f", ENV_FILE, "--", *cmd]
-
-
-def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
-    print(f"$ {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=ROOT, text=True)
-    if check and result.returncode != 0:
-        sys.exit(result.returncode)
-    return result
-
-
-def ensure_tool(name: str, hint: str) -> None:
-    if shutil.which(name) is None:
-        sys.exit(f"error: `{name}` is required on PATH. {hint}")
-
-
-def is_supabase_running() -> bool:
-    """Check if the Supabase Studio Docker container is already running.
-
-    Uses `docker ps --filter name=supabase_studio` so we don't rely on the
-    `supabase` CLI — Docker is the ground truth for whether the stack is live.
-    """
-    result = subprocess.run(
-        [
-            "docker",
-            "ps",
-            "--filter",
-            f"name={SUPABASE_STUDIO_FILTER}",
-            "--format",
-            "{{.Names}}",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    return bool(result.stdout.strip())
-
+from utils import SUPABASE_PROJECT_DIR, VITE_URL, ensure_tool, is_supabase_running, run
 
 # ---------------------------------------------------------------------------
 # Demo app helpers
@@ -90,20 +32,7 @@ def is_supabase_running() -> bool:
 
 def _run_vite_server() -> None:
     """Target for the background thread: keep the Vite HMR dev server alive."""
-    subprocess.run(
-        dotenvx_wrap(["bun", "run", "dev"]),
-        cwd=ROOT / DEMO_APP_DIR,
-        text=True,
-    )
-
-
-def _run_electrobun() -> None:
-    """Target for the background thread: build then launch the electrobun desktop app."""
-    subprocess.run(
-        dotenvx_wrap(["bun", "run", "start"]),
-        cwd=ROOT / DEMO_APP_DIR,
-        text=True,
-    )
+    run(cmd=["bun", "run", "dev"], dotenvx=True)
 
 
 def start_demo_app() -> None:
@@ -125,7 +54,6 @@ def start_demo_app() -> None:
     # 2. Give Vite a moment to bind before opening the browser
     time.sleep(2)
     print(f"🌐 Opening browser at {VITE_URL} …")
-    webbrowser.open(VITE_URL)
 
     # 3. Build and launch the electrobun desktop app
     # electrobun_thread = threading.Thread(
@@ -158,14 +86,11 @@ def start() -> None:
         print("✅ Supabase local stack is already running — skipping `supabase start`.")
     else:
         print("Starting Supabase local stack (Docker containers may take a minute)…")
-        run(dotenvx_wrap(["supabase", "start", "--workdir", SUPABASE_PROJECT_DIR]))
+        run(cmd=["supabase", "start", "--workdir", SUPABASE_PROJECT_DIR], dotenvx=True)
         print("\n✅ Supabase local stack is up.")
 
     # Print status (URLs + keys) for convenience — non-fatal if it fails.
-    run(
-        dotenvx_wrap(["supabase", "status"]),
-        check=False,
-    )
+    run((["supabase", "status"]), check=False, dotenvx=True)
     start_demo_app()
 
 
@@ -178,7 +103,7 @@ def stop() -> None:
         "supabase",
         "Install: https://supabase.com/docs/guides/local-development/cli/getting-started",
     )
-    run(dotenvx_wrap(["supabase", "stop"]))
+    run(["supabase", "stop"])
 
 
 # ---------------------------------------------------------------------------

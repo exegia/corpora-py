@@ -3,10 +3,9 @@
 	"version": "1.0.0",
 	"description": "Electrobun app with React, Tailwind CSS, and Vite HMR",
 	"scripts": {
-		"start": "dotenvx run -fk ./../../.env.keys -f ./../../.env.development -- vite build",
-		"dev": "dotenvx run -fk ./../../.env.keys -f ./../../.env.development -- electrobun dev --watch",
 		"desktop:dev": "electrobun dev --watch",
 		"vite:build": "vite build",
+		"vite:dev": "vite dev --open",
 		"build:canary": "vite build && electrobun build --env=canary",
 		"build:python": "bun scripts/build-embedded-python.ts",
 		"build:python:clean": "bun scripts/build-embedded-python.ts --clean",

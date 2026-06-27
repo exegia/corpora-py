@@ -12,7 +12,6 @@
 // The ElectroBun app (when not in DEV_PYTHON_BIN mode) will spawn this embedded Python.
 
 import { $ } from "bun";
-import { existsSync, mkdirSync } from "fs";
 import { join, resolve } from "path";
 import { parseArgs } from "util";
 
