@@ -84,10 +84,21 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
 
-    wheel_path = Path(args.wheel).resolve()
+    wheel_arg = args.wheel
+    # Support "path.whl[extra]" syntax
+    if "[" in wheel_arg:
+        wheel_path_str = wheel_arg.split("[")[0]
+        extra_part = "[" + wheel_arg.split("[", 1)[1]
+    else:
+        wheel_path_str = wheel_arg
+        extra_part = ""
+
+    wheel_path = Path(wheel_path_str).resolve()
     if not wheel_path.exists():
         print(f"Wheel not found: {wheel_path}", file=sys.stderr)
         sys.exit(1)
+
+    install_target = str(wheel_path) + extra_part if extra_part else str(wheel_path)
 
     platform_key = args.platform or detect_platform()
     if platform_key not in PLATFORM_MAP:
@@ -143,7 +154,7 @@ def main():
             "--python",
             str(python_bin),
             "--no-cache",
-            str(wheel_path),
+            install_target,
         ]
     )
 
@@ -178,6 +189,11 @@ def main():
         "curses",
         "multiprocessing",
         "concurrent",
+        # Be careful: do not remove "email" (used by importlib.metadata), "xml", "http"
+        "distutils",
+        "venv",
+        "ctypes/test",
+        "sqlite3/test",
     ]
     for item in remove_items:
         target = pylib / item
@@ -206,6 +222,15 @@ def main():
         for a in dest_dir.rglob("*.a"):
             a.unlink(missing_ok=True)
 
+    # Remove unnecessary installer tools from the final bundle
+    for tool in ["pip", "wheel", "setuptools"]:
+        tool_dir = pylib / "site-packages" / tool
+        if tool_dir.exists():
+            shutil.rmtree(tool_dir, ignore_errors=True)
+        # also remove dist-info
+        for dinfo in (pylib / "site-packages").glob(f"{tool}*.dist-info"):
+            shutil.rmtree(dinfo, ignore_errors=True)
+
     # 5. Report
     def du(p: Path) -> str:
         try:
@@ -232,6 +257,15 @@ def main():
     print(f"    Shared lib:    {lib_size} ({info['lib']})")
     print(f"    Stdlib:        {stdlib_size}")
     print(f"    Site-packages: {site_size}")
+
+    # Produce a distributable archive of the python dir (for client on-demand download)
+    archive = dest_dir.parent / f"python-runtime-{platform_key}.tar.gz"
+    print(f"==> Creating distributable archive for client opt-in: {archive}")
+    with tarfile.open(archive, "w:gz") as tf:
+        tf.add(dest_dir, arcname="python")
+    print(
+        f"    Ready to host: {archive} (users can download on opt-in for full features)"
+    )
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ import argparse
 import sys
 import threading
 import time
+from pathlib import Path
 
 from utils import (
     ROOT,
@@ -61,7 +62,24 @@ def ensure_demo_python_runtime() -> None:
 
 def _run_vite_server() -> None:
     """Target for the background thread: keep the Vite HMR dev server alive."""
-    run(cmd=["bun", "run", "dev"], dotenvx=True)
+    dir: Path = ROOT / "demo/app"
+    run(cmd=["bun", "run", "vite:dev"], dotenvx=True, dir=dir)
+
+
+def _run_electrobun_server() -> None:
+    """Target for the background thread: keep the Vite HMR dev server alive."""
+    dir = ROOT / "demo/app"
+    dist: Path = dir / "dist"
+    if dist.exists() is False:
+        """If the dist folder isn't there, that means that we need to run,
+        the `vite:build` command.
+        """
+        run(cmd=["bun", "run", "vite:build"], dotenvx=True, dir=dir)
+        time.sleep(2)
+
+    """The folder already exists, the vite build has already been ran"""
+    """We can then run and boot the desktop app."""
+    run(cmd=["bun", "run", "desktop:dev"], dotenvx=True, dir=dir)
 
 
 def start_demo_app() -> None:
@@ -73,24 +91,23 @@ def start_demo_app() -> None:
       3. Launch the electrobun desktop app in a daemon thread (non-blocking).
       4. Block on the file-watcher — rebuild electrobun whenever .ts/.tsx changes.
     """
-    # 1. Vite HMR server
-    vite_thread = threading.Thread(
-        target=_run_vite_server, daemon=True, name="vite-hmr"
+    # 1.Build and launch the electrobun desktop app
+    electrobun_thread = threading.Thread(
+        target=_run_electrobun_server, daemon=True, name="electrobun"
     )
-    vite_thread.start()
-    print("⚡ Vite HMR server starting...")
+    electrobun_thread.start()
+    print("🖥️  Starting electrobun desktop app...")
 
     # 2. Give Vite a moment to bind before opening the browser
     time.sleep(2)
     print(f"🌐 Opening browser at {VITE_URL} …")
 
-    # 3. Build and launch the electrobun desktop app
-    # electrobun_thread = threading.Thread(
-    #   target=_run_electrobun, daemon=True,
-    #   name="electrobun"
-    # )
-    # electrobun_thread.start()
-    print("🖥️  Starting electrobun desktop app...")
+    # 3. Vite HMR server
+    vite_thread = threading.Thread(
+        target=_run_vite_server, daemon=True, name="vite-hmr"
+    )
+    vite_thread.start()
+    print("⚡ Vite HMR server starting...")
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +136,7 @@ def start() -> None:
         print("\n✅ Supabase local stack is up.")
 
     # Print status (URLs + keys) for convenience — non-fatal if it fails.
-    run((["supabase", "status"]), check=False, dotenvx=True)
+    run((["supabase", "status", "--workdir", SUPABASE_PROJECT_DIR]), check=False)
 
     # Ensure the demo's embedded Python runtime is ready (root-owned bundler)
     ensure_demo_python_runtime()

@@ -50,6 +50,11 @@ def parse_args():
     p.add_argument(
         "--clean", action="store_true", help="Remove previous resources/python first"
     )
+    p.add_argument(
+        "--full",
+        action="store_true",
+        help="Install with [full] extra (includes text-fabric for conversions)",
+    )
     return p.parse_args()
 
 
@@ -82,12 +87,12 @@ def main():
     wheel = find_wheel()
     print(f"    Found wheel: {wheel.name}")
 
-    # 2. Run bundler
-    print("\n==> Bundling standalone Python + wheel...")
-    bundle_cmd = [sys.executable, str(BUNDLE_SCRIPT), str(wheel)]
+    wheel_spec = f"{wheel}[full]" if args.full else str(wheel)
+    print(f"\n==> Bundling standalone Python + wheel{'[full]' if args.full else ''}...")
+
+    bundle_cmd = [sys.executable, str(BUNDLE_SCRIPT), wheel_spec]
     if args.platform:
         bundle_cmd += ["--platform", args.platform]
-    # Always target the demo app resources dir explicitly
     bundle_cmd += ["--dest-dir", str(DEMO_RESOURCES)]
 
     run(bundle_cmd)
