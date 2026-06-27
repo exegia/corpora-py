@@ -1,8 +1,10 @@
 name: Demo App - Docker Image
 
 # Builds and (optionally) publishes a dev container image for the ElectroBun demo.
-# The image contains Bun + the local Python library so you get a reproducible
-# dev environment you can SSH into from your IDE.
+# The image contains Bun + the local Python library (editable venv inside container).
+# Bundling of the "frozen" embedded Python (wheel + standalone) is driven from
+# root scripts/ (see scripts/build_embedded_python.py and scripts/setup.py).
+# The dev container sets up a venv shim + DEV_PYTHON_BIN override on start.
 #
 # - Builds on changes under demo/app/ or the Python source
 # - Uses cache for fast rebuilds

@@ -121,6 +121,15 @@ else
   echo "==> node_modules present, skipping bun install"
 fi
 
+# 6b. Ensure the embedded Python runtime for the demo (if not already built)
+# The bundling logic lives in the root scripts/ (build_embedded_python.py).
+# For Docker dev we prefer the venv shim (see below), but ensure the dir exists
+# so that non-DEV runs would work, and for consistency with local `start.py`.
+if [[ ! -x /workspace/demo/app/resources/python/bin/python3 ]]; then
+  echo "==> Demo embedded Python not present — building via root script..."
+  python3 /workspace/scripts/build_embedded_python.py
+fi
+
 # 6b. Expose key binaries (dotenvx, etc.) in the system PATH
 # This ensures `dotenvx run ...` works when running the npm scripts inside the container.
 echo "==> Linking runtime binaries (dotenvx) into /usr/local/bin..."

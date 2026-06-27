@@ -4,6 +4,9 @@ name: Build Sidecar
 # The resulting zip archives are intended to be embedded as resources in a
 # Tauri application (see https://v2.tauri.app/develop/sidecar/).
 #
+# Note: Demo/ElectroBun embedded Python bundling lives in root scripts/
+# (build_embedded_python.py + bundle_python.py) and is invoked from setup.py / start.py.
+#
 # Triggering:
 #   - On tags (vX.Y.Z) — production builds with signing
 #   - workflow_dispatch — manual runs; pass skip_sign=true for unsigned builds
@@ -80,9 +83,9 @@ jobs:
       matrix:
         include:
           - platform: macos-arm64
-            runner: macos-14        # Apple Silicon
+            runner: macos-14 # Apple Silicon
           - platform: macos-x64
-            runner: macos-13        # Intel (use macos-latest-large if macos-13 is retired)
+            runner: macos-13 # Intel (use macos-latest-large if macos-13 is retired)
           - platform: windows-x64
             runner: windows-latest
 
