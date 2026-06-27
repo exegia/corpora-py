@@ -6,6 +6,15 @@
 Build the wheel for this project and embed it into the ElectroBun demo app's
 standalone Python runtime.
 
+This is primarily for the DEMO / ADMIN use case (full size is acceptable).
+
+For the CONSUMER/CLIENT app:
+- Use the base install (without [full]).
+- On user opt-in for full corpus features, the client downloads a pre-built
+  runtime archive instead of bundling at install time.
+- See scripts/ensure_python_runtime.py for the download helper.
+- See scripts/build_client_python_runtime.py for producing the client archive.
+
 Python equivalent of demo/app/scripts/build-embedded-python.ts
 
 Usage:

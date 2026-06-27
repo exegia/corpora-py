@@ -48,6 +48,9 @@ build-backend = "hatchling.build"
 [project.optional-dependencies]
 full = [
     "text-fabric>=13.0.0",  # needed for conversion tools (epub/html → TF)
+    # Admin / full corpus: install with [full]
+    # Client consumer: base install is small. On opt-in, download prebuilt full runtime
+    # (see scripts/build_client_python_runtime.py and scripts/ensure_python_runtime.py).
 ]
 
 [tool.hatch.build.targets.wheel]

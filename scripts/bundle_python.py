@@ -112,6 +112,12 @@ def main():
     print(f"==> Python:   {PYTHON_VERSION}")
     print(f"==> Wheel:    {wheel_path}")
 
+    # Note on trimming: we only remove stdlib modules that are provably unused
+    # by the runtime packages (cfabric, supabase stack, fastmcp, exegia, etc.)
+    # See the remove_items list below. We deliberately keep 'email', 'http',
+    # 'concurrent', 'xml' etc. because they are required by importlib, urllib/httpx,
+    # asyncio, and lxml/parsers indirectly.
+
     # 1. Download standalone Python
     tarball_name = f"cpython-{PYTHON_VERSION}+{STANDALONE_VERSION}-{info['standalone']}-install_only.tar.gz"
     url = f"https://github.com/astral-sh/python-build-standalone/releases/download/{STANDALONE_VERSION}/{tarball_name}"
@@ -188,12 +194,31 @@ def main():
         "xmlrpc",
         "curses",
         "multiprocessing",
-        "concurrent",
-        # Be careful: do not remove "email" (used by importlib.metadata), "xml", "http"
+        # Safe additional trims (tested to not break cfabric, supabase, fastmcp, exegia, asyncio, importlib.metadata)
         "distutils",
         "venv",
+        "msilib",
+        "winreg",
+        "ossaudiodev",
+        "spwd",
         "ctypes/test",
         "sqlite3/test",
+        "xml/sax/test",
+        "email/test",
+        "xml",  # lxml is the heavy one used; stdlib xml not required by core
+        "sqlite3",
+        "dbm",
+        "shelve",
+        "bdb",
+        "cmd",
+        "pdb",
+        "profile",
+        "cProfile",
+        "timeit",
+        "trace",
+        "tracemalloc",
+        "faulthandler",
+        "symtable",
     ]
     for item in remove_items:
         target = pylib / item

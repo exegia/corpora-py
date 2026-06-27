@@ -11,8 +11,13 @@ export default {
 		copy: {
 			"dist/index.html": "views/mainview/index.html",
 			"dist/assets": "views/mainview/assets",
-			// Copy the embedded Python runtime (built via build:python) into the app bundle
-			// so python-bridge.ts can find it at Contents/Resources/python/bin/python3
+			// Copy the embedded Python runtime (built via root scripts/build_embedded_python.py)
+			// into the app bundle so python-bridge.ts can find python3 at
+			// Contents/Resources/python/bin/python3
+			//
+			// Admin app: we bundle the (large) full runtime.
+			// Client app: base app ships without it (or with minimal). On user opt-in we
+			// download the pre-built archive (see scripts/ensure_python_runtime.py).
 			"resources/python": "python",
 		},
 		// Ignore Vite output in watch mode — HMR handles view rebuilds separately
