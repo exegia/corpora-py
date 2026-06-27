@@ -126,10 +126,11 @@ def start_demo_app() -> None:
     webbrowser.open(VITE_URL)
 
     # 3. Build and launch the electrobun desktop app
-    electrobun_thread = threading.Thread(
-        target=_run_electrobun, daemon=True, name="electrobun"
-    )
-    electrobun_thread.start()
+    # electrobun_thread = threading.Thread(
+    #   target=_run_electrobun, daemon=True,
+    #   name="electrobun"
+    # )
+    # electrobun_thread.start()
     print("🖥️  Starting electrobun desktop app...")
 
 
@@ -159,7 +160,10 @@ def start() -> None:
         print("\n✅ Supabase local stack is up.")
 
     # Print status (URLs + keys) for convenience — non-fatal if it fails.
-    run(dotenvx_wrap(["supabase", "status"]), check=False)
+    run(
+        dotenvx_wrap(["supabase", "--network-id", "ivaecofevxactmmupvyp", "status"]),
+        check=False,
+    )
     start_demo_app()
 
 

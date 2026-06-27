@@ -5,11 +5,12 @@
 	"scripts": {
 		"start": "dotenvx run -fk ./../../.env.keys -f ./../../.env.development -- vite build",
 		"dev": "dotenvx run -fk ./../../.env.keys -f ./../../.env.development -- electrobun dev --watch",
-		"dev:hmr": "concurrently \"bun run hmr\" \"bun run start\"",
-		"hmr": "vite --port 5173",
+		"desktop:dev": "electrobun dev --watch",
+		"vite:build": "vite build",
 		"build:canary": "vite build && electrobun build --env=canary",
 		"build:python": "bun scripts/build-embedded-python.ts",
-		"build:python:clean": "bun scripts/build-embedded-python.ts --clean"
+		"build:python:clean": "bun scripts/build-embedded-python.ts --clean",
+		"clean": "bun scripts/clean.ts"
 	},
 	"dependencies": {
 		"@dotenvx/dotenvx": "latest",
