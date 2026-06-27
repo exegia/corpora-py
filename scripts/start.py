@@ -28,7 +28,8 @@ import time
 import webbrowser
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPTS_DIR.parent
 ENV_FILE = str(ROOT / ".env.development")  # absolute so dotenvx works from any cwd
 DEMO_APP_DIR = "demo/app"
 DEMO_SRC_DIR = str(ROOT / "demo/app/src")
@@ -37,6 +38,7 @@ VITE_URL = "http://localhost:5173"
 # Match any running Supabase Studio container regardless of project name.
 # If one is up, we reuse it rather than starting a second instance.
 SUPABASE_STUDIO_FILTER = "supabase_studio"
+SUPABASE_PROJECT_DIR = str(ROOT.parent / "corpora-supabase")
 
 
 def dotenvx_wrap(cmd: list[str]) -> list[str]:
@@ -156,12 +158,12 @@ def start() -> None:
         print("✅ Supabase local stack is already running — skipping `supabase start`.")
     else:
         print("Starting Supabase local stack (Docker containers may take a minute)…")
-        run(dotenvx_wrap(["supabase", "start"]))
+        run(dotenvx_wrap(["supabase", "start", "--workdir", SUPABASE_PROJECT_DIR]))
         print("\n✅ Supabase local stack is up.")
 
     # Print status (URLs + keys) for convenience — non-fatal if it fails.
     run(
-        dotenvx_wrap(["supabase", "--network-id", "ivaecofevxactmmupvyp", "status"]),
+        dotenvx_wrap(["supabase", "status"]),
         check=False,
     )
     start_demo_app()
