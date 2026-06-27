@@ -55,5 +55,6 @@ src/exegia/supabase/*.pem
 .env.*.local
 src/exegia/supabase/seeds/*_rows.sql
 src/corpora_py.egg-info/
+supabase/
 **/resources/python/
 resources/python/
