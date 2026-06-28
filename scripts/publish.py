@@ -4,7 +4,7 @@
 Two modes:
 
   tag (default)
-    Bumps the version in pyproject.toml and src/exegia/__init__.py, commits,
+    Bumps the version in pyproject.toml and src/shared/__init__.py (or client), commits,
     creates a vX.Y.Z tag, and pushes — the "Publish" workflow picks it up
     automatically via its tag trigger.
 
@@ -44,7 +44,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
-VERSION_FILE = ROOT / "src" / "exegia" / "__init__.py"
+VERSION_FILE = ROOT / "src" / "shared" / "__init__.py"
 REPO = "Mannydefreitas7/exegia-api-py"
 WORKFLOW_FILE = "publish.yml"
 
@@ -211,19 +211,19 @@ def main() -> None:
         default="patch",
         metavar="patch|minor|major|X.Y.Z",
         help="Version bump type or explicit version (default: patch). "
-             "Ignored when --dispatch is used.",
+        "Ignored when --dispatch is used.",
     )
     parser.add_argument(
         "--dispatch",
         action="store_true",
         help="Trigger workflow_dispatch directly instead of pushing a tag. "
-             "Does not bump the version.",
+        "Does not bump the version.",
     )
     parser.add_argument(
         "--publish",
         action="store_true",
         help="Only valid with --dispatch. Passes publish=true to the workflow "
-             "(build and upload to PyPI).",
+        "(build and upload to PyPI).",
     )
     parser.add_argument(
         "--ref",

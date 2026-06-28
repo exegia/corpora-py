@@ -56,5 +56,6 @@ src/exegia/supabase/*.pem
 src/exegia/supabase/seeds/*_rows.sql
 src/corpora_py.egg-info/
 supabase/
-**/resources/python/
+!src/exegia/supabase/
+**/resources/
 resources/python/

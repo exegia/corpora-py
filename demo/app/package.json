@@ -7,8 +7,8 @@
 		"vite:build": "vite build",
 		"vite:dev": "vite dev --open",
 		"build:canary": "vite build && electrobun build --env=canary",
-		"build:python": "bun scripts/build-embedded-python.ts",
-		"build:python:clean": "bun scripts/build-embedded-python.ts --clean",
+		"build:python": "uv --project ../.. run python ../../scripts/build_embedded_python.py",
+		"build:python:clean": "uv --project ../.. run python ../../scripts/build_embedded_python.py --clean",
 		"clean": "bun scripts/clean.ts"
 	},
 	"dependencies": {

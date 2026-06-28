@@ -10,7 +10,7 @@ Exegia is a backend for studying annotated religious texts (Bible, Quran, Tanakh
 corpus data through two surfaces:
 
 | Surface        | Technology | Use case                          |
-|----------------|------------|-----------------------------------|
+| -------------- | ---------- | --------------------------------- |
 | **MCP server** | FastMCP    | AI assistants (Claude, GPT, etc.) |
 
 Corpora are loaded from [Context-Fabric](https://context-fabric.ai) — a graph-based annotated text engine. Every word,
@@ -20,16 +20,20 @@ verse, chapter, and book is a typed node in a graph with queryable features (lem
 
 ## Package modules
 
-Everything lives in the `exegia` namespace (`src/exegia/`):
+Code is now decoupled into separate workspaces under `src/` (see the refactor):
 
-| Module           | Purpose                                         |
-|------------------|-------------------------------------------------|
-| `exegia.mcp`     | FastMCP server — 11 corpus tools for AI clients |
-| `exegia.corpus`  | Fetch TF datasets from git repositories         |
-| `exegia.utils`   | EPUB / HTML → Text-Fabric converters            |
-| `exegia.models`  | Shared enums and data model definitions         |
-| `exegia.schemas` | Pydantic request/response schemas               |
-| `exegia.auth`    | Auth utilities                                  |
+- `shared/` — common (auth, supabase, models, schemas, constants, corpus fetch, epub parse)
+- `client/` — client/consumer surface (primarily the FastMCP server + tools)
+- `admin/` — admin/full tooling (EPUB/HTML converters + packaging)
+
+| Module           | Purpose                                                |
+| ---------------- | ------------------------------------------------------ |
+| `client.mcp`     | FastMCP server — 11 corpus tools for AI clients        |
+| `shared.corpus`  | Fetch TF datasets from git repositories                |
+| `admin.utils`    | EPUB / HTML → Text-Fabric converters (requires [full]) |
+| `shared.models`  | Shared enums and data model definitions                |
+| `shared.schemas` | Pydantic request/response schemas                      |
+| `shared.auth`    | Auth utilities (sign in/up/out + CurrentUser)          |
 
 ---
 
@@ -88,7 +92,7 @@ uv run cf-mcp \
 ### Available tools (11)
 
 | Category  | Tool                  | Description                                              |
-|-----------|-----------------------|----------------------------------------------------------|
+| --------- | --------------------- | -------------------------------------------------------- |
 | Discovery | `list_corpora`        | List loaded corpora and the active one                   |
 | Discovery | `describe_corpus`     | Node types with counts, section hierarchy                |
 | Discovery | `list_features`       | Browse features, filter by node type                     |
@@ -115,7 +119,7 @@ get_passages(references)    → read the matched text
 ### Programmatic use
 
 ```python
-from exegia.mcp import mcp, corpus_manager
+from client.mcp import mcp, corpus_manager
 
 corpus_manager.load("~/.exegia/datasets/bibles/BHSA", name="BHSA")
 mcp.run(transport="sse", host="localhost", port=8000)
@@ -130,7 +134,7 @@ Datasets are Text-Fabric archives extracted locally under `~/.exegia/datasets/`.
 ### Fetch from git
 
 ```python
-from exegia.corpus.fetch_from_git import fetch_datasets_from_git
+from shared.corpus.fetch_from_git import fetch_datasets_from_git
 
 paths = fetch_datasets_from_git("https://github.com/ETCBC/bhsa")
 # returns list[Path] of dirs containing otext.tf + otype.tf
@@ -143,7 +147,7 @@ paths = fetch_datasets_from_git("https://github.com/ETCBC/bhsa")
 Books can be converted from EPUB or HTML into Text-Fabric datasets for corpus querying.
 
 ```python
-from exegia.utils.convert_epub_to_tf import convert_epub_to_tf
+from admin.utils.convert_epub_to_tf import convert_epub_to_tf
 
 tf_path = convert_epub_to_tf(
     epub_path="commentary.epub",
@@ -208,11 +212,15 @@ backend/
 │   └── workflows/
 │       └── publish.yml  # CI: build + publish on tag push
 └── src/
-    └── exegia/
-        ├── auth/        # Auth utilities
-        ├── corpus/      # Git dataset fetching
-        ├── mcp/         # FastMCP server (cf-mcp entrypoint)
-        ├── models/      # Enums and data model definitions
-        ├── schemas/     # Pydantic API schemas
-        └── utils/       # EPUB/HTML → TF converters
+    ├── shared/          # Shared (auth, supabase, models, schemas, corpus fetch, parse)
+    │   ├── auth/
+    │   ├── supabase/
+    │   ├── models/
+    │   ├── schemas/
+    │   ├── corpus/
+    │   └── utils/
+    ├── client/          # Client workspace
+    │   └── mcp/         # FastMCP server (cf-mcp entrypoint)
+    └── admin/           # Admin workspace
+        └── utils/       # Converters (EPUB/HTML → TF etc, [full] extra)
 ```

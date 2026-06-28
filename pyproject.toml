@@ -15,9 +15,8 @@ classifiers = [
 dependencies = [
     # MCP server
     "fastmcp>=2.0",
-    # Corpus
+    # Corpus (core runtime uses context-fabric; text-fabric is for dataset conversion)
     "context-fabric>=0.5.0",
-    "text-fabric>=13.0.0",
     # HTTP client
     "httpx>=0.27.0",
     # Config / env
@@ -34,18 +33,34 @@ dependencies = [
     "ebooklib>=0.18",
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
-    "black>=26.5.1",
     "supabase>=2.31.0",
     "watchfiles>=1.2.0",
     "platformdirs>=4.10.0",
 ]
 
 [project.scripts]
-cf-mcp = "exegia.mcp:main"
+# cf-mcp lives in the client workspace (the MCP server is the primary client surface)
+cf-mcp = "client.mcp:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project.optional-dependencies]
+full = [
+    "text-fabric>=13.0.0",  # needed for conversion tools (epub/html → TF)
+    # Admin / full corpus: install with [full]
+    # Client consumer: base install is small. On opt-in, download prebuilt full runtime
+    # (see scripts/build_client_python_runtime.py and scripts/ensure_python_runtime.py).
+]
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/exegia"]
+# Decoupled workspaces: admin (converters + heavy), client (MCP), shared (auth/models/etc)
+packages = ["src/shared", "src/client", "src/admin"]
+
+# supabase subpackage was being dropped from the wheel in some builds
+# (name clash with the "supabase" runtime dep during hatch discovery?).
+# Force-including the subdir guarantees the full shared package is present
+# after `uv build` + install into the standalone python runtime.
+[tool.hatch.build.targets.wheel.force-include]
+"src/shared/supabase" = "shared/supabase"

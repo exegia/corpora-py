@@ -4,7 +4,7 @@ import {Icon} from "@iconify/react";
 function App() {
 
 	return (
-	<main className="flex min-h-screen items-center justify-center select-none">
+	<main className="flex min-h-screen items-center justify-center select-none bg-neutral-100 dark:bg-neutral-900">
       <Surface className='p-6 border-2 border-neutral-100 rounded-2xl w-1/3' variant="default">
 
 

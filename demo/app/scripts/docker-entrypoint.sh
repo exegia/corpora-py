@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # demo/app/scripts/docker-entrypoint.sh
 # Prepares the dev container:
-# - Ensures Python 3.13 + editable install of the corpora-py library (so exegia.* is importable)
+# - Ensures Python 3.13 + editable install of the corpora-py library (so shared.*, client.*, admin.* are importable)
 # - Sets up a stable python "shim" the ElectroBun PythonBridge can use in DEV mode
 # - Injects optional SSH public key for passwordless login
 # - Starts sshd (or the provided CMD)
@@ -26,7 +26,7 @@ uv venv --python 3.13 "${VENV_PATH}"
 # shellcheck disable=SC1091
 source "${VENV_PATH}/bin/activate"
 
-# 3. Install the local library in editable mode so `import exegia` and `exegia.auth` etc. work
+# 3. Install the local library in editable mode so `import shared`, `import client`, `import admin` etc. work (post admin/client/shared refactor)
 echo "==> Installing corpora-py (local) in editable mode..."
 uv pip install -e /workspace --quiet
 
@@ -121,6 +121,15 @@ else
   echo "==> node_modules present, skipping bun install"
 fi
 
+# 6b. Ensure the embedded Python runtime for the demo (if not already built)
+# The bundling logic lives in the root scripts/ (build_embedded_python.py).
+# For Docker dev we prefer the venv shim (see below), but ensure the dir exists
+# so that non-DEV runs would work, and for consistency with local `start.py`.
+if [[ ! -x /workspace/demo/app/resources/python/bin/python3 ]]; then
+  echo "==> Demo embedded Python not present — building via root script..."
+  python3 /workspace/scripts/build_embedded_python.py
+fi
+
 # 6b. Expose key binaries (dotenvx, etc.) in the system PATH
 # This ensures `dotenvx run ...` works when running the npm scripts inside the container.
 echo "==> Linking runtime binaries (dotenvx) into /usr/local/bin..."
@@ -144,6 +153,7 @@ export DEV_PYTHON_HOME="${RESOURCES_PYTHON}"
 # If someone execs into the container we still want these
 echo "DEV_PYTHON_BIN=${DEV_PYTHON_BIN}" >> /etc/environment || true
 echo "DEV_PYTHON_HOME=${DEV_PYTHON_HOME}" >> /etc/environment || true
+# PYTHONPATH=/workspace/src enables `import shared` etc without editable install in some contexts
 echo "PYTHONPATH=/workspace/src" >> /etc/environment || true
 
 echo ""
