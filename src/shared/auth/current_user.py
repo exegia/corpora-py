@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from supabase_auth import User
+from supabase_auth import User  # pyright: ignore[reportMissingImports]
 
 from shared.supabase.authentication import (
     OAuthProvider,

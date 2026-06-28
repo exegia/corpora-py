@@ -57,3 +57,10 @@ full = [
 [tool.hatch.build.targets.wheel]
 # Decoupled workspaces: admin (converters + heavy), client (MCP), shared (auth/models/etc)
 packages = ["src/shared", "src/client", "src/admin"]
+
+# supabase subpackage was being dropped from the wheel in some builds
+# (name clash with the "supabase" runtime dep during hatch discovery?).
+# Force-including the subdir guarantees the full shared package is present
+# after `uv build` + install into the standalone python runtime.
+[tool.hatch.build.targets.wheel.force-include]
+"src/shared/supabase" = "shared/supabase"

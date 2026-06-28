@@ -193,7 +193,7 @@ def main():
         "ftplib.py",
         "xmlrpc",
         "curses",
-        "multiprocessing",
+        # "multiprocessing",  # Keep: required by uvicorn/fastmcp server reload/supervisors (used by client.mcp). Trimming broke `import client`.
         # Safe additional trims (tested to not break cfabric, supabase, fastmcp, exegia, asyncio, importlib.metadata)
         "distutils",
         "venv",

@@ -1,19 +1,10 @@
 
-import { BrowserWindow, Updater, Screen } from "electrobun/bun";
-import { retrieve, store } from "./storage";
+import {  Updater, Utils } from "electrobun/bun";
 import { getAuth } from "./example-usage";
+import { windowManager } from "./windows";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
-
-const primary = Screen.getPrimaryDisplay();
-const windowWidth = 800;
-const windowHeight = 600;
-
-// Calculate centered position
-const x = Math.round((primary.workArea.width - windowWidth) / 2) + primary.workArea.x;
-const y = Math.round((primary.workArea.height - windowHeight) / 2) + primary.workArea.y;
-
 
 // Check if Vite dev server is running for HMR
 async function getMainViewUrl(): Promise<string> {
@@ -33,55 +24,20 @@ async function getMainViewUrl(): Promise<string> {
 }
 
 // Create the main application window
-const url = await getMainViewUrl();
 
-const mainWindow = new BrowserWindow({
-	title: "CorporaPy testing",
-  url,
-  hidden: true,
-  titleBarStyle: "hiddenInset",
-  renderer: 'native',
-  passthrough: true,
-  frame: {
-    width: windowWidth,
-       height: windowHeight,
-       x,
-       y
-  },
-  styleMask: {
-      // These are the current defaults
-      Borderless: false,
-      Titled: true,
-      Closable: true,
-      Miniaturizable: false,
-      Resizable: false,
-      UnifiedTitleAndToolbar: true,
-      FullScreen: false,
-      FullSizeContentView: false,
-      UtilityWindow: false,
-      DocModalWindow: false,
-      NonactivatingPanel: true,
-      HUDWindow: false,
-    }
-});
 
 const start = async () => {
-  try {
-    const state = await retrieve();
-    if (!state) {
-      // This is probably the first time the app is being run, so no state yet.
-      // We will create a new window and store it as the active window.
-      mainWindow.show();
-      store({ activeWindow: mainWindow, windows: [mainWindow.id], theme: "dark" });
-      return;
-    };
-    if (state.activeWindow.id != mainWindow.id) {
-      mainWindow.show();
-    }
 
-  } catch (error) {
-    console.log(error);
+  const url = await getMainViewUrl();
+  console.log("Loading view into window..");
+  const main = windowManager.loadWindow(windowManager.mainWindowId, url);
+  if (!main) {
+    const { response } = await Utils.showMessageBox({ type: "error", message: `Main window could not load the dom: ${url}`, buttons: ["Ok, thanks"] });
+    if (response >= 0) windowManager.close(windowManager.mainWindowId);
+    return;
   }
+  console.log("Opening window now..");
+  main.show();
 };
 
 await start();

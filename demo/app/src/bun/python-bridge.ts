@@ -1,5 +1,6 @@
 import { PATHS } from "electrobun/bun";
 import { spawn, type Subprocess } from "bun";
+import { existsSync } from "node:fs";
 
 export class PythonBridge {
   private pythonBin: string;
@@ -19,8 +20,21 @@ export class PythonBridge {
       this.pythonHome = process.env.DEV_PYTHON_HOME || "";
     } else {
       const base = PATHS.RESOURCES_FOLDER;
-      this.pythonHome = `${base}/python`;
+      // ElectroBun copy rules place non-Vite assets under an "app/" subfolder in
+      // Contents/Resources (see electrobun.config.ts "resources/python": "python").
+      // We probe the two most likely locations so it works across layout tweaks.
+      const candidates = [
+        `${base}/app/python`,
+        `${base}/python`,
+      ];
+      const chosen = candidates.find((p) => existsSync(`${p}/bin/python3`)) || candidates[0];
+      this.pythonHome = chosen;
       this.pythonBin = `${this.pythonHome}/bin/python3`;
+      if (!existsSync(`${this.pythonHome}/bin/python3`)) {
+        console.warn(`[PythonBridge] Warning: python3 not found at ${this.pythonBin}. ` +
+          `Make sure the runtime was built (uv run scripts/build_embedded_python.py) and ` +
+          `that start.py (or a clean electrobun build) copied it.`);
+      }
     }
   }
 

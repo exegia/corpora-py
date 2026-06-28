@@ -60,14 +60,29 @@ def run(
     check: bool = True,
     dotenvx: bool = True,
     dir: Path = ROOT,
+    *,
+    # For long-running dev servers, detach stdin so Bun/Node readline interfaces
+    # don't get EIO when the launcher TTY state changes or the parent exits.
+    stdin=None,
+    dev_server: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     _cmd: list[str] = cmd
     print(f"$ {' '.join(cmd)}")
     if dotenvx:
         print("🔒 Starting command with dotenvx...")
         _cmd = dotenvx_wrap(cmd=cmd)
-    result = subprocess.run(_cmd, cwd=dir, text=True)
+
+    effective_stdin = stdin
+    if effective_stdin is None and dev_server:
+        effective_stdin = subprocess.DEVNULL
+
+    result = subprocess.run(_cmd, cwd=dir, text=True, stdin=effective_stdin)
     if check and result.returncode != 0:
+        if dev_server:
+            # Don't kill the whole launcher just because one dev server exited.
+            # The main thread blocker will keep running.
+            print(f"[dev server] {' '.join(cmd)} exited with code {result.returncode}")
+            return result
         sys.exit(result.returncode)
     return result
 
