@@ -1,6 +1,7 @@
 node_modules/
 build/
 dist/
+.react-router/
 artifacts/
 *.tsbuildinfo
 **/resources/python/

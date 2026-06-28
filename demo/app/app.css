@@ -1,0 +1,5 @@
+/* Tailwind CSS v4 — must be first */
+@import "tailwindcss";
+
+/* HeroUI v3 styles — must be after Tailwind */
+@import "@heroui/styles";

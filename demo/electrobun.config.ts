@@ -7,10 +7,10 @@ export default {
 		version: "0.0.1",
   },
 	build: {
-		// Vite builds to dist/, we copy from there
+		// React Router framework mode (SPA) builds to dist/client/, we copy from there.
 		copy: {
-			"dist/index.html": "views/mainview/index.html",
-			"dist/assets": "views/mainview/assets",
+			"dist/client/index.html": "views/mainview/index.html",
+			"dist/client/assets": "views/mainview/assets",
 			// Copy the embedded Python runtime (built via root scripts/build_embedded_python.py)
 			// into the app bundle. With current ElectroBun behavior this lands at
 			// Contents/Resources/app/python/bin/python3 (alongside the app payload).
