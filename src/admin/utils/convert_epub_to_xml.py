@@ -18,8 +18,6 @@ Dependencies:
     pip install ebooklib lxml beautifulsoup4
 """
 
-import re
-import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
