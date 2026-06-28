@@ -10,7 +10,9 @@ from OpenSSL import crypto
 
 logger = logging.getLogger(__name__)
 
-CERT_DIR = Path("src/exegia/supabase")
+# Note: after the admin/client/shared refactor, we no longer keep generated
+# artifacts inside source packages. Write to a local dev directory instead.
+CERT_DIR = Path(".dev-certs")
 CERT_FILE = CERT_DIR / "cert.pem"
 KEY_FILE = CERT_DIR / "key.pem"
 

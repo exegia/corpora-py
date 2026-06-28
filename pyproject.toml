@@ -39,7 +39,8 @@ dependencies = [
 ]
 
 [project.scripts]
-cf-mcp = "exegia.mcp:main"
+# cf-mcp lives in the client workspace (the MCP server is the primary client surface)
+cf-mcp = "client.mcp:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -54,4 +55,5 @@ full = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/exegia"]
+# Decoupled workspaces: admin (converters + heavy), client (MCP), shared (auth/models/etc)
+packages = ["src/shared", "src/client", "src/admin"]

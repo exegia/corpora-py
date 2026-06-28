@@ -12,7 +12,7 @@ export class PythonBridge {
   constructor() {
     // Dev override (used by Docker + SSH dev environments)
     // Set DEV_PYTHON_BIN (and optionally DEV_PYTHON_HOME) to use a system / venv Python
-    // that has the local exegia/corpora-py package available.
+    // that has the local shared/client/admin workspaces (from corpora-py) available.
     const devPythonBin = process.env.DEV_PYTHON_BIN;
     if (devPythonBin) {
       this.pythonBin = devPythonBin;
