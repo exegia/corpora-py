@@ -8,7 +8,11 @@ export default defineConfig({
 	// emitting dist/client for the SPA build). It also provides React/Fast Refresh,
 	// so we no longer use @vitejs/plugin-react or a `root`/`build.outDir` override
 	// (that was the old src/mainview SPA setup).
-	plugins: [tailwindcss(), reactRouter()],
+  plugins: [tailwindcss(), reactRouter()],
+  build: {
+    outDir: "dist",
+  },
+  appType: "spa",
 	server: {
 		port: 5173,
 		strictPort: true,
