@@ -26,6 +26,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.local
 .venv/
 
+!scripts/build/
+
 # caches
 .eslintcache
 .cache
@@ -40,11 +42,7 @@ resources/**
 
 # Finder (MacOS) folder config
 .DS_Store
-
-# Supabase
-src/exegia/supabase/.branches
-src/exegia/supabase/.temp
-src/exegia/supabase/*.pem
+**/.DS_Store
 
 # publish credentials
 .env.publish
@@ -54,5 +52,7 @@ src/exegia/supabase/*.pem
 .env.*.local
 src/exegia/supabase/seeds/*_rows.sql
 src/corpora_py.egg-info/
-
-
+supabase/
+!src/shared/supabase/
+**/resources/
+resources/python/

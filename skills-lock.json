@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "heroui-react": {
+      "source": "heroui-inc/heroui",
+      "sourceType": "github",
+      "skillPath": "skills/heroui-react/SKILL.md",
+      "computedHash": "c9e1bb41fbc3cee782faae08bd465ae05cd685a6ed7cc3392464fdf29b3ab467"
+    },
+    "react-router-framework-mode": {
+      "source": "remix-run/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-router-framework-mode/SKILL.md",
+      "computedHash": "26c5bdac2f686c47eb4c4b48b6cb52401cde1dc833e6d26408ddfb22ea83c5ca"
+    }
+  }
+}
