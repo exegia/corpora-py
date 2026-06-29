@@ -69,7 +69,7 @@ def ensure_demo_python_runtime() -> None:
     All build/bundling logic lives under scripts/build/
       - python -m scripts.build.embedded [--clean] [--full]
     """
-    runtime = ROOT / "demo/public/resources/python/bin/python3"
+    runtime = ROOT / "demo/build/lib/python/bin/python3"
     if runtime.exists() and _python_has_shared_module(runtime):
         print("✅ Demo embedded Python runtime already present and up-to-date.")
         return
@@ -90,7 +90,7 @@ def ensure_demo_python_runtime() -> None:
 def clean_electrobun_dev_build() -> None:
     """Remove the ElectroBun dev build directory.
 
-    This forces a fresh copy of resources/ (including the Python runtime)
+    This forces a fresh copy of lib/ (including the Python runtime)
     according to the rules in demo/app/electrobun.config.ts. Stale builds are
     the most common cause of "python binary not found" after changes.
     """
@@ -186,7 +186,7 @@ def start() -> None:
     # Ensure the demo's embedded Python runtime is ready (root-owned bundler)
     ensure_demo_python_runtime()
 
-    # Clean previous ElectroBun dev build so the copy rule for resources/python
+    # Clean previous ElectroBun dev build so the copy rule for lib/python
     # is re-applied into the fresh bundle. Without this you often get ENOENT
     # for the python binary inside the launched .app even when the source exists.
     clean_electrobun_dev_build()

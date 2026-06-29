@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--clean",
         action="store_true",
-        help="Remove previous resources/python first",
+        help="Remove previous lib/python first",
     )
     p.add_argument(
         "--full",
@@ -64,7 +64,7 @@ def main():
     print(f"    Target:    {DEMO_RESOURCES}")
 
     if args.clean:
-        print("==> Cleaning previous resources/python")
+        print("==> Cleaning previous lib/python")
         if DEMO_RESOURCES.exists():
             shutil.rmtree(DEMO_RESOURCES)
 

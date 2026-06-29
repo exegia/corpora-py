@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument(
-        "--clean", action="store_true", help="Remove previous resources/python first"
+        "--clean", action="store_true", help="Remove previous lib/python first"
     )
     p.add_argument(
         "--full",
@@ -47,8 +47,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--dest-dir",
-        default="demo/public/resources/python",
-        help="Where to place the bundled python (default: demo/public/resources/python)",
+        default="demo/build/lib/python",
+        help="Where to place the bundled python (default: demo/build/lib/python)",
     )
     p.add_argument(
         "--cache-dir",

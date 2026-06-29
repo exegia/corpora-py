@@ -9,7 +9,7 @@ Run from repo root:
 
 It will:
 - Build with [full] extra
-- Produce the resources/python and the distributable .tar.gz (e.g. python-runtime-macos-arm64.tar.gz)
+- Produce the lib/python and the distributable .tar.gz (e.g. python-runtime-macos-arm64.tar.gz)
 - The tarball is what the client app can host and download on user opt-in.
 
 For admin/full local demo: use

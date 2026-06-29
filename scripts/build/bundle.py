@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--dest-dir",
-        default="demo/public/resources/python",
+        default="demo/build/lib/python",
         help="Where to place the bundled python runtime",
     )
     p.add_argument(
@@ -77,7 +77,7 @@ def bundle_wheel(
 
     info = PLATFORM_MAP[platform_key]
 
-    dest = Path(dest_dir).resolve() if dest_dir else Path("demo/public/resources/python").resolve()
+    dest = Path(dest_dir).resolve() if dest_dir else Path("demo/build/lib/python").resolve()
     cache = Path(cache_dir).resolve() if cache_dir else Path(".cache/python-standalone").resolve()
 
     # Resolve wheel + extras

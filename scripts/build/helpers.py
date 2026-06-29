@@ -70,8 +70,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--dest-dir",
-        default="lib/resources/python",
-        help="Staging directory for the bundled Python (default: lib/resources/python/)",
+        default="lib/lib/python",
+        help="Staging directory for the bundled Python (default: lib/lib/python/)",
     )
     p.add_argument(
         "--cache-dir",
@@ -180,7 +180,7 @@ def ensure_python_runtime(target_dir: Path | None = None, force: bool = False) -
         # In a real client: use a stable user-writable location, e.g.
         # from platformdirs import user_data_dir
         # target_dir = Path(user_data_dir("YourClientApp")) / "python-runtime"
-        target_dir = Path("demo/public/resources")  # demo default
+        target_dir = Path("demo/build/lib")  # demo default
 
     python_dir = target_dir / "python"
     if platform.system() == "Windows":

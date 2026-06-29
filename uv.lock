@@ -392,7 +392,7 @@ wheels = [
 
 [[package]]
 name = "corpora-admin-py"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "packages/admin" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -420,7 +420,7 @@ provides-extras = ["full"]
 
 [[package]]
 name = "corpora-client-py"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "packages/client" }
 dependencies = [
     { name = "context-fabric" },
@@ -446,7 +446,7 @@ provides-extras = ["sse"]
 
 [[package]]
 name = "corpora-py"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "corpora-admin-py" },
@@ -488,7 +488,7 @@ dev = [
 
 [[package]]
 name = "corpora-shared-py"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "packages/shared" }
 dependencies = [
     { name = "dotenvx" },

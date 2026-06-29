@@ -107,7 +107,7 @@ def main():
     print()
     print(
         "    To use as a Tauri sidecar resource, add to tauri.conf.json:\n"
-        f'      "bundle": {{ "resources": {{ "{archive.name}": "resources/" }} }}'
+        f'      "bundle": {{ "lib": {{ "{archive.name}": "lib/" }} }}'
     )
 
 

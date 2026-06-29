@@ -93,4 +93,4 @@ _pkg_dir = Path(__file__).resolve().parent          # .../scripts/build
 _scripts_dir = _pkg_dir.parent                      # .../scripts
 ROOT = _scripts_dir.parent                          # repo root
 DIST_DIR = ROOT / "dist"
-DEMO_RESOURCES = ROOT / "demo/public/resources/python"
+DEMO_RESOURCES = ROOT / "demo/build/lib/python"
