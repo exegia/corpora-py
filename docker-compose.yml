@@ -1,0 +1,67 @@
+# docker-compose.yml
+# Local orchestration for the Corpora platform services.
+#
+# Services:
+#   client  — MCP server (SSE on 8000). Connect Claude Desktop or any MCP client.
+#   admin   — Admin/conversion tools shell. Run conversion commands interactively.
+#
+# Usage:
+#   docker compose up client          # start MCP server only
+#   docker compose run --rm admin     # run admin container interactively
+#   docker compose up                 # start all services
+#
+# Env vars: copy .env.example → .env and fill in values, or set them in your shell.
+
+services:
+
+  # ── MCP server (client package) ────────────────────────────────────────────
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    image: corpora-client:latest
+    container_name: corpora-mcp
+    command:
+      # Serve via SSE so remote clients can connect
+      - --sse
+      - "8000"
+      - --corpus
+      - /data/datasets/BHSA
+      - --name
+      - BHSA
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount your local datasets directory (read-only in the container)
+      - "${DATASETS_DIR:-~/.exegia/datasets}:/data/datasets:ro"
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      PROJECT_REF: ${PROJECT_REF}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import client; print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ── Admin / conversion tools ───────────────────────────────────────────────
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    image: corpora-admin:latest
+    container_name: corpora-admin
+    # Keep running so you can exec into it, or override CMD for one-shot jobs
+    command: ["python", "-c", "import time; print('Admin container ready.'); time.sleep(86400)"]
+    volumes:
+      - "${DATASETS_DIR:-~/.exegia/datasets}:/data/datasets"
+      - "${SOURCES_DIR:-~/sources}:/data/sources:ro"
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      PROJECT_REF: ${PROJECT_REF}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+    profiles:
+      # Only start admin when explicitly requested:  docker compose --profile admin up
+      - admin
