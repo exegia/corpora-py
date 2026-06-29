@@ -18,9 +18,9 @@ uv run pytest
 uv run pytest path/to/test_file.py::test_name
 
 # Build individual workspace wheels
-uv build --package corpora-shared --wheel --out-dir dist/
-uv build --package corpora-client --wheel --out-dir dist/
-uv build --package corpora-admin  --wheel --out-dir dist/
+uv build --package corpora-shared-py --wheel --out-dir dist/
+uv build --package corpora-client-py --wheel --out-dir dist/
+uv build --package corpora-admin-py  --wheel --out-dir dist/
 
 # Build all workspace wheels at once (shorthand via script)
 uv run scripts/publish.py          # patch bump + publish
@@ -64,22 +64,22 @@ This is a **uv workspace** of three published Python packages plus an umbrella m
 
 | Package | PyPI name | Source | Purpose |
 |---|---|---|---|
-| Shared | `corpora-shared` | `packages/corpora-shared/src/shared/` | Auth, Supabase client, models, schemas |
-| Client | `corpora-client` | `packages/corpora-client/src/client/` | FastMCP server + `cf-mcp` CLI |
-| Admin  | `corpora-admin`  | `packages/corpora-admin/src/admin/`  | EPUB/HTML → Text-Fabric converters |
+| Shared | `corpora-shared-py` | `packages/shared/src/shared/` | Auth, Supabase client, models, schemas |
+| Client | `corpora-client-py` | `packages/client/src/client/` | FastMCP server + `cf-mcp` CLI |
+| Admin  | `corpora-admin-py`  | `packages/admin/src/admin/`  | EPUB/HTML → Text-Fabric converters |
 | Umbrella | `corpora-py` | (no source) | Depends on all three; used by sidecar/demo |
 
 - **Install everything** (dev / demo / sidecar): `uv sync` or install `corpora-py`
-- **Deploy only MCP server**: install `corpora-client` (pulls `corpora-shared`)
-- **Run conversion tools**: install `corpora-admin[full]` (pulls `corpora-shared` + text-fabric)
+- **Deploy only MCP server**: install `corpora-client-py` (pulls `corpora-shared-py`)
+- **Run conversion tools**: install `corpora-admin-py[full]` (pulls `corpora-shared-py` + text-fabric)
 - **Docker client image**: `Dockerfile.client` — small, only MCP server
 - **Docker admin image**: `Dockerfile.admin` — full stack with text-fabric
 
 Code is organized into decoupled workspace packages under `packages/`:
 
-- `packages/corpora-shared/src/shared/` — code used by both admin and client (auth, supabase, models, schemas, constants, git fetcher, epub parser)
-- `packages/corpora-client/src/client/` — client/consumer surface (FastMCP server + query tools for AI + desktop apps)
-- `packages/corpora-admin/src/admin/` — admin / full-feature tooling (conversion pipelines that need text-fabric)
+- `packages/shared/src/shared/` — code used by both admin and client (auth, supabase, models, schemas, constants, git fetcher, epub parser)
+- `packages/client/src/client/` — client/consumer surface (FastMCP server + query tools for AI + desktop apps)
+- `packages/admin/src/admin/` — admin / full-feature tooling (conversion pipelines that need text-fabric)
 
 ### Module layers (post-refactor)
 
@@ -115,4 +115,6 @@ Supabase URLs are constructed from `PROJECT_REF` (not from `SUPABASE_URL`) becau
 
 ### CI/CD
 
-On PR merge: the `bump` job auto-increments the patch version in **all** workspace `pyproject.toml` files simultaneously, commits back with `[skip ci]`, and pushes a `vX.Y.Z` tag. The `build` and `publish` jobs then run against that tag, building and publishing all four wheels (`corpora-shared`, `corpora-client`, `corpora-admin`, `corpora-py`) to PyPI via OIDC trusted publishing (no stored token).
+On PR merge: the `bump` job auto-increments the patch version in **all** workspace `pyproject.toml` files simultaneously, commits back with `[skip ci]`, and pushes a `vX.Y.Z` tag. The `build` and `publish` jobs then run against that tag, building and publishing all four wheels (`corpora-shared-py`, `corpora-client-py`, `corpora-admin-py`, `corpora-py`) to PyPI via OIDC trusted publishing (no stored token).
+
+The `build-sidecar` workflow builds the same four wheels, then bundles them per-platform (macOS arm64/x64, Windows) into a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun apps. The bundle step runs `python -m scripts.build --skip-build` and resolves workspace deps from `dist/` via `--find-links` (no PyPI needed).

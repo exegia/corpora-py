@@ -69,8 +69,8 @@ jobs:
       - name: Build
         uses: ./.github/actions/build-dist
 
-  # Publishes all workspace wheels to PyPI (corpora-shared, corpora-client,
-  # corpora-admin, corpora-py). Uses OIDC trusted publishing — no stored token.
+  # Publishes all workspace wheels to PyPI (corpora-shared-py, corpora-client-py,
+  # corpora-admin-py, corpora-py). Uses OIDC trusted publishing — no stored token.
   publish:
     name: Publish Python 🐍 distributions 📦 to PyPI
     needs: [bump, build]

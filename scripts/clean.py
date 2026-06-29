@@ -16,7 +16,6 @@ GLOB_PATTERNS = [
     "**/*.egg-info",
     "**/.temp",
     "**/dist",
-    "**/build",
     "**/resources/python",
     "**/.cache",
     "**/artifacts",
@@ -40,6 +39,7 @@ def main() -> None:
     print("\nRemoving cached/build artifacts...")
     for pattern in GLOB_PATTERNS:
         for path in sorted(ROOT.glob(pattern), reverse=True):
+
             remove(path)
 
     print("\nDone.")

@@ -15,15 +15,16 @@ classifiers = [
 # Umbrella: pulling this installs all three workspace packages.
 # Used by the sidecar/demo build to get everything in one install.
 dependencies = [
-    "corpora-shared>=0.1.1",
-    "corpora-client>=0.1.1",
-    "corpora-admin>=0.1.1",
+    "corpora-shared-py>=0.1.1",
+    "corpora-client-py>=0.1.1",
+    "corpora-admin-py>=0.1.1",
+    "dotenvx>=0.0.0",
 ]
 
 [project.optional-dependencies]
 # Pulls in text-fabric for corpus conversion tools
 full = [
-    "corpora-admin[full]>=0.1.1",
+    "corpora-admin-py[full]>=0.1.1",
 ]
 
 [project.scripts]
@@ -35,8 +36,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# Umbrella wheel — no source packages of its own; workspace members carry the code.
-packages = []
+# Umbrella wheel — tiny corpora_py module; real code lives in workspace members.
+packages = ["src/corpora_py"]
 
 # ── uv workspace ──────────────────────────────────────────────────────────────
 [tool.uv.workspace]
@@ -44,9 +45,9 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 # Resolve workspace members from local paths during development
-corpora-shared = { workspace = true }
-corpora-client = { workspace = true }
-corpora-admin  = { workspace = true }
+corpora-shared-py = { workspace = true }
+corpora-client-py = { workspace = true }
+corpora-admin-py  = { workspace = true }
 
 [dependency-groups]
 # Dev-only tools (not shipped in any package)

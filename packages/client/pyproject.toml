@@ -1,5 +1,5 @@
 [project]
-name = "corpora-client"
+name = "corpora-client-py"
 version = "0.1.1"
 description = "MCP server and client tools for the Corpora platform"
 readme = "../../README.md"
@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "corpora-shared>=0.1.1",
+    "corpora-shared-py>=0.1.1",
     # MCP server
     "fastmcp>=2.0",
     # Corpus runtime
@@ -32,8 +32,8 @@ sse = [
 ]
 
 [tool.uv.sources]
-# Resolve corpora-shared from the local workspace during development
-corpora-shared = { workspace = true }
+# Resolve corpora-shared-py from the local workspace during development
+corpora-shared-py = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

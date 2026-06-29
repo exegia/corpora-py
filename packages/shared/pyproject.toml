@@ -1,5 +1,5 @@
 [project]
-name = "corpora-shared"
+name = "corpora-shared-py"
 version = "0.1.1"
 description = "Shared auth, models, schemas, and Supabase client for the Corpora platform"
 readme = "../../README.md"

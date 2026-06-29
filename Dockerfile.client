@@ -24,17 +24,17 @@ WORKDIR /app
 
 # Copy workspace root + the packages we need to build
 COPY pyproject.toml uv.lock* ./
-COPY packages/corpora-shared packages/corpora-shared
-COPY packages/corpora-client  packages/corpora-client
+COPY packages/shared packages/shared
+COPY packages/client  packages/client
 
 # Build wheels for just these two packages
-RUN uv build --package corpora-shared --wheel --out-dir /wheels/ && \
-    uv build --package corpora-client --wheel --out-dir /wheels/
+RUN uv build --package corpora-shared-py --wheel --out-dir /wheels/ && \
+    uv build --package corpora-client-py --wheel --out-dir /wheels/
 
 # Install into a dedicated venv (no dev deps, frozen)
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --find-links /wheels \
-        corpora-client
+        corpora-client-py
 
 # ── Stage 2: minimal runtime image ───────────────────────────────────────────
 FROM python:3.13-slim

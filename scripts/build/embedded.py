@@ -68,9 +68,13 @@ def main():
         if DEMO_RESOURCES.exists():
             shutil.rmtree(DEMO_RESOURCES)
 
-    # 1. Build wheel
-    print("\n==> Building wheel with uv...")
+    # 1. Build all workspace wheels so they can be resolved locally (not from PyPI)
+    print("\n==> Building workspace wheels with uv...")
     DIST_DIR.mkdir(parents=True, exist_ok=True)
+    run(["uv", "build", "--package", "corpora-shared-py", "--wheel", f"--out-dir={DIST_DIR}"])
+    run(["uv", "build", "--package", "corpora-client-py", "--wheel", f"--out-dir={DIST_DIR}"])
+    run(["uv", "build", "--package", "corpora-admin-py",  "--wheel", f"--out-dir={DIST_DIR}"])
+    # Umbrella (corpora-py) last — depends on the three above
     run(["uv", "build", "--wheel", f"--out-dir={DIST_DIR}"])
 
     wheel = find_wheel(DIST_DIR)
@@ -84,6 +88,7 @@ def main():
         wheel_spec=wheel_spec,
         platform_key=args.platform,
         dest_dir=DEMO_RESOURCES,
+        find_links=DIST_DIR,
     )
 
     print("\n✅ Done!")
