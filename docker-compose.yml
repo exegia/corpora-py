@@ -5,16 +5,18 @@
 #   client  — MCP server (SSE on 8000). Connect Claude Desktop or any MCP client.
 #   admin   — Admin/conversion tools shell. Run conversion commands interactively.
 #
-# Usage:
-#   docker compose up client          # start MCP server only
-#   docker compose run --rm admin     # run admin container interactively
-#   docker compose up                 # start all services
+# Quick start:
+#   docker compose up client                      # start MCP server
+#   docker compose --profile admin run --rm admin # admin shell
+#   docker compose up                             # start all default services
 #
-# Env vars: copy .env.example → .env and fill in values, or set them in your shell.
+# Env vars: copy .env.example → .env and fill in values, or export them in your shell.
+#   Required: PROJECT_REF, SUPABASE_SECRET_KEY
+#   Optional: DATASETS_DIR (default: ~/.exegia/datasets), SOURCES_DIR (default: ~/sources)
 
 services:
 
-  # ── MCP server (client package) ────────────────────────────────────────────
+  # ── MCP server (corpora-client-py) ─────────────────────────────────────────
   client:
     build:
       context: .
@@ -22,7 +24,8 @@ services:
     image: corpora-client:latest
     container_name: corpora-mcp
     command:
-      # Serve via SSE so remote clients can connect
+      # Serve via SSE so remote MCP clients can connect.
+      # Override to use stdio:  docker run corpora-client --corpus /data/datasets/BHSA
       - --sse
       - "8000"
       - --corpus
@@ -32,36 +35,53 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount your local datasets directory (read-only in the container)
+      # Mount your local datasets directory read-only.
+      # Override: DATASETS_DIR=/path/to/datasets docker compose up client
       - "${DATASETS_DIR:-~/.exegia/datasets}:/data/datasets:ro"
+    env_file:
+      - path: .env
+        required: false   # silently skipped if .env doesn't exist; use shell env instead
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       PROJECT_REF: ${PROJECT_REF}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import client; print('ok')"]
+      test: ["CMD", "python", "-c", "from client.mcp import corpus_manager; print('ok')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
-  # ── Admin / conversion tools ───────────────────────────────────────────────
+  # ── Admin / conversion tools (corpora-admin-py[full]) ──────────────────────
   admin:
     build:
       context: .
       dockerfile: Dockerfile.admin
     image: corpora-admin:latest
     container_name: corpora-admin
-    # Keep running so you can exec into it, or override CMD for one-shot jobs
-    command: ["python", "-c", "import time; print('Admin container ready.'); time.sleep(86400)"]
+    # Stays alive so you can exec/run commands interactively.
+    # One-shot example:
+    #   docker compose --profile admin run --rm admin \
+    #     python -m admin.utils.convert_epub_to_tf /data/sources/book.epub /data/datasets/out
+    command: >
+      python -c "
+      import time, sys
+      print('corpora-admin ready. Available: admin.utils.*')
+      sys.stdout.flush()
+      time.sleep(86400)
+      "
     volumes:
       - "${DATASETS_DIR:-~/.exegia/datasets}:/data/datasets"
       - "${SOURCES_DIR:-~/sources}:/data/sources:ro"
+    env_file:
+      - path: .env
+        required: false
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       PROJECT_REF: ${PROJECT_REF}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
     profiles:
-      # Only start admin when explicitly requested:  docker compose --profile admin up
+      # Only start when explicitly requested:
+      #   docker compose --profile admin up
       - admin

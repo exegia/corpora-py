@@ -74,7 +74,8 @@ def main():
     extract_python(tarball, dest_dir)
 
     # 4. Install wheel + deps into standalone Python
-    install_wheel(wheel, dest_dir)
+    # Pass --find-links so workspace sub-packages are resolved locally, not from PyPI
+    install_wheel(wheel, dest_dir, find_links=out_dir)
 
     # 5. Trim stdlib
     trim_stdlib(dest_dir)

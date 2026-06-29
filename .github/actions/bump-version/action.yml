@@ -38,10 +38,10 @@ runs:
         # Update all workspace package pyproject.toml files
         for pkg_toml in packages/*/pyproject.toml; do
           sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" "$pkg_toml"
-          # Also update the inter-package dependency pins (corpora-*>=$VERSION)
-          sed -i "s/corpora-shared>=$VERSION/corpora-shared>=$NEW_VERSION/g" "$pkg_toml"
-          sed -i "s/corpora-client>=$VERSION/corpora-client>=$NEW_VERSION/g" "$pkg_toml"
-          sed -i "s/corpora-admin>=$VERSION/corpora-admin>=$NEW_VERSION/g" "$pkg_toml"
+          # Also update the inter-package dependency pins (corpora-*-py>=$VERSION)
+          sed -i "s/corpora-shared-py>=$VERSION/corpora-shared-py>=$NEW_VERSION/g" "$pkg_toml"
+          sed -i "s/corpora-client-py>=$VERSION/corpora-client-py>=$NEW_VERSION/g" "$pkg_toml"
+          sed -i "s/corpora-admin-py>=$VERSION/corpora-admin-py>=$NEW_VERSION/g" "$pkg_toml"
           echo "  Updated $pkg_toml"
         done
 

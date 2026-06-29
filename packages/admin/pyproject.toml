@@ -1,5 +1,5 @@
 [project]
-name = "corpora-admin"
+name = "corpora-admin-py"
 version = "0.1.1"
 description = "Admin and conversion tools for the Corpora platform (EPUB/HTML → Text-Fabric)"
 readme = "../../README.md"
@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "corpora-shared>=0.1.1",
+    "corpora-shared-py>=0.1.1",
     # EPUB / HTML parsing
     "ebooklib>=0.18",
     "beautifulsoup4>=4.12.0",
@@ -28,8 +28,8 @@ full = [
 ]
 
 [tool.uv.sources]
-# Resolve corpora-shared from the local workspace during development
-corpora-shared = { workspace = true }
+# Resolve corpora-shared-py from the local workspace during development
+corpora-shared-py = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -30,17 +30,17 @@ WORKDIR /app
 
 # Copy workspace root + all packages (admin depends on shared)
 COPY pyproject.toml uv.lock* ./
-COPY packages/corpora-shared packages/corpora-shared
-COPY packages/corpora-admin  packages/corpora-admin
+COPY packages/shared packages/shared
+COPY packages/admin  packages/admin
 
 # Build wheels
-RUN uv build --package corpora-shared --wheel --out-dir /wheels/ && \
-    uv build --package corpora-admin  --wheel --out-dir /wheels/
+RUN uv build --package corpora-shared-py --wheel --out-dir /wheels/ && \
+    uv build --package corpora-admin-py  --wheel --out-dir /wheels/
 
 # Install into a dedicated venv with [full] extra for text-fabric
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --find-links /wheels \
-        "corpora-admin[full]"
+        "corpora-admin-py[full]"
 
 # ── Stage 2: runtime image ────────────────────────────────────────────────────
 FROM python:3.13-slim

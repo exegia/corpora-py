@@ -17,12 +17,10 @@ The wheel arg supports extras syntax, e.g.:
 
 import argparse
 import platform
-import shutil
-import sys
 import tarfile
 from pathlib import Path
 
-from .env_vars import PLATFORM_MAP, PYTHON_VERSION, STANDALONE_VERSION, STDLIB_TRIM
+from .env_vars import PLATFORM_MAP, PYTHON_VERSION
 from .helpers import detect_platform, du, run
 from .archive import extract_python
 from .download import download_standalone_python
@@ -51,6 +49,11 @@ def parse_args() -> argparse.Namespace:
         default=".cache/python-standalone",
         help="Cache dir for standalone Python tarballs",
     )
+    p.add_argument(
+        "--find-links",
+        default=None,
+        help="Local directory of pre-built wheels (used as --find-links so workspace deps are not fetched from PyPI)",
+    )
     return p.parse_args()
 
 
@@ -59,6 +62,7 @@ def bundle_wheel(
     platform_key: str | None = None,
     dest_dir: Path | str | None = None,
     cache_dir: Path | str | None = None,
+    find_links: Path | str | None = None,
 ) -> Path:
     """
     Bundle the given wheel (may include [extra]) into a standalone Python at dest_dir.
@@ -105,17 +109,16 @@ def bundle_wheel(
         python_bin = dest / "python.exe"
     else:
         python_bin = dest / "bin" / "python3"
-    run(
-        [
-            "uv",
-            "pip",
-            "install",
-            "--python",
-            str(python_bin),
-            "--no-cache",
-            install_target,
-        ]
-    )
+    install_cmd = [
+        "uv", "pip", "install",
+        "--python", str(python_bin),
+        "--no-cache",
+    ]
+    # Allow resolving workspace deps from a local directory instead of PyPI
+    if find_links is not None:
+        install_cmd += ["--find-links", str(Path(find_links).resolve())]
+    install_cmd.append(install_target)
+    run(install_cmd)
 
     # 4. Trim
     print("==> Trimming stdlib...")
@@ -161,6 +164,7 @@ def main():
         platform_key=args.platform,
         dest_dir=args.dest_dir,
         cache_dir=args.cache_dir,
+        find_links=args.find_links,
     )
 
 
