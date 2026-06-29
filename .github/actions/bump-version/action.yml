@@ -1,5 +1,5 @@
 name: 'Bump Version'
-description: 'Bumps the version in pyproject.toml and __init__.py, commits, and tags'
+description: 'Bumps the version in root pyproject.toml and all workspace package pyproject.toml files, commits, and tags'
 inputs:
   github_token:
     description: 'GitHub Token'
@@ -14,6 +14,9 @@ outputs:
   tag:
     description: 'The new version tag'
     value: ${{ steps.bump.outputs.tag }}
+  version:
+    description: 'The new version string (without v prefix)'
+    value: ${{ steps.bump.outputs.version }}
 runs:
   using: 'composite'
   steps:
@@ -21,17 +24,30 @@ runs:
       id: bump
       shell: bash
       run: |
+        # Read current version from root pyproject.toml
         VERSION=$(grep -m1 '^version' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
         NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
         TAG="v$NEW_VERSION"
 
+        echo "Bumping $VERSION → $NEW_VERSION (tag $TAG)"
+
+        # Update root pyproject.toml
         sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
-        sed -i "s/__version__ = \"$VERSION\"/__version__ = \"$NEW_VERSION\"/" src/exegia/__init__.py
+
+        # Update all workspace package pyproject.toml files
+        for pkg_toml in packages/*/pyproject.toml; do
+          sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" "$pkg_toml"
+          # Also update the inter-package dependency pins (corpora-*>=$VERSION)
+          sed -i "s/corpora-shared>=$VERSION/corpora-shared>=$NEW_VERSION/g" "$pkg_toml"
+          sed -i "s/corpora-client>=$VERSION/corpora-client>=$NEW_VERSION/g" "$pkg_toml"
+          sed -i "s/corpora-admin>=$VERSION/corpora-admin>=$NEW_VERSION/g" "$pkg_toml"
+          echo "  Updated $pkg_toml"
+        done
 
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add pyproject.toml src/exegia/__init__.py
+        git add pyproject.toml packages/*/pyproject.toml
         git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
         git tag "$TAG"
 
@@ -52,6 +68,7 @@ runs:
         git push origin "$TAG"
 
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
         echo "Bumped $VERSION → $NEW_VERSION (tag $TAG)"
 
     - name: Add version label to PR
