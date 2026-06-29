@@ -2,16 +2,16 @@ import type { ElectrobunConfig } from "electrobun";
 
 export default {
 	app: {
-		name: "corpora python test",
+		name: "CorporaPy",
 		identifier: "io.exegia.Corpora",
 		version: "0.0.1",
   },
-	build: {
-		// Vite builds to dist/, we copy from there
+  build: {
+		// React Router framework mode (SPA) builds to dist/client/, we copy from there.
 		copy: {
-			"dist/index.html": "views/mainview/index.html",
-			"dist/assets": "views/mainview/assets",
-			// Copy the embedded Python runtime (built via root scripts/build_embedded_python.py)
+			"dist/client/index.html": "views/mainview/index.html",
+			"dist/client/assets": "views/mainview/assets",
+			// Copy the embedded Python runtime (built via scripts/build/embedded.py)
 			// into the app bundle. With current ElectroBun behavior this lands at
 			// Contents/Resources/app/python/bin/python3 (alongside the app payload).
 			// python-bridge.ts now probes both that location and a top-level python/.
@@ -19,8 +19,13 @@ export default {
 			// Admin app: we bundle the (large) full runtime.
 			// Client app: base app ships without it (or with minimal). On user opt-in we
 			// download the pre-built archive (see scripts/ensure_python_runtime.py).
-			"resources/python": "python",
-		},
+			"public/resources/python": "python"
+    },
+    views: {
+      mainview: {
+        entrypoint: "app/root.tsx"
+      }
+    },
 		// Ignore Vite output in watch mode — HMR handles view rebuilds separately
 		watchIgnore: ["dist/**"],
     targets: "macos-arm64,win-x64",

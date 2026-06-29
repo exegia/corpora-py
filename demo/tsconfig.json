@@ -15,8 +15,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "types": ["vite/client"],
+    "rootDirs": [".", "./.react-router/types"],
   },
 
-  "include": ["src", "window-custom.d.ts"],
-  "exclude": ["node_modules", "dist", "build", "../../package/dist"],
+  "include": ["src", "window-custom.d.ts", ".react-router/types/**/*"],
+  "exclude": ["node_modules", "dist", "../package/dist"],
 }

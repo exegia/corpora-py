@@ -68,7 +68,7 @@ This repo provides a first-class Docker dev environment so the ElectroBun demo c
 
 ```bash
 # From repo root
-docker compose -f demo/app/docker-compose.yml up --build -d
+docker compose -f demo/docker/docker-compose.yml up --build -d
 ```
 
 ### 2. Connect from your IDE via SSH
@@ -92,13 +92,13 @@ Default password is `dev` (change it or use key auth).
 
 ```bash
 export SSH_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)"
-docker compose -f demo/app/docker-compose.yml up --build -d
+docker compose -f demo/docker/docker-compose.yml up --build -d
 ```
 
 ### 3. Inside the container
 
 ```bash
-cd /workspace/demo/app
+cd /workspace/demo/docker
 
 # Normal dev (no HMR)
 bun run dev
@@ -115,9 +115,9 @@ Because we use an editable install, changes to `src/shared/**/*.py`, `src/client
 
 ### Files
 
-- `demo/app/Dockerfile`
-- `demo/app/docker-compose.yml`
-- `demo/app/scripts/docker-entrypoint.sh`
+- `demo/docker/Dockerfile`
+- `demo/docker/docker-compose.yml`
+- `demo/docker/scripts/docker-entrypoint.sh`
 - `.github/workflows/demo-app-docker.yml` (builds + publishes the dev image to GHCR)
 
 The container also exposes the Vite dev server on port 5173 (useful for debugging the webview even if you don't forward the native window).
