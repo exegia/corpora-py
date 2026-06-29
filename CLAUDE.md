@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
+# Install all workspace packages in editable/dev mode
+uv sync
+
 # Install dependencies (also installs dotenvx for encrypted .env)
 uv run scripts/setup.py
 
@@ -14,11 +17,13 @@ uv run pytest
 # Run a single test file or test
 uv run pytest path/to/test_file.py::test_name
 
-# Build wheel
-uv build --out-dir dist/
+# Build individual workspace wheels
+uv build --package corpora-shared --wheel --out-dir dist/
+uv build --package corpora-client --wheel --out-dir dist/
+uv build --package corpora-admin  --wheel --out-dir dist/
 
-# Publish (bump patch/minor or explicit version)
-uv run scripts/publish.py          # patch
+# Build all workspace wheels at once (shorthand via script)
+uv run scripts/publish.py          # patch bump + publish
 uv run scripts/publish.py minor
 uv run scripts/publish.py 1.2.3
 
@@ -35,17 +40,46 @@ uv run cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA --sse 8000
 uv run cf-mcp \
   --corpus ~/.exegia/datasets/bibles/BHSA --name BHSA \
   --corpus ~/.exegia/datasets/bibles/GNT  --name GNT
+
+# Docker — run MCP server
+docker build -f Dockerfile.client -t corpora-client .
+docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro \
+  corpora-client --corpus /data/datasets/BHSA --name BHSA --sse 8000
+
+# Docker — run admin/conversion tools
+docker build -f Dockerfile.admin -t corpora-admin .
+docker run -it -v ~/.exegia/datasets:/data/datasets \
+  corpora-admin python -m admin.utils.convert_epub_to_tf ...
+
+# Docker Compose (start MCP server)
+docker compose up client
+
+# Docker Compose (admin shell)
+docker compose --profile admin run --rm admin
 ```
 
 ## Architecture
 
-This is a Python library (published as `corpora-py`) — no web server, just an MCP server entry point and importable modules.
+This is a **uv workspace** of three published Python packages plus an umbrella meta-package:
 
-Code is organized into decoupled workspaces under `src/`:
+| Package | PyPI name | Source | Purpose |
+|---|---|---|---|
+| Shared | `corpora-shared` | `packages/corpora-shared/src/shared/` | Auth, Supabase client, models, schemas |
+| Client | `corpora-client` | `packages/corpora-client/src/client/` | FastMCP server + `cf-mcp` CLI |
+| Admin  | `corpora-admin`  | `packages/corpora-admin/src/admin/`  | EPUB/HTML → Text-Fabric converters |
+| Umbrella | `corpora-py` | (no source) | Depends on all three; used by sidecar/demo |
 
-- `shared/` — code used by both admin and client (auth, supabase, models, schemas, constants, git fetcher, epub parser)
-- `client/` — client/consumer surface (FastMCP server + query tools for AI + desktop apps)
-- `admin/` — admin / full-feature tooling (conversion pipelines that need text-fabric)
+- **Install everything** (dev / demo / sidecar): `uv sync` or install `corpora-py`
+- **Deploy only MCP server**: install `corpora-client` (pulls `corpora-shared`)
+- **Run conversion tools**: install `corpora-admin[full]` (pulls `corpora-shared` + text-fabric)
+- **Docker client image**: `Dockerfile.client` — small, only MCP server
+- **Docker admin image**: `Dockerfile.admin` — full stack with text-fabric
+
+Code is organized into decoupled workspace packages under `packages/`:
+
+- `packages/corpora-shared/src/shared/` — code used by both admin and client (auth, supabase, models, schemas, constants, git fetcher, epub parser)
+- `packages/corpora-client/src/client/` — client/consumer surface (FastMCP server + query tools for AI + desktop apps)
+- `packages/corpora-admin/src/admin/` — admin / full-feature tooling (conversion pipelines that need text-fabric)
 
 ### Module layers (post-refactor)
 
@@ -81,4 +115,4 @@ Supabase URLs are constructed from `PROJECT_REF` (not from `SUPABASE_URL`) becau
 
 ### CI/CD
 
-On PR merge: the `bump` job auto-increments the patch version, commits back with `[skip ci]`, and pushes a `vX.Y.Z` tag. The `build` and `publish` jobs then run against that tag, publishing to PyPI via OIDC trusted publishing (no stored token).
+On PR merge: the `bump` job auto-increments the patch version in **all** workspace `pyproject.toml` files simultaneously, commits back with `[skip ci]`, and pushes a `vX.Y.Z` tag. The `build` and `publish` jobs then run against that tag, building and publishing all four wheels (`corpora-shared`, `corpora-client`, `corpora-admin`, `corpora-py`) to PyPI via OIDC trusted publishing (no stored token).
