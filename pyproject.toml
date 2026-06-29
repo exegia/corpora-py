@@ -1,7 +1,7 @@
 [project]
 name = "corpora-py"
 version = "0.1.1"
-description = "Graph-based biblical and religious text study platform"
+description = "Graph-based biblical and religious text study platform (all-in-one umbrella)"
 readme = "README.md"
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
 requires-python = ">=3.13"
@@ -10,57 +10,74 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13"
+    "Programming Language :: Python :: 3.13",
 ]
+# Umbrella: pulling this installs all three workspace packages.
+# Used by the sidecar/demo build to get everything in one install.
 dependencies = [
-    # MCP server
-    "fastmcp>=2.0",
-    # Corpus (core runtime uses context-fabric; text-fabric is for dataset conversion)
-    "context-fabric>=0.5.0",
-    # HTTP client
-    "httpx>=0.27.0",
-    # Config / env
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
-    "python-dotenv>=1.0.0",
-    "dotenvx>=0.0.0",
-    # Auth
-    "python-jose[cryptography]>=3.3.0",
-    "passlib[bcrypt]>=1.7.4",
-    "pyOpenSSL>=23.0.0",
-    # Utilities
-    "python-multipart>=0.0.9",
-    "ebooklib>=0.18",
-    "beautifulsoup4>=4.12.0",
-    "lxml>=5.0.0",
-    "supabase>=2.31.0",
-    "watchfiles>=1.2.0",
-    "platformdirs>=4.10.0",
+    "corpora-shared>=0.1.1",
+    "corpora-client>=0.1.1",
+    "corpora-admin>=0.1.1",
+]
+
+[project.optional-dependencies]
+# Pulls in text-fabric for corpus conversion tools
+full = [
+    "corpora-admin[full]>=0.1.1",
 ]
 
 [project.scripts]
-# cf-mcp lives in the client workspace (the MCP server is the primary client surface)
+# Re-exported from corpora-client for convenience
 cf-mcp = "client.mcp:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[project.optional-dependencies]
-full = [
-    "text-fabric>=13.0.0",  # needed for conversion tools (epub/html → TF)
-    # Admin / full corpus: install with [full]
-    # Client consumer: base install is small. On opt-in, download prebuilt full runtime
-    # (see scripts/build_client_python_runtime.py and scripts/ensure_python_runtime.py).
+[tool.hatch.build.targets.wheel]
+# Umbrella wheel — no source packages of its own; workspace members carry the code.
+packages = []
+
+# ── uv workspace ──────────────────────────────────────────────────────────────
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+# Resolve workspace members from local paths during development
+corpora-shared = { workspace = true }
+corpora-client = { workspace = true }
+corpora-admin  = { workspace = true }
+
+[dependency-groups]
+# Dev-only tools (not shipped in any package)
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
 ]
 
-[tool.hatch.build.targets.wheel]
-# Decoupled workspaces: admin (converters + heavy), client (MCP), shared (auth/models/etc)
-packages = ["src/shared", "src/client", "src/admin"]
+# ── Tool configuration (shared across workspace) ───────────────────────────────
 
-# supabase subpackage was being dropped from the wheel in some builds
-# (name clash with the "supabase" runtime dep during hatch discovery?).
-# Force-including the subdir guarantees the full shared package is present
-# after `uv build` + install into the standalone python runtime.
-[tool.hatch.build.targets.wheel.force-include]
-"src/shared/supabase" = "shared/supabase"
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["packages"]
+omit = ["*/tests/*"]

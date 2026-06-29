@@ -41,32 +41,31 @@ on:
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
 jobs:
-  # ── 1. Build the pure-Python wheel once on a fast Linux runner ───────────────
+  # ── 1. Build all workspace wheels once on a fast Linux runner ───────────────
   build-wheel:
-    name: Build wheel
+    name: Build wheels
     runs-on: ubuntu-latest
-    outputs:
-      wheel_name: ${{ steps.find.outputs.wheel_name }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
-      - name: Build wheel
-        run: uv build --wheel --out-dir dist/
+      - name: Build all workspace wheels
+        run: |
+          uv build --package corpora-shared --wheel --out-dir dist/
+          uv build --package corpora-client --wheel --out-dir dist/
+          uv build --package corpora-admin  --wheel --out-dir dist/
+          echo "Built wheels:"
+          ls -lh dist/*.whl
 
-      - name: Find wheel name
-        id: find
-        run: echo "wheel_name=$(ls dist/*.whl | xargs basename)" >> "$GITHUB_OUTPUT"
-
-      - name: Upload wheel
-        uses: actions/upload-artifact@v7
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
         with:
-          name: wheel
+          name: wheels
           path: dist/*.whl
           if-no-files-found: error
           retention-days: 1
@@ -99,10 +98,10 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Download wheel
-        uses: actions/download-artifact@v7
+      - name: Download wheels
+        uses: actions/download-artifact@v4
         with:
-          name: wheel
+          name: wheels
           path: dist/
 
       # Cache the standalone-Python tarball — it's ~70 MB and rarely changes.

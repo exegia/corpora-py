@@ -39,13 +39,14 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 VERSION_FILE = ROOT / "src" / "shared" / "__init__.py"
-REPO = "Mannydefreitas7/exegia-api-py"
+REPO = "exegia/corpora-py"
 WORKFLOW_FILE = "publish.yml"
 
 

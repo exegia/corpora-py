@@ -31,4 +31,4 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__all__ = ["auth", "supabase", "models", "schemas", "utils", "corpus", "__version__"]
+__all__ = ["auth", "backend", "models", "schemas", "utils", "corpus", "__version__"]

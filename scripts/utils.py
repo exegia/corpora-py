@@ -7,7 +7,7 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 ROOT = SCRIPTS_DIR.parent
 ENV_FILE = str(ROOT / ".env.development")  # absolute so dotenvx works from any cwd
-DEMO_APP_DIR = str(ROOT / "demo/app")
+DEMO_APP_DIR = str(ROOT / "demo")
 VITE_URL = "http://localhost:5173"
 
 # Match any running Supabase Studio container regardless of project name.
