@@ -37,16 +37,17 @@ def install_dotenvx() -> None:
 
 def install_demo_deps() -> None:
     print("\n[3/4] Installing the demo app dependencies...")
-    demo_app_dir = ROOT / "demo/app"
+    demo_app_dir = ROOT / "demo"
     run(cmd=["bun", "install", "--no-cache"], dir=demo_app_dir)
 
 
 def build_demo_python_runtime() -> None:
-    print("\n[4/4] Ensuring embedded Python runtime for the demo (in root scripts/)...")
-    # The actual downloading/building/bundling lives in scripts/build_embedded_python.py
-    # and scripts/bundle_python.py. We only build if not present yet.
+    print("\n[4/4] Ensuring embedded Python runtime for the demo...")
+    # All build logic now lives under scripts/build/
+    #   - python -m scripts.build.embedded
+    #   - python -m scripts.build.bundle
     run(
-        [sys.executable, str(ROOT / "scripts" / "build_embedded_python.py")],
+        [sys.executable, "-m", "scripts.build.embedded"],
         dotenvx=False,
     )
 

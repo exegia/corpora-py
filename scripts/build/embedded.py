@@ -12,57 +12,39 @@ For the CONSUMER/CLIENT app:
 - Use the base install (without [full]).
 - On user opt-in for full corpus features, the client downloads a pre-built
   runtime archive instead of bundling at install time.
-- See scripts/ensure_python_runtime.py for the download helper.
-- See scripts/build_client_python_runtime.py for producing the client archive.
-
-Python equivalent of demo/app/scripts/build-embedded-python.ts
 
 Usage:
-    uv run python scripts/build_embedded_python.py [--platform ...] [--clean]
+    uv run python -m scripts.build.embedded [--platform ...] [--clean] [--full]
 """
 
 import argparse
-import subprocess
-import sys
-from pathlib import Path
+import shutil
 
-ROOT = Path(__file__).resolve().parent.parent
-DIST_DIR = ROOT / "dist"
-DEMO_RESOURCES = ROOT / "demo/app/resources/python"
-BUNDLE_SCRIPT = ROOT / "scripts/bundle_python.py"
+from .env_vars import DIST_DIR, DEMO_RESOURCES, PLATFORM_MAP, ROOT
+from .helpers import run
+from .wheel import find_wheel
+from .bundle import bundle_wheel
 
 
-def run(cmd: list[str], cwd: Path = ROOT):
-    print(f"$ {' '.join(str(c) for c in cmd)}")
-    subprocess.run(cmd, cwd=cwd, check=True)
-
-
-def find_wheel() -> Path:
-    wheels = sorted(
-        DIST_DIR.glob("corpora_py-*.whl"), key=lambda p: p.stat().st_mtime, reverse=True
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    if not wheels:
-        wheels = sorted(
-            DIST_DIR.glob("*.whl"), key=lambda p: p.stat().st_mtime, reverse=True
-        )
-    if not wheels:
-        raise SystemExit("No wheel found in dist/. Did `uv build` succeed?")
-    return wheels[0]
-
-
-def parse_args():
-    p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--platform",
-        help="Target platform for the standalone Python (passed to bundle script)",
+        choices=list(PLATFORM_MAP.keys()),
+        help="Target platform (default: auto-detect)",
     )
     p.add_argument(
-        "--clean", action="store_true", help="Remove previous resources/python first"
+        "--clean",
+        action="store_true",
+        help="Remove previous resources/python first",
     )
     p.add_argument(
         "--full",
         action="store_true",
-        help="Install with [full] extra (includes text-fabric for conversions)",
+        help="Install with [full] extra (includes text-fabric etc. for admin/demo)",
     )
     return p.parse_args()
 
@@ -84,8 +66,6 @@ def main():
     if args.clean:
         print("==> Cleaning previous resources/python")
         if DEMO_RESOURCES.exists():
-            import shutil
-
             shutil.rmtree(DEMO_RESOURCES)
 
     # 1. Build wheel
@@ -93,18 +73,18 @@ def main():
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     run(["uv", "build", "--wheel", f"--out-dir={DIST_DIR}"])
 
-    wheel = find_wheel()
+    wheel = find_wheel(DIST_DIR)
     print(f"    Found wheel: {wheel.name}")
 
     wheel_spec = f"{wheel}[full]" if args.full else str(wheel)
     print(f"\n==> Bundling standalone Python + wheel{'[full]' if args.full else ''}...")
 
-    bundle_cmd = [sys.executable, str(BUNDLE_SCRIPT), wheel_spec]
-    if args.platform:
-        bundle_cmd += ["--platform", args.platform]
-    bundle_cmd += ["--dest-dir", str(DEMO_RESOURCES)]
-
-    run(bundle_cmd)
+    # Directly call the bundler (no subprocess indirection)
+    bundle_wheel(
+        wheel_spec=wheel_spec,
+        platform_key=args.platform,
+        dest_dir=DEMO_RESOURCES,
+    )
 
     print("\n✅ Done!")
     print(f"   Embedded Python is at: {DEMO_RESOURCES}/bin/python3")

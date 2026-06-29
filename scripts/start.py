@@ -66,12 +66,10 @@ def _python_has_shared_module(py_bin: Path) -> bool:
 def ensure_demo_python_runtime() -> None:
     """Ensure the embedded Python runtime for the demo app is built.
 
-    The responsibility for building/bundling the wheel + standalone Python
-    lives in the root scripts/ (build_embedded_python.py + bundle_python.py).
-    We only invoke it here if the runtime is missing (or looks outdated after
-    the admin/client/shared source refactor).
+    All build/bundling logic lives under scripts/build/
+      - python -m scripts.build.embedded [--clean] [--full]
     """
-    runtime = ROOT / "demo/app/resources/python/bin/python3"
+    runtime = ROOT / "demo/public/resources/python/bin/python3"
     if runtime.exists() and _python_has_shared_module(runtime):
         print("✅ Demo embedded Python runtime already present and up-to-date.")
         return
@@ -83,7 +81,7 @@ def ensure_demo_python_runtime() -> None:
         print("    Forcing clean rebuild with current sources...")
 
     print("Demo embedded Python runtime not found (or stale) — building now...")
-    cmd = [sys.executable, str(ROOT / "scripts/build_embedded_python.py")]
+    cmd = [sys.executable, "-m", "scripts.build.embedded"]
     if runtime.exists():
         cmd.append("--clean")
     run(cmd, dotenvx=False, dir=ROOT)
@@ -96,7 +94,7 @@ def clean_electrobun_dev_build() -> None:
     according to the rules in demo/app/electrobun.config.ts. Stale builds are
     the most common cause of "python binary not found" after changes.
     """
-    build_dir = ROOT / "demo/app/build"
+    build_dir = ROOT / "demo/dist/build"
     if build_dir.exists():
         print(
             f"🧹 Cleaning stale ElectroBun build at {build_dir} (ensures fresh python runtime copy)…"
@@ -106,13 +104,13 @@ def clean_electrobun_dev_build() -> None:
 
 def _run_vite_server() -> None:
     """Target for the background thread: keep the Vite HMR dev server alive."""
-    dir: Path = ROOT / "demo/app"
+    dir: Path = ROOT / "demo"
     run(cmd=["bun", "run", "vite:dev"], dotenvx=True, dir=dir, dev_server=True)
 
 
 def _run_electrobun_server() -> None:
     """Target for the background thread: keep the ElectroBun desktop dev server alive."""
-    dir = ROOT / "demo/app"
+    dir = ROOT / "demo"
     dist: Path = dir / "dist"
     if dist.exists() is False:
         """If the dist folder isn't there, that means that we need to run,
