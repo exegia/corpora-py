@@ -4,6 +4,9 @@ name: Build Sidecar
 # The resulting zip archives are intended to be embedded as resources in a
 # Tauri application (see https://v2.tauri.app/develop/sidecar/).
 #
+# Note: Demo/ElectroBun embedded Python bundling lives in root scripts/
+# (build_embedded_python.py + bundle_python.py) and is invoked from setup.py / start.py.
+#
 # Triggering:
 #   - On tags (vX.Y.Z) — production builds with signing
 #   - workflow_dispatch — manual runs; pass skip_sign=true for unsigned builds
@@ -38,32 +41,33 @@ on:
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
 jobs:
-  # ── 1. Build the pure-Python wheel once on a fast Linux runner ───────────────
+  # ── 1. Build all workspace wheels once on a fast Linux runner ───────────────
   build-wheel:
-    name: Build wheel
+    name: Build wheels
     runs-on: ubuntu-latest
-    outputs:
-      wheel_name: ${{ steps.find.outputs.wheel_name }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
-      - name: Build wheel
-        run: uv build --wheel --out-dir dist/
+      - name: Build all workspace wheels
+        run: |
+          uv build --package corpora-shared-py --wheel --out-dir dist/
+          uv build --package corpora-client-py --wheel --out-dir dist/
+          uv build --package corpora-admin-py  --wheel --out-dir dist/
+          # Umbrella last — its deps are now present in dist/
+          uv build --wheel --out-dir dist/
+          echo "Built wheels:"
+          ls -lh dist/*.whl
 
-      - name: Find wheel name
-        id: find
-        run: echo "wheel_name=$(ls dist/*.whl | xargs basename)" >> "$GITHUB_OUTPUT"
-
-      - name: Upload wheel
-        uses: actions/upload-artifact@v7
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
         with:
-          name: wheel
+          name: wheels
           path: dist/*.whl
           if-no-files-found: error
           retention-days: 1
@@ -80,26 +84,26 @@ jobs:
       matrix:
         include:
           - platform: macos-arm64
-            runner: macos-14        # Apple Silicon
+            runner: macos-14 # Apple Silicon
           - platform: macos-x64
-            runner: macos-13        # Intel (use macos-latest-large if macos-13 is retired)
+            runner: macos-13 # Intel (use macos-latest-large if macos-13 is retired)
           - platform: windows-x64
             runner: windows-latest
 
     runs-on: ${{ matrix.runner }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
-      - name: Download wheel
-        uses: actions/download-artifact@v7
+      - name: Download wheels
+        uses: actions/download-artifact@v4
         with:
-          name: wheel
+          name: wheels
           path: dist/
 
       # Cache the standalone-Python tarball — it's ~70 MB and rarely changes.
@@ -112,7 +116,7 @@ jobs:
       - name: Bundle (unsigned)
         if: ${{ inputs.skip_sign == true }}
         run: |
-          uv run python scripts/build.py \
+          uv run python -m scripts.build \
             --platform ${{ matrix.platform }} \
             --skip-sign \
             --skip-build
@@ -123,7 +127,7 @@ jobs:
       - name: Bundle + sign (macOS)
         if: ${{ inputs.skip_sign != true && startsWith(matrix.platform, 'macos') }}
         run: |
-          uv run python scripts/build.py \
+          uv run python -m scripts.build \
             --platform ${{ matrix.platform }} \
             --skip-build
         env:
@@ -140,7 +144,7 @@ jobs:
         if: ${{ inputs.skip_sign != true && matrix.platform == 'windows-x64' }}
         shell: pwsh
         run: |
-          uv run python scripts/build.py `
+          uv run python -m scripts.build `
             --platform ${{ matrix.platform }} `
             --skip-build
         env:
@@ -150,7 +154,7 @@ jobs:
           WINDOWS_SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
 
       - name: Upload archive
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: corpora-py-sidecar-${{ github.run_id }}-${{ matrix.platform }}
           path: dist/corpora-py-${{ matrix.platform }}.zip

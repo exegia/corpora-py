@@ -1,5 +1,5 @@
 name: 'Build Distribution'
-description: 'Installs uv, builds the package, and uploads artifacts'
+description: 'Installs uv, builds all workspace packages, and uploads artifacts'
 runs:
   using: 'composite'
   steps:
@@ -8,12 +8,20 @@ runs:
       with:
         enable-cache: true
 
-    - name: Build
+    - name: Build all workspace packages
       shell: bash
-      run: uv build --out-dir dist/
+      run: |
+        # Build each workspace package separately so they can be published independently
+        uv build --package corpora-shared-py --wheel --out-dir dist/
+        uv build --package corpora-client-py --wheel --out-dir dist/
+        uv build --package corpora-admin-py  --wheel --out-dir dist/
+        # Also build the umbrella package (corpora-py) for sidecar/demo installs
+        uv build --wheel --out-dir dist/
+        echo "Built wheels:"
+        ls -lh dist/*.whl
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: dist/

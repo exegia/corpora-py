@@ -4,31 +4,25 @@
 Steps:
     1. Install workspace dependencies via `uv sync`.
     2. Install `dotenvx` for reading the encrypted .env files.
+    3. Install demo app (Bun) dependencies.
+    4. Build embedded Python runtime for the demo (if not already present).
 
 Run via `uv run scripts/setup.py`.
 """
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 import sys
-from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
-ROOT = SCRIPTS_DIR.parent
+from utils import ROOT, ensure_tool, run
 
 
-def run(cmd: list[str]) -> None:
-    print(f"$ {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=ROOT)
-    if result.returncode != 0:
-        sys.exit(result.returncode)
-
-
-def ensure_uv() -> None:
-    if shutil.which("uv") is None:
-        sys.exit("error: `uv` is required. Install from https://docs.astral.sh/uv/")
+def is_uv_install() -> None:
+    ensure_tool(
+        "uv",
+        "error: `uv` is required. Install from https://docs.astral.sh/uv/",
+        ["curl", "-LsSf", "https://astral.sh/uv/install.sh", "|", "sh"],
+    )
 
 
 def sync_dependencies() -> None:
@@ -42,15 +36,28 @@ def install_dotenvx() -> None:
 
 
 def install_demo_deps() -> None:
-    print("\n[3/3] Installing the demo app dependencies...")
-    run(cmd=["bun", "install", "--no-cache", "--cwd", "demo/app"])
+    print("\n[3/4] Installing the demo app dependencies...")
+    demo_app_dir = ROOT / "demo"
+    run(cmd=["bun", "install", "--no-cache"], dir=demo_app_dir)
+
+
+def build_demo_python_runtime() -> None:
+    print("\n[4/4] Ensuring embedded Python runtime for the demo...")
+    # All build logic now lives under scripts/build/
+    #   - python -m scripts.build.embedded
+    #   - python -m scripts.build.bundle
+    run(
+        [sys.executable, "-m", "scripts.build.embedded"],
+        dotenvx=False,
+    )
 
 
 def main() -> None:
-    ensure_uv()
+    is_uv_install()
     sync_dependencies()
     install_dotenvx()
     install_demo_deps()
+    build_demo_python_runtime()
 
     print("\nSetup complete.")
 
