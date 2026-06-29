@@ -4,5 +4,5 @@ dist/
 .react-router/
 artifacts/
 *.tsbuildinfo
-**/resources/python/
-resources/python/
+**/lib/python/
+lib/python/

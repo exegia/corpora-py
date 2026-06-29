@@ -30,9 +30,9 @@ source "${VENV_PATH}/bin/activate"
 echo "==> Installing corpora-py (local) in editable mode..."
 uv pip install -e /workspace --quiet
 
-# 4. Create the "resources/python" structure the PythonBridge expects, but pointing at our dev venv
+# 4. Create the "lib/python" structure the PythonBridge expects, but pointing at our dev venv
 #    This lets the existing python-bridge.ts work with almost no changes when DEV_PYTHON_BIN is set.
-RESOURCES_PYTHON="/workspace/demo/public/resources/python"
+RESOURCES_PYTHON="/workspace/demo/build/lib/python"
 mkdir -p "${RESOURCES_PYTHON}/bin"
 
 # Symlink the venv python so the bridge can spawn it exactly like a bundled one
@@ -124,7 +124,7 @@ fi
 # 6b. Ensure the embedded Python runtime for the demo (if not already built)
 # Build logic now lives under scripts/build/ (python -m scripts.build.embedded).
 # For Docker dev we prefer the venv shim (see below), but ensure the dir exists.
-if [[ ! -x /workspace/demo/dist/resources/python/bin/python3 ]]; then
+if [[ ! -x /workspace/demo/dist/lib/python/bin/python3 ]]; then
   echo "==> Demo embedded Python not present — building via scripts/build..."
   python3 -m scripts.build.embedded
 fi

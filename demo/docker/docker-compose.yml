@@ -36,8 +36,8 @@ services:
       # Inject your SSH public key for passwordless login (recommended)
       - SSH_PUBKEY=${SSH_PUBKEY:-}
       # These are consumed by the updated python-bridge.ts + entrypoint
-      - DEV_PYTHON_BIN=/workspace/demo/public/resources/python/bin/python3
-      - DEV_PYTHON_HOME=/workspace/demo/public/resources/python
+      - DEV_PYTHON_BIN=/workspace/demo/build/lib/python/bin/python3
+      - DEV_PYTHON_HOME=/workspace/demo/build/lib/python
     volumes:
       # Live mount the entire monorepo for editing TS, Python, etc.
       - ../..:/workspace
