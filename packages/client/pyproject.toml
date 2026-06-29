@@ -1,6 +1,6 @@
 [project]
 name = "corpora-client-py"
-version = "0.1.1"
+version = "0.1.2"
 description = "MCP server and client tools for the Corpora platform"
 readme = "../../README.md"
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "corpora-shared-py>=0.1.1",
+    "corpora-shared-py>=0.1.2",
     # MCP server
     "fastmcp>=2.0",
     # Corpus runtime

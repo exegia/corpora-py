@@ -1,6 +1,6 @@
 [project]
 name = "corpora-admin-py"
-version = "0.1.1"
+version = "0.1.2"
 description = "Admin and conversion tools for the Corpora platform (EPUB/HTML → Text-Fabric)"
 readme = "../../README.md"
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "corpora-shared-py>=0.1.1",
+    "corpora-shared-py>=0.1.2",
     # EPUB / HTML parsing
     "ebooklib>=0.18",
     "beautifulsoup4>=4.12.0",

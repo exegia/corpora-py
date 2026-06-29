@@ -1,6 +1,6 @@
 [project]
 name = "corpora-shared-py"
-version = "0.1.1"
+version = "0.1.2"
 description = "Shared auth, models, schemas, and Supabase client for the Corpora platform"
 readme = "../../README.md"
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
