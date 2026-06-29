@@ -26,7 +26,7 @@ services:
   demo:
     build:
       context: ../.. # Build context = monorepo root (so we see the Python package + demo)
-      dockerfile: demo/app/Dockerfile
+      dockerfile: demo/docker/Dockerfile
     image: ghcr.io/exegia/corpora-py-demo-dev:latest
     container_name: corpora-demo-dev
     ports:
@@ -36,13 +36,13 @@ services:
       # Inject your SSH public key for passwordless login (recommended)
       - SSH_PUBKEY=${SSH_PUBKEY:-}
       # These are consumed by the updated python-bridge.ts + entrypoint
-      - DEV_PYTHON_BIN=/workspace/demo/app/resources/python/bin/python3
-      - DEV_PYTHON_HOME=/workspace/demo/app/resources/python
+      - DEV_PYTHON_BIN=/workspace/demo/public/resources/python/bin/python3
+      - DEV_PYTHON_HOME=/workspace/demo/public/resources/python
     volumes:
       # Live mount the entire monorepo for editing TS, Python, etc.
       - ../..:/workspace
       # Persist Bun deps / node_modules inside the container (avoids host pollution)
-      - demo-node-modules:/workspace/demo/app/node_modules
+      - demo-node-modules:/workspace/demo/node_modules
       # Optional: bring your own SSH key for easy authorized_keys injection
       # - ~/.ssh:/host-ssh:ro
     # For X11 forwarding of the native ElectroBun window (advanced / Linux host only)

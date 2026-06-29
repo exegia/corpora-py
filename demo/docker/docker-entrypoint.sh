@@ -32,7 +32,7 @@ uv pip install -e /workspace --quiet
 
 # 4. Create the "resources/python" structure the PythonBridge expects, but pointing at our dev venv
 #    This lets the existing python-bridge.ts work with almost no changes when DEV_PYTHON_BIN is set.
-RESOURCES_PYTHON="/workspace/demo/app/resources/python"
+RESOURCES_PYTHON="/workspace/demo/public/resources/python"
 mkdir -p "${RESOURCES_PYTHON}/bin"
 
 # Symlink the venv python so the bridge can spawn it exactly like a bundled one
@@ -73,7 +73,7 @@ echo "==> Configuring shell environment for ${DEV_USER}..."
 cat > /etc/profile.d/corpora-dev.sh << 'EOF'
 # Corpora-Py Demo Dev Environment - Runtime PATH setup
 # Ensures bun, uv, dotenvx and project tools are available
-export PATH="/usr/local/bin:/workspace/demo/app/node_modules/.bin:${PATH}"
+export PATH="/usr/local/bin:/workspace/demo/node_modules/.bin:${PATH}"
 EOF
 chmod +x /etc/profile.d/corpora-dev.sh
 
@@ -83,7 +83,7 @@ if ! grep -q "corpora-dev" "${DEV_HOME}/.profile" 2>/dev/null; then
 
 # --- Corpora-Py Demo: explicit runtime PATH ---
 # Make bun, uv (system installs), dotenvx, and local project bins available
-export PATH="/usr/local/bin:/workspace/demo/app/node_modules/.bin:${PATH}"
+export PATH="/usr/local/bin:/workspace/demo/node_modules/.bin:${PATH}"
 
 # Optional: source .bashrc for interactive features
 if [ -f ~/.bashrc ]; then
@@ -98,14 +98,14 @@ if ! grep -q "Corpora-Py Demo" "${DEV_HOME}/.bashrc" 2>/dev/null; then
 
 # --- Corpora-Py Demo (interactive) ---
 # Project binaries (dotenvx etc.)
-if [ -d /workspace/demo/app/node_modules/.bin ]; then
-  export PATH="/workspace/demo/app/node_modules/.bin:${PATH}"
+if [ -d /workspace/demo/node_modules/.bin ]; then
+  export PATH="/workspace/demo/node_modules/.bin:${PATH}"
 fi
 
 # Quick aliases
 alias ll='ls -alF'
-alias dev='cd /workspace/demo/app && bun run dev:hmr'
-alias cdp='cd /workspace/demo/app'
+alias dev='cd /workspace/demo && bun run dev:hmr'
+alias cdp='cd /workspace/demo'
 EOF
 fi
 
@@ -113,7 +113,7 @@ chown -R "${DEV_USER}:${DEV_USER}" "${DEV_HOME}/.bashrc" "${DEV_HOME}/.profile" 
 chown root:root /etc/profile.d/corpora-dev.sh || true
 
 # 6. Prepare the ElectroBun demo app (Bun deps)
-cd /workspace/demo/app
+cd /workspace/demo
 if [[ ! -d node_modules ]]; then
   echo "==> Running bun install (first run in container)..."
   bun install
@@ -122,20 +122,19 @@ else
 fi
 
 # 6b. Ensure the embedded Python runtime for the demo (if not already built)
-# The bundling logic lives in the root scripts/ (build_embedded_python.py).
-# For Docker dev we prefer the venv shim (see below), but ensure the dir exists
-# so that non-DEV runs would work, and for consistency with local `start.py`.
-if [[ ! -x /workspace/demo/app/resources/python/bin/python3 ]]; then
-  echo "==> Demo embedded Python not present — building via root script..."
-  python3 /workspace/scripts/build_embedded_python.py
+# Build logic now lives under scripts/build/ (python -m scripts.build.embedded).
+# For Docker dev we prefer the venv shim (see below), but ensure the dir exists.
+if [[ ! -x /workspace/demo/dist/resources/python/bin/python3 ]]; then
+  echo "==> Demo embedded Python not present — building via scripts/build..."
+  python3 -m scripts.build.embedded
 fi
 
 # 6b. Expose key binaries (dotenvx, etc.) in the system PATH
 # This ensures `dotenvx run ...` works when running the npm scripts inside the container.
 echo "==> Linking runtime binaries (dotenvx) into /usr/local/bin..."
-ln -sf /workspace/demo/app/node_modules/.bin/dotenvx /usr/local/bin/dotenvx 2>/dev/null || true
+ln -sf /workspace/demo/node_modules/.bin/dotenvx /usr/local/bin/dotenvx 2>/dev/null || true
 # You can add more if needed, e.g.:
-# ln -sf /workspace/demo/app/node_modules/.bin/vite /usr/local/bin/vite 2>/dev/null || true
+# ln -sf /workspace/demo/node_modules/.bin/vite /usr/local/bin/vite 2>/dev/null || true
 
 # Verify critical runtimes are in PATH (for root during startup)
 for cmd in bun uv dotenvx; do
@@ -178,7 +177,7 @@ echo ""
 echo " Then in VS Code / Cursor: Remote-SSH > Connect to Host > corpora-demo"
 echo ""
 echo " Inside the container:"
-echo "   cd /workspace/demo/app"
+echo "   cd /workspace/demo"
 echo "   bun run dev:hmr     # recommended"
 echo "   # or bun run dev"
 echo "==================================================="

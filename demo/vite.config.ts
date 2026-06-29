@@ -11,6 +11,7 @@ export default defineConfig({
   plugins: [tailwindcss(), reactRouter()],
   build: {
     outDir: "dist",
+    emptyOutDir: true
   },
   appType: "spa",
 	server: {

@@ -1,11 +1,11 @@
-# demo/app/Dockerfile
+# demo/docker/Dockerfile
 # Development container for the ElectroBun + Python demo app.
 # - Full Bun + ElectroBun dev environment
 # - Python 3.13 + uv + the local corpora-py / exegia library installed editable
 # - OpenSSH server so IDEs (VS Code, Cursor, etc.) can connect via Remote-SSH
 #
 # Usage (recommended with docker-compose):
-#   docker compose -f demo/app/docker-compose.yml up --build
+#   docker compose -f demo/docker/docker-compose.yml up --build
 #   # Then from host:
 #   ssh -p 2222 dev@localhost
 #
@@ -91,7 +91,7 @@ WORKDIR /workspace
 EXPOSE 22 5173
 
 # Entrypoint handles venv creation for Python lib + SSH key injection + sshd
-COPY demo/app/scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY demo/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Default: run sshd in foreground. Developer SSH's in and runs `bun run dev` / `bun run dev:hmr`

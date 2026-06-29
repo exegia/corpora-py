@@ -18,7 +18,7 @@ const ROOT = resolve(import.meta.dir, "..");
 const DIRS_TO_REMOVE = [
   "build",
   "dist",
-  "resources/python",
+  "public/resources",
   "node_modules",
   ".cache",
   "artifacts",
@@ -33,7 +33,7 @@ async function removeDir(name: string) {
 }
 
 async function main() {
-  console.log("Cleaning demo/app dev artifacts...\n");
+  console.log("Cleaning demo dev artifacts...\n");
 
   console.log("Removing top-level generated directories...");
   for (const dir of DIRS_TO_REMOVE) {

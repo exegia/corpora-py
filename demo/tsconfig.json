@@ -19,11 +19,6 @@
     "rootDirs": [".", "./.react-router/types"],
   },
 
-  "include": [
-    "src",
-    "app",
-    "window-custom.d.ts",
-    ".react-router/types/**/*",
-  ],
-  "exclude": ["node_modules", "dist", "build", "../../package/dist"],
+  "include": ["src", "window-custom.d.ts", ".react-router/types/**/*"],
+  "exclude": ["node_modules", "dist", "../package/dist"],
 }

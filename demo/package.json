@@ -1,45 +1,43 @@
 {
-	"name": "electrobun-react-tailwind-vite",
-	"version": "1.0.0",
-	"description": "Electrobun app with React, Tailwind CSS, and Vite HMR",
-	"scripts": {
-		"desktop:dev": "electrobun dev --watch",
-		"vite:build": "vite build",
-		"vite:dev": "vite dev --open",
-		"build:canary": "vite build && electrobun build --env=canary",
-		"build:python": "uv --project ../.. run python ../../scripts/build_embedded_python.py",
-		"build:python:clean": "uv --project ../.. run python ../../scripts/build_embedded_python.py --clean",
-		"clean": "bun scripts/clean.ts"
-	},
-	"dependencies": {
-		"@dotenvx/dotenvx": "latest",
-		"@gravity-ui/icons": "^2.18.0",
-		"@heroui/react": "^3.2.1",
-		"@heroui/styles": "^3.2.1",
-		"@iconify/react": "^6.0.2",
-		"@icons-pack/react-simple-icons": "^13.13.0",
-		"@react-router/node": "^8.0.1",
-		"@react-router/serve": "^8.0.1",
-		"@tailwindcss/vite": "^4.3.1",
-		"bun_python": "^0.1.10",
-		"bunpy": "^0.3.3",
-		"electrobun": "1.18.4-beta.6",
-		"isbot": "^5.1.44",
-		"lucide-react": "^1.21.0",
-		"react": "^19.2.7",
-		"react-dom": "^19.2.7",
-		"react-router": "^8.0.1"
-	},
-	"devDependencies": {
-		"@react-router/dev": "^8.0.1",
-		"@types/bun": "latest",
-		"@types/react": "^19.2.17",
-		"@types/react-dom": "^19.2.3",
-		"@vitejs/plugin-react": "^6.0.3",
-		"autoprefixer": "^10.5.2",
-		"concurrently": "^10.0.3",
-		"tailwindcss": "^4.3.1",
-		"typescript": "^6.0.3",
-		"vite": "^8.1.0"
-	}
+  "name": "electrobun-react-tailwind-vite",
+  "version": "1.0.0",
+  "description": "Electrobun app with React, Tailwind CSS, and Vite HMR",
+  "scripts": {
+    "desktop:dev": "electrobun dev --watch",
+    "vite:build": "vite build",
+    "vite:dev": "vite dev --open",
+    "build:canary": "vite build && electrobun build --env=canary",
+    "clean": "bun scripts/clean.ts"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "latest",
+    "@gravity-ui/icons": "^2.18.0",
+    "@heroui/react": "^3.2.1",
+    "@heroui/styles": "^3.2.1",
+    "@iconify/react": "^6.0.2",
+    "@icons-pack/react-simple-icons": "^13.13.0",
+    "@react-router/node": "^8.0.1",
+    "@react-router/serve": "^8.0.1",
+    "@tailwindcss/vite": "^4.3.1",
+    "bun_python": "^0.1.10",
+    "bunpy": "^0.3.3",
+    "electrobun": "1.18.4-beta.6",
+    "isbot": "^5.1.44",
+    "lucide-react": "^1.21.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router": "^8.0.1"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^8.0.1",
+    "@types/bun": "latest",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "autoprefixer": "^10.5.2",
+    "concurrently": "^10.0.3",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0"
+  }
 }

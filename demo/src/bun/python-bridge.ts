@@ -32,7 +32,7 @@ export class PythonBridge {
       this.pythonBin = `${this.pythonHome}/bin/python3`;
       if (!existsSync(`${this.pythonHome}/bin/python3`)) {
         console.warn(`[PythonBridge] Warning: python3 not found at ${this.pythonBin}. ` +
-          `Make sure the runtime was built (uv run scripts/build_embedded_python.py) and ` +
+          `Make sure the runtime was built (uv run python -m scripts.build.embedded) and ` +
           `that start.py (or a clean electrobun build) copied it.`);
       }
     }
