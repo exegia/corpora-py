@@ -11,21 +11,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Supabase
-    supabase_url: str = os.getenv("SUPABASE_URL")
-    supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY")
-    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET")
-
-    # Database (Supabase PostgreSQL connection string)
-    database_url: str = os.getenv("DATABASE_URL")
-
-    # Datasets
-    datasets_base_path: str = os.getenv("DATASETS_BASE_PATH")
-
     # App
     environment: str = os.getenv("ENVIRONMENT")
     cors_origins: str = os.getenv("CORS_ORIGINS")
+    # AI
+    open_ai_key: str = model_config.get("OPENAI_KEY", "")
 
     @property
     def cors_origins_list(self) -> list[str]:

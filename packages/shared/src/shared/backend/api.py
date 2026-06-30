@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import settings
-from exegia_graphql.schema import graphql_router
 from src.utils.ssl_cert import CERT_FILE, KEY_FILE, generate_ssl_cert
 
 logging.basicConfig(
@@ -33,9 +32,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ── GraphQL ────────────────────────────────────────────────────────────────────
-app.include_router(graphql_router, prefix="/corpus/graphql")
 
 
 @app.get("/health", tags=["Health"])
