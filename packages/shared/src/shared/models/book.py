@@ -32,7 +32,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.database import Base
+from backend.database import Base
 
 
 # ── Enumerations ──────────────────────────────────────────────────────────────
