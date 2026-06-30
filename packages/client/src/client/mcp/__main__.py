@@ -1,3 +1,3 @@
-from client.mcp.server import main
+from server import main
 
 main()

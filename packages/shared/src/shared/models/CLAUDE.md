@@ -140,22 +140,6 @@ CREATE POLICY "Users can manage their own datasets"
     USING (auth.uid() = user_id);
 ```
 
-## SQLAlchemy Models
-
-### User Model (`user.py`)
-
-see @user
-
-### Note Model (`note.py`)
-
-see @note
-
-### Favorite Model (`favorite.py`)
-
-see @favorite
-
-### UserDataset Model (`dataset.py`)
-
 ## Migrations
 
 Database migrations managed with Alembic:
