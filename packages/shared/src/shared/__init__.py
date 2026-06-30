@@ -11,7 +11,7 @@ Contains:
 
 __version__ = "0.1.11"
 
-from . import auth, corpus, models, schemas, utils
+from . import auth, corpus, models, schemas, utils, backend
 
 # Lazy import for supabase to avoid import-time side effects (the module
 # creates a live Supabase client at import time of its client submodule) and
