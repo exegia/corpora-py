@@ -8,15 +8,15 @@ import {
 } from "react-router";
 import { Typography } from "@heroui/react";
 
-import stylesheet from "./app.css?url";
-
-export const links = () => [{ rel: "stylesheet", href: stylesheet }];
+import "./app.css";
 
 const NAV = [
 	{ to: "/", label: "Home", end: true },
 	{ to: "/corpus/upload", label: "Upload", end: false },
 	{ to: "/corpus/convert", label: "Convert", end: false },
 ];
+
+
 
 // Global document shell — everything renders inside this.
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -41,8 +41,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 // Global UI (nav) lives in the root per framework-mode conventions.
 export default function App() {
 	return (
-		<div className="flex min-h-screen flex-col">
-			<header className="flex items-center gap-6 border-b border-neutral-200 px-6 py-3 dark:border-neutral-800">
+    <div className="flex min-h-screen flex-col relative">
+      <div className="electrobun-webkit-app-region-drag w-full flex justify-center py-1.5 absolute left-0 top-0 select-none">
+        <Typography type="h6">Corpora</Typography>
+      </div>
+			<header className="flex items-center gap-6 border-b border-neutral-200 px-6 py-3 dark:border-neutral-800 mt-6">
 				<NavLink to="/" className="no-underline">
 					<Typography type="h4">Corpora</Typography>
 				</NavLink>
@@ -66,7 +69,7 @@ export default function App() {
 				</nav>
 			</header>
 
-			<main className="flex-1 px-6 py-8">
+			<main className="flex-1 px-6 py-8 h-full flex flex-col justify-center">
 				<Outlet />
 			</main>
 		</div>
