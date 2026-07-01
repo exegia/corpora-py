@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cf-mcp = "mcp:main"
+cf-mcp = "corpora_mcp.server:main"
 
 [project.optional-dependencies]
 # Enable SSE / HTTP transport (needed for remote MCP deployments)
@@ -23,6 +23,13 @@ sse = [
     "uvicorn[standard]>=0.30.0",
 ]
 
+
+[tool.uv.sources]
+# Resolve common from the local workspace during development
+corpora-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/corpora_mcp"]
 
 [build-system]
 requires = ["hatchling"]

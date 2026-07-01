@@ -1,10 +1,11 @@
 
 from pathlib import Path
 
-from openSSL import crypto
+from OpenSSL import crypto
 from fastapi.routing import APIRoute
-from constant import CERT_DIR, KEY_FILE, CERT_FILE
-from console import corpora_logger
+
+from .constant import CERT_DIR, KEY_FILE, CERT_FILE
+from .console import corpora_logger
 
 def generate_unique_id(route: APIRoute) -> str:
     return f"{route.tags[0]}-{route.name}"

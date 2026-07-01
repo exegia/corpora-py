@@ -1,5 +1,5 @@
 import os
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     # AI
     open_ai_key: str = model_config.get("OPENAI_KEY", "")
 
-    PROJECT_NAME = "Corpora API"
-    PROJECT_DESC = "FastAPI project to be loaded as a wheel, docker and/or server."
+    PROJECT_NAME: ClassVar[str] = "Corpora API"
+    PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."
     API_V1_STR: str = "/api/v1"
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"

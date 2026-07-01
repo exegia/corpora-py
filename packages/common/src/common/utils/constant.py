@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 from pathlib import Path
-from config import settings
 
 from platformdirs import PlatformDirs
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+from .config import settings
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 application_support = PlatformDirs("exegia")
 
 # Application
