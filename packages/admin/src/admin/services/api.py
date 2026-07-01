@@ -25,13 +25,15 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile
+from typing import Any
+
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers.schema import SourceFormat
-from .jobs import JobStatus, job_manager
+from .jobs import ConversionJob, JobQueueFull, JobStatus, job_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,18 +41,54 @@ router = APIRouter(prefix="/convert", tags=["Conversion"])
 
 # Scratch space for uploads + intermediate Text-Fabric output. Each job gets
 # its own subdirectory (named after the job id) so concurrent conversions
-# never collide; nothing here is meant to be long-lived storage -- once
-# packaged into a `.corpus` archive, the caller is expected to move/upload
-# the result and the job directory can be reaped.
+# never collide. Deleted in full once the job reaches a terminal state (see
+# `_run_conversion`'s `finally` block) -- nothing here is meant to survive a
+# finished job.
 _WORK_ROOT = Path(tempfile.gettempdir()) / "corpora-admin-jobs"
+
+# Where finished `.corpus` archives live, named after their (already-unique)
+# `work_dir` so no separate id has to be threaded through `JobManager`.
+# Unlike `_WORK_ROOT`, nothing currently deletes from here -- there is no
+# "client downloaded it, safe to delete" signal, and a naive delete-on-
+# download would break retries. This still needs a TTL-based reap job; see
+# `packages/admin/CLAUDE.md`'s "Known gaps".
+_RESULTS_ROOT = Path(tempfile.gettempdir()) / "corpora-admin-results"
 
 # 1 MiB read chunks: large enough to not be I/O-bound, small enough that a
 # multi-hundred-MB EPUB/PDF is never fully buffered in memory.
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
 
+# Reject uploads past this size. This only bounds disk usage *during* the
+# chunked read (the request body itself is already being streamed, not
+# buffered) -- it's not a pre-flight `Content-Length` check, since
+# `UploadFile`'s multipart parsing doesn't expose the declared size before
+# parsing starts. 500 MiB comfortably covers a full Bible EPUB or a large
+# scanned PDF; raise it if a legitimate source needs more.
+_MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+
+
+def _claims(request: Request) -> dict[str, Any] | None:
+    """The decoded JWT claims `AuthMiddleware` attached to this request.
+
+    `None` if auth is currently disabled (`AUTH_REQUIRED=false`) -- see
+    `corpora_py.auth`. Only ever reads `request.state`, never verifies
+    anything itself: this router has no auth policy of its own (see this
+    module's docstring).
+    """
+    return getattr(request.state, "user", None)
+
+
+def _not_found_unless_visible(job: ConversionJob | None, request: Request) -> ConversionJob:
+    if job is None or not job.is_visible_to(_claims(request)):
+        # Same message/status for "doesn't exist" and "exists but isn't
+        # yours" -- distinguishing the two would let a client enumerate
+        # other users' job ids.
+        raise HTTPException(status_code=404, detail="Unknown job id")
+    return job
+
 
 async def _save_upload(upload: UploadFile, dest_dir: Path) -> Path:
-    """Stream `upload` to disk in chunks.
+    """Stream `upload` to disk in chunks, enforcing `_MAX_UPLOAD_BYTES`.
 
     Uploading is comparatively cheap disk I/O next to the conversion itself
     (which runs in the background thread pool), so doing this directly in
@@ -61,9 +99,20 @@ async def _save_upload(upload: UploadFile, dest_dir: Path) -> Path:
     fixed-size chunks.
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / (upload.filename or "source")
+    # `.name` strips any path segments from the client-supplied filename
+    # (e.g. `../../etc/passwd` -> `passwd`) before joining with `dest_dir`.
+    dest = dest_dir / Path(upload.filename or "source").name
+    total = 0
     with dest.open("wb") as out:
         while chunk := await upload.read(_UPLOAD_CHUNK_SIZE):
+            total += len(chunk)
+            if total > _MAX_UPLOAD_BYTES:
+                out.close()
+                dest.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Upload exceeds the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit",
+                )
             out.write(chunk)
     return dest
 
@@ -79,17 +128,24 @@ def _run_conversion(
     """Blocking pipeline: parse -> Text-Fabric -> .cfm -> .corpus.
 
     Runs on a `JobManager` worker thread -- never call this directly from an
-    async endpoint.
+    async endpoint. Always cleans up `work_dir` (the upload + intermediate
+    `tf/` tree) on the way out, success or failure -- only the final
+    `.corpus`, written to `_RESULTS_ROOT`, survives.
     """
-    converter = CONVERTERS[source_format]
-    tf_dir = work_dir / "tf"
-    converter(str(source_path), tf_dir)
-    corpus_path = work_dir / f"{name}.corpus"
-    return convert_to_corpus(tf_dir, corpus_path, name=name, description=description)
+    try:
+        converter = CONVERTERS[source_format]
+        tf_dir = work_dir / "tf"
+        converter(str(source_path), tf_dir)
+        _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
+        corpus_path = _RESULTS_ROOT / f"{work_dir.name}.corpus"
+        return convert_to_corpus(tf_dir, corpus_path, name=name, description=description)
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 @router.post("", status_code=202)
 async def create_conversion(
+    request: Request,
     file: UploadFile,
     source_format: SourceFormat = Form(...),
     name: str = Form(...),
@@ -108,21 +164,35 @@ async def create_conversion(
             f"Available: {sorted(f.value for f in CONVERTERS)}",
         )
 
+    claims = _claims(request)
+    owner = claims.get("sub") if claims else None
+
     _WORK_ROOT.mkdir(parents=True, exist_ok=True)
     work_dir = Path(tempfile.mkdtemp(prefix="job-", dir=str(_WORK_ROOT)))
-    source_path = await _save_upload(file, work_dir / "source")
+    try:
+        source_path = await _save_upload(file, work_dir / "source")
 
-    job = job_manager.submit(
-        source_format=source_format,
-        name=name,
-        fn=lambda: _run_conversion(
-            source_path=source_path,
-            work_dir=work_dir,
-            source_format=source_format,
-            name=name,
-            description=description,
-        ),
-    )
+        try:
+            job = job_manager.submit(
+                source_format=source_format,
+                name=name,
+                owner=owner,
+                fn=lambda: _run_conversion(
+                    source_path=source_path,
+                    work_dir=work_dir,
+                    source_format=source_format,
+                    name=name,
+                    description=description,
+                ),
+            )
+        except JobQueueFull as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except HTTPException:
+        # The job never started (rejected upload or full queue) -- nothing
+        # will clean up `work_dir` for us, so do it here.
+        shutil.rmtree(work_dir, ignore_errors=True)
+        raise
+
     logger.info("Queued conversion job %s (%s, %s)", job.id, source_format.value, name)
     return {
         "job_id": job.id,
@@ -132,20 +202,20 @@ async def create_conversion(
 
 
 @router.get("/{job_id}")
-async def get_conversion(job_id: str) -> dict[str, object]:
-    """Poll the status of a conversion job."""
-    job = job_manager.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Unknown job id")
+async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
+    """Poll the status of a conversion job.
+
+    404s for a job that exists but belongs to a different submitter, same as
+    an unknown id -- see `_not_found_unless_visible`.
+    """
+    job = _not_found_unless_visible(job_manager.get(job_id), request)
     return job.to_dict()
 
 
 @router.get("/{job_id}/download")
-async def download_conversion(job_id: str) -> FileResponse:
+async def download_conversion(job_id: str, request: Request) -> FileResponse:
     """Download the finished `.corpus` archive for a succeeded job."""
-    job = job_manager.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Unknown job id")
+    job = _not_found_unless_visible(job_manager.get(job_id), request)
     if job.status != JobStatus.SUCCEEDED or job.result_path is None:
         raise HTTPException(status_code=409, detail=f"Job is {job.status.value}, not ready")
     return FileResponse(job.result_path, filename=job.result_path.name)

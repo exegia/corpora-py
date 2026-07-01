@@ -8,5 +8,6 @@ from . import config
 from . import helpers
 from . import console
 from . import constant
+from . import jwt_auth
 
-__all__ = ["constant", "console", "config",  "helpers"]
+__all__ = ["constant", "console", "config", "helpers", "jwt_auth"]

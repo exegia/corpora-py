@@ -370,6 +370,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "platformdirs" },
     { name = "pydantic-settings" },
+    { name = "pyjwt" },
     { name = "pyopenssl" },
 ]
 
@@ -378,6 +379,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "platformdirs", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
+    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "pyopenssl", specifier = ">=24.0.0" },
 ]
 

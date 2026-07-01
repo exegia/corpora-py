@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code when working in `packages/admin/`
-(the `corpora-admin-py` package). See the workspace root `CLAUDE.md` for the
+(the `corpora-admin` package). See the workspace root `CLAUDE.md` for the
 overall repo; this file only covers what's specific to this package.
 
 ## Commands
@@ -10,7 +10,7 @@ overall repo; this file only covers what's specific to this package.
 # Run from the workspace root, not from packages/admin/
 
 # Install / re-sync this package's deps
-uv sync --package corpora-admin-py
+uv sync --package corpora-admin
 
 # Lint / type-check
 uv run ruff check packages/admin/
@@ -20,7 +20,7 @@ uv run mypy packages/admin/src --ignore-missing-imports
 # NOT catch a broken `[tool.hatch.build.targets.wheel] packages` path; it
 # happily installs an empty editable package with no error. Always verify
 # with a real build after touching pyproject.toml:
-uv build --package corpora-admin-py --wheel --out-dir /tmp/wheelcheck
+uv build --package corpora-admin --wheel --out-dir /tmp/wheelcheck
 python -m zipfile -l /tmp/wheelcheck/*.whl   # should list admin/parsers/*.py, admin/converters/*.py
 ```
 
@@ -30,7 +30,7 @@ python -m zipfile -l /tmp/wheelcheck/*.whl   # should list admin/parsers/*.py, a
 packages/admin/
   pyproject.toml           # packages = ["src/admin"] — must match this path exactly
   src/admin/
-    __init__.py             # from . import converters, parsers
+    __init__.py             # from . import converters, parsers, services
     parsers/                 # source document -> Document/Unit tree
       schema.py               # the shared schema + Parser ABC (read this first)
       _epub.py, _html.py, _xml.py, _tei.py, _pdf.py, _plain.py
@@ -41,10 +41,16 @@ packages/admin/
       convert_to_cfm.py         # .tf -> .cfm (Context-Fabric compile)
       convert_to_corpus.py      # .tf + .cfm -> .corpus archive
       __init__.py               # CONVERTERS: dict[SourceFormat, converter fn]
+    services/                 # HTTP surface over the pipeline above (FastAPI routers)
+      api.py                    # POST/GET /convert (upload, poll, download)
+      websocket.py              # /convert/{id}/ws (status push)
+      jobs.py                   # JobManager (in-process ThreadPoolExecutor job registry)
 ```
 
-This mirrors `packages/shared/src/shared/` and `packages/client/src/client/`
-— every workspace package lives at `packages/{name}/src/{name}/`. **Do not**
+This mirrors `packages/common/src/common/` and `packages/mcp/src/corpora_mcp/`
+— every workspace package lives at `packages/{name}/src/{name}/` (mcp's
+importable module is `corpora_mcp`, not `mcp`, to avoid colliding with the
+real `mcp` SDK — see the root `CLAUDE.md`). **Do not**
 move code back to `packages/admin/{parsers,converters}/` (flat, no `src/`) —
 that layout was tried twice and both times produced a wheel with zero
 code in it (hatchling silently resolves `packages = ["admin"]` or
@@ -138,3 +144,33 @@ contract both the Corpora and Exegia apps parse.
   `convert_to_corpus()` are caller-supplied and default to `""` — this
   package has no way to know them; they're assigned by whatever backend
   calls it (the Corpora/Exegia app, not this converter).
+- **`services/` (the `/convert` HTTP API) has no test coverage.** A
+  deliberate scope cut, not an oversight — see the root `CLAUDE.md`'s CI/CD
+  section for context. Test strategy (mocking `cfabric`, exercising
+  `JobManager` without real conversions) needs its own design pass.
+  (Auth *is* covered now — see `corpora_py.auth` and the root `CLAUDE.md`.)
+- **`_RESULTS_ROOT` (finished `.corpus` archives, in `services/api.py`) is
+  never cleaned up.** `_WORK_ROOT` (uploads + intermediate Text-Fabric
+  output) *is* deleted once a job reaches a terminal state, but there's no
+  "client downloaded it, safe to delete" signal for the final archive, and a
+  naive delete-on-download would break retries. Needs a TTL-based reap (a
+  periodic task deleting files older than N hours) — not implemented yet.
+  `JobManager._jobs` has the same problem: terminal job entries are never
+  pruned from the in-memory registry, so it grows for the lifetime of the
+  process.
+- **`JobManager`'s stall watchdog (`_check_stall`) cannot actually stop a
+  hung conversion.** It marks a job `FAILED` after `stall_timeout_seconds`
+  of wall-clock `RUNNING` time so clients stop waiting on it, but a
+  `ThreadPoolExecutor` has no way to kill a thread that's already running —
+  the underlying worker thread keeps executing the stuck call (e.g. a
+  malformed PDF looping in `pypdf`) indefinitely, permanently occupying one
+  of the pool's `max_workers` slots. A real fix needs process-isolated
+  execution (subprocess or `ProcessPoolExecutor`), which in turn requires
+  `JobManager.submit()` to accept a picklable job spec instead of an
+  arbitrary closure (`api.py` currently passes a `lambda` closing over
+  `source_path`/`work_dir`/etc., which cannot cross a process boundary).
+- **No cross-process job registry.** `JobManager` is an in-memory,
+  per-process singleton (see its class docstring and `corpora_py.app.main()`,
+  which hardcodes `workers=1` specifically because of this). Scaling this
+  service beyond one process needs a shared backend (Redis, Celery, or
+  similar) instead of — or in front of — `JobManager`.

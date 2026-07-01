@@ -38,10 +38,16 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
     """Push `ConversionJob.to_dict()` snapshots whenever the job's status changes.
 
     Closes automatically once the job reaches a terminal state
-    (`succeeded`/`failed`), or immediately with 4404 if `job_id` is unknown.
+    (`succeeded`/`failed`), or immediately with 4404 if `job_id` is unknown
+    *or* belongs to a different submitter -- same non-distinguishing
+    treatment as `GET /convert/{id}` (see `admin.services.api`), so a client
+    can't use this to enumerate other users' job ids. The claims used for
+    that check are whatever `AuthMiddleware` (`corpora_py.auth`) attached to
+    this connection's ASGI scope -- `None` if auth is currently disabled.
     """
+    claims = getattr(websocket.state, "user", None)
     job = job_manager.get(job_id)
-    if job is None:
+    if job is None or not job.is_visible_to(claims):
         await websocket.close(code=_UNKNOWN_JOB_CLOSE_CODE, reason="Unknown job id")
         return
 

@@ -1,4 +1,4 @@
-# corpora-admin-py
+# corpora-admin
 
 Admin / conversion tooling for the Corpora platform: turns EPUB, HTML, XML,
 TEI, PDF, and plain-text source documents into
@@ -7,9 +7,12 @@ those into [Context-Fabric](https://context-fabric.ai)'s `.cfm` cache, and
 packages the result into a `.corpus` archive — the format both the Corpora
 and Exegia apps consume.
 
-This is the `[full]` extra of the workspace: it pulls in `text-fabric` and
-`context-fabric`, which the slim client runtime (`corpora-client-py`) doesn't
-need.
+This package pulls in `text-fabric` and `context-fabric` as plain
+dependencies (there is no `[full]` extra — installing `corpora-admin` always
+includes them), which the slim MCP runtime (`corpora-mcp`) doesn't need.
+`admin.services` also exposes this pipeline over HTTP (`POST/GET /convert`,
+mounted into the combined app at `src/corpora_py/app.py`) — see "Module map"
+below.
 
 ## Pipeline
 
@@ -48,10 +51,10 @@ source document  --parse-->  Document/Unit tree  --walk-->  Text-Fabric (.tf)  -
 
 ```bash
 # From the workspace root
-uv sync --package corpora-admin-py
+uv sync --package corpora-admin
 
 # Standalone
-pip install "corpora-admin-py"
+pip install corpora-admin
 ```
 
 ## Usage
@@ -86,6 +89,12 @@ corpus_path = convert_to_corpus(
   Each `_{format}_to_tf.py` supplies the handful of format-specific choices
   (root node name, `Unit.type` → TF node type mapping). `convert_to_cfm.py`
   and `convert_to_corpus.py` are the two packaging stages after conversion.
+- **`admin.services`** — HTTP surface over the pipeline above: `api.py`
+  (`POST /convert` upload + background job, `GET /convert/{id}` poll,
+  `GET /convert/{id}/download`), `websocket.py` (`/convert/{id}/ws` status
+  push), `jobs.py` (the in-process `JobManager` backing both). Not a
+  standalone app — meant to be included into a FastAPI app (see
+  `src/corpora_py/app.py`).
 
 ## Development
 
@@ -93,5 +102,5 @@ corpus_path = convert_to_corpus(
 # From the workspace root
 uv run ruff check packages/admin/
 uv run mypy packages/admin/src --ignore-missing-imports
-uv build --package corpora-admin-py --wheel --out-dir dist/
+uv build --package corpora-admin --wheel --out-dir dist/
 ```

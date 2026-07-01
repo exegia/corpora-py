@@ -15,6 +15,11 @@
 #   Optional: DATASETS_DIR (default: ~/.exegia/datasets), SOURCES_DIR (default: ~/sources)
 
 services:
+  # NOTE: `api` and `caddy` below don't correspond to anything else in this
+  # repo (there's no `./dockerfiles/python${PYTHON_VERSION}/Dockerfile`, no
+  # Caddyfile at the repo root) — they look like leftover boilerplate from a
+  # template and haven't been touched here; the real combined app is the
+  # `corpora` service further down.
   api:
     restart: unless-stopped
     env_file:
@@ -50,7 +55,7 @@ services:
     depends_on:
       - api
 
-  # ── MCP server (corpora-client-py) ─────────────────────────────────────────
+  # ── Combined FastAPI app: MCP server + admin conversion API (corpora-py) ───
   corpora:
     build:
       context: .
@@ -70,7 +75,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "from mcp.corpus import corpus_manager; print('ok')"]
+      test: ["CMD", "python", "-c", "from corpora_mcp.corpus import corpus_manager; print('ok')"]
       interval: 30s
       timeout: 10s
       retries: 3

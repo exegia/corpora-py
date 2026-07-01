@@ -1,6 +1,6 @@
 # Dockerfile.admin
 # Full-featured container for corpus conversion / admin tools.
-# Includes corpora-admin[full] with text-fabric, EPUB/HTML converters, etc.
+# Includes corpora-admin with text-fabric, EPUB/HTML/PDF/TEI converters, etc.
 #
 # Build:
 #   docker build -f Dockerfile.admin -t corpora-admin .
@@ -13,7 +13,7 @@
 #     -v ~/.exegia/datasets:/data/datasets \
 #     -v ~/my-epub-sources:/data/sources:ro \
 #     corpora-admin \
-#     python -m admin.utils.convert_epub_to_tf /data/sources/book.epub /data/datasets/output
+#     python -c "from admin.converters import convert_epub_to_tf; convert_epub_to_tf('/data/sources/book.epub', '/data/datasets/output')"
 
 # ── Stage 1: install dependencies into a virtual environment ─────────────────
 FROM python:3.13-slim AS builder
@@ -28,19 +28,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy workspace root + all packages (admin depends on shared)
+# Copy workspace root + all packages (admin depends on common)
 COPY pyproject.toml uv.lock* ./
-COPY packages/shared packages/shared
+COPY packages/common packages/common
 COPY packages/admin  packages/admin
 
 # Build wheels
-RUN uv build --package corpora-shared-py --wheel --out-dir /wheels/ && \
-    uv build --package corpora-admin-py  --wheel --out-dir /wheels/
+RUN uv build --package corpora-common --wheel --out-dir /wheels/ && \
+    uv build --package corpora-admin  --wheel --out-dir /wheels/
 
-# Install into a dedicated venv with [full] extra for text-fabric
+# Install into a dedicated venv (text-fabric is a direct dependency of
+# corpora-admin, not gated behind an extra)
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --find-links /wheels \
-        "corpora-admin-py[full]"
+        corpora-admin
 
 # ── Stage 2: runtime image ────────────────────────────────────────────────────
 FROM python:3.13-slim
@@ -65,4 +66,4 @@ ENV PATH="/opt/venv/bin:$PATH" \
 VOLUME ["/data/datasets", "/data/sources"]
 
 # Default: show available admin modules
-CMD ["python", "-c", "import admin; print('corpora-admin ready. Available: admin.utils.*')"]
+CMD ["python", "-c", "import admin; print('corpora-admin ready. Available: admin.parsers.*, admin.converters.*')"]
