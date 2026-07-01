@@ -43,15 +43,15 @@ combined with the MCP app's via `combine_lifespans` below -- see
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
-from fastmcp.utilities.lifespan import combine_lifespans
 
 from admin.services.api import router as conversion_router
 from admin.services.jobs import job_manager
 from admin.services.websocket import router as conversion_ws_router
 from corpora_mcp import mcp
+from fastapi import FastAPI
+from fastmcp.utilities.lifespan import combine_lifespans
 
 from .auth import AuthMiddleware
 
@@ -61,7 +61,7 @@ _mcp_app = mcp.http_app(path="/")
 
 
 @asynccontextmanager
-async def _job_manager_lifespan(app: FastAPI):
+async def _job_manager_lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     job_manager.shutdown(wait=False)
 

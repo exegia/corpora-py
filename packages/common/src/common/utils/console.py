@@ -1,5 +1,6 @@
 import logging
 
+
 def configure_logger(instance: logging.Logger) -> None:
     """Configure a custom logger."""
 

@@ -1,6 +1,7 @@
 """Environment-backed constants loaded from `.env.{environment}` at import time."""
 
 from __future__ import annotations
+
 from pathlib import Path
 
 from platformdirs import PlatformDirs

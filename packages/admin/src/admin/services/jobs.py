@@ -46,7 +46,7 @@ class JobStatus(StrEnum):
 _TERMINAL_STATUSES = (JobStatus.SUCCEEDED, JobStatus.FAILED)
 
 
-class JobQueueFull(Exception):
+class JobQueueFullError(Exception):
     """Raised by `JobManager.submit` when too many jobs are queued/running.
 
     Deliberately a plain exception, not an `HTTPException` -- this module
@@ -160,7 +160,7 @@ class JobManager:
 
         `fn` must be a zero-argument callable that does the actual blocking
         conversion work and returns the path to the finished `.corpus` file
-        (or raises on failure). Raises `JobQueueFull` without touching `fn`
+        (or raises on failure). Raises `JobQueueFullError` without touching `fn`
         if too many jobs are already queued/running.
 
         `owner` should be the submitter's JWT `sub` claim (or `None` if auth
@@ -172,7 +172,7 @@ class JobManager:
         with self._lock:
             pending = sum(1 for j in self._jobs.values() if j.status not in _TERMINAL_STATUSES)
             if pending >= self._max_pending:
-                raise JobQueueFull(
+                raise JobQueueFullError(
                     f"{pending} conversions already queued/running (limit {self._max_pending})"
                 )
             self._jobs[job.id] = job

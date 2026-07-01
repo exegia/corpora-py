@@ -33,11 +33,10 @@ from __future__ import annotations
 import logging
 from urllib.parse import parse_qs
 
-from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
-
 from common.utils.config import settings
 from common.utils.jwt_auth import AuthError, verify_jwt
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 

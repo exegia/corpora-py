@@ -24,7 +24,6 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-
 from typing import Any
 
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
@@ -33,7 +32,7 @@ from fastapi.responses import FileResponse
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers.schema import SourceFormat
-from .jobs import ConversionJob, JobQueueFull, JobStatus, job_manager
+from .jobs import ConversionJob, JobQueueFullError, JobStatus, job_manager
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +194,7 @@ async def create_conversion(
                     description=description,
                 ),
             )
-        except JobQueueFull as exc:
+        except JobQueueFullError as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
     except Exception:
         # The job never started (rejected upload, full queue, or some
