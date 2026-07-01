@@ -1,6 +1,6 @@
 # https://caddyserver.com/docs/caddyfile/concepts
 
 :5002 {
-	reverse_proxy /* api:5001
+	reverse_proxy /* corpora:8000
 	encode zstd gzip
 }

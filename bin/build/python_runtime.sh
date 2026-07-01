@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # python_runtime.sh
-# Shell version of the runtime helper described in scripts/build/python_runtime.py
 #
 # For use by the consumer/client application code (or in CI).
 #
@@ -13,11 +12,11 @@
 # and set DOWNLOAD_BASE_URL appropriately.
 #
 # Usage:
-#   source scripts/build/common.sh
+#   source scripts/bin/common.sh
 #   ensure_python_runtime [target_dir] [force]
 #
 # Or directly:
-#   ./scripts/build/python_runtime.sh [target_dir]
+#   ./bim/build/python_runtime.sh [target_dir]
 #
 # It will print the path to the python binary on success.
 #

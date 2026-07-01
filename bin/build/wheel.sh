@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 #
 # wheel.sh
-# Shell equivalent of scripts/build/wheel.py
 #
 # Build workspace wheels, find the umbrella wheel, and install into a standalone Python.
 #
 # Usage examples:
-#   ./scripts/build/wheel.sh build [out-dir]
-#   ./scripts/build/wheel.sh find [out-dir]
-#   ./scripts/build/wheel.sh install <wheel> <python_dir> [--find-links <dir>]
+#   ./bin/build/wheel.sh build [out-dir]
+#   ./bin/build/wheel.sh find [out-dir]
+#   ./bin/build/wheel.sh install <wheel> <python_dir> [--find-links <dir>]
 #
 
 set -euo pipefail
@@ -21,8 +20,8 @@ build_wheels() {
   mkdir -p "$out_dir"
 
   log "Building workspace wheels with uv..."
-  run_cmd uv build --package corpora-shared --wheel "--out-dir=$out_dir"
-  run_cmd uv build --package corpora-client --wheel "--out-dir=$out_dir"
+  run_cmd uv build --package corpora-common --wheel "--out-dir=$out_dir"
+  run_cmd uv build --package corpora-mcp --wheel "--out-dir=$out_dir"
   run_cmd uv build --package corpora-admin --wheel "--out-dir=$out_dir"
   # Umbrella last
   run_cmd uv build --wheel "--out-dir=$out_dir"
