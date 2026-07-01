@@ -68,6 +68,21 @@ target-version = "py313"
 select = ["E", "F", "I", "N", "W", "UP", "B"]
 ignore = ["E501"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's parameter-marker idiom (`= Form(...)`, `= Query(...)`, etc.) is
+# the standard, documented way to declare request parameters -- not the
+# mutable-default-argument footgun B008 exists to catch.
+extend-immutable-calls = [
+    "fastapi.Form",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Depends",
+    "fastapi.Security",
+]
+
 [tool.mypy]
 python_version = "3.13"
 warn_unused_configs = true

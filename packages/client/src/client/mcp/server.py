@@ -580,7 +580,7 @@ clause
 """,
     }
 
-    full_guide = "\n\n".join(f"=== {k.upper()} ===\n{v}" for k, v in guide.items())
+    all_sections = "\n\n".join(f"=== {k.upper()} ===\n{v}" for k, v in guide.items())
 
     if section:
         key = section.lower()
@@ -588,7 +588,7 @@ clause
             return guide[key]
         return f"Unknown section '{section}'. Available: {', '.join(guide)}"
 
-    return full_guide
+    return all_sections
 
 
 # ── Data access tools ─────────────────────────────────────────────────────────
