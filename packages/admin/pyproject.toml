@@ -19,12 +19,9 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
     "python-multipart>=0.0.9",
-]
-
-[project.optional-dependencies]
-# text-fabric needed for conversion tools (epub/html → TF node hierarchy)
-full = [
-    "text-fabric>=13.0.0",
+    "text-fabric>=13.1.0",
+    # PDF parsing
+    "pypdf>=5.0.0",
 ]
 
 [tool.uv.sources]

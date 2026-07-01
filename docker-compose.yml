@@ -15,6 +15,40 @@
 #   Optional: DATASETS_DIR (default: ~/.exegia/datasets), SOURCES_DIR (default: ~/sources)
 
 services:
+  api:
+    restart: unless-stopped
+    env_file:
+      - .env
+    build:
+      context: ./
+      dockerfile: ./dockerfiles/python${PYTHON_VERSION}/Dockerfile
+      labels:
+        - fastapi
+    ports:
+      - "5001:5001"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5002:5002"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+      - type: volume
+        source: caddy_data
+        target: /data
+      - type: volume
+        source: caddy_config
+        target: /config
+    depends_on:
+      - api
 
   # ── MCP server (corpora-client-py) ─────────────────────────────────────────
   client:
@@ -23,15 +57,6 @@ services:
       dockerfile: Dockerfile.client
     image: corpora-client:latest
     container_name: corpora-mcp
-    command:
-      # Serve via SSE so remote MCP clients can connect.
-      # Override to use stdio:  docker run corpora-client --corpus /data/datasets/BHSA
-      - --sse
-      - "8000"
-      - --corpus
-      - /data/datasets/BHSA
-      - --name
-      - BHSA
     ports:
       - "8000:8000"
     volumes:
@@ -40,7 +65,7 @@ services:
       - "${DATASETS_DIR:-~/.exegia/datasets}:/data/datasets:ro"
     env_file:
       - path: .env
-        required: false   # silently skipped if .env doesn't exist; use shell env instead
+        required: false # silently skipped if .env doesn't exist; use shell env instead
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       PROJECT_REF: ${PROJECT_REF}
@@ -60,17 +85,9 @@ services:
       dockerfile: Dockerfile.admin
     image: corpora-admin:latest
     container_name: corpora-admin
-    # Stays alive so you can exec/run commands interactively.
-    # One-shot example:
-    #   docker compose --profile admin run --rm admin \
-    #     python -m admin.utils.convert_epub_to_tf /data/sources/book.epub /data/datasets/out
     command: >
-      python -c "
-      import time, sys
-      print('corpora-admin ready. Available: admin.utils.*')
-      sys.stdout.flush()
-      time.sleep(86400)
-      "
+      python -c " import time, sys print('corpora-admin ready. Available: admin.utils.*')
+      sys.stdout.flush() time.sleep(86400) "
     volumes:
       - "${DATASETS_DIR:-~/.exegia/datasets}:/data/datasets"
       - "${SOURCES_DIR:-~/sources}:/data/sources:ro"
@@ -79,9 +96,11 @@ services:
         required: false
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
-      PROJECT_REF: ${PROJECT_REF}
-      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
     profiles:
       # Only start when explicitly requested:
       #   docker compose --profile admin up
       - admin
+
+volumes:
+  caddy_data:
+  caddy_config:
