@@ -54,22 +54,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-      <Surface
-        className="rounded-2xl border-2 border-neutral-100 p-6 dark:border-neutral-800"
-        variant="default"
-      >
-        <Typography type="h2">Login</Typography>
-        <div className="mt-4 flex flex-col gap-3">
-          <Button className="w-full" variant="tertiary">
-            <Icon icon="devicon:google" />
-            Sign in with Google
-          </Button>
-          <Button className="w-full" variant="tertiary">
-            <Icon icon="ion:logo-apple" />
-            Sign in with Apple.
-          </Button>
-        </div>
-      </Surface>
+
 
       <Card variant="transparent">
         <Card.Header>
