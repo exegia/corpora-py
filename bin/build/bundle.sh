@@ -27,7 +27,7 @@ Usage:
   bundle.sh <wheel-spec> [--platform P] [--dest-dir D] [--cache-dir C] [--find-links F]
 
 Example:
-  ./scripts/build/bundle.sh dist/corpora_py-*.whl[full]
+  ./bin/build/bundle.sh dist/corpora_py-*.whl[full]
 EOF
 }
 

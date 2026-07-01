@@ -35,9 +35,9 @@ COPY packages/admin   packages/admin
 COPY src/corpora_py   src/corpora_py
 
 # Build all wheels so pip can resolve workspace deps without hitting PyPI
-RUN uv build --package corpora-shared-py --wheel --out-dir /wheels/ && \
-    uv build --package corpora-client-py --wheel --out-dir /wheels/ && \
-    uv build --package corpora-admin-py  --wheel --out-dir /wheels/ && \
+RUN uv build --package corpora-shared --wheel --out-dir /wheels/ && \
+    uv build --package corpora-client --wheel --out-dir /wheels/ && \
+    uv build --package corpora-admin  --wheel --out-dir /wheels/ && \
     uv build --wheel --out-dir /wheels/
 
 # Install everything (corpora-py umbrella + [full] for text-fabric)

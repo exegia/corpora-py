@@ -54,9 +54,9 @@ fi
 # 1. Build all workspace wheels (local dist)
 log "Building workspace wheels with uv..."
 mkdir -p "$DIST_DIR"
-run_cmd uv build --package corpora-shared-py --wheel "--out-dir=$DIST_DIR"
-run_cmd uv build --package corpora-client-py --wheel "--out-dir=$DIST_DIR"
-run_cmd uv build --package corpora-admin-py --wheel "--out-dir=$DIST_DIR"
+run_cmd uv build --package corpora-shared --wheel "--out-dir=$DIST_DIR"
+run_cmd uv build --package corpora-client --wheel "--out-dir=$DIST_DIR"
+run_cmd uv build --package corpora-admin --wheel "--out-dir=$DIST_DIR"
 run_cmd uv build --wheel "--out-dir=$DIST_DIR"
 
 wheel="$("$SCRIPT_DIR/wheel.sh" find "$DIST_DIR")"

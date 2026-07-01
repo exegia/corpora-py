@@ -17,9 +17,9 @@ license-files = ["LICENSE"]
 # Umbrella: pulling this installs all three workspace packages.
 # Used by the sidecar/demo build to get everything in one install.
 dependencies = [
-    "admin>=0.1.1",
-    "common>=0.1.1",
-    "mcp>=0.1.1",
+    "corpora-admin>=0.1.1",
+    "corpora-common>=0.1.1",
+    "corpora-mcp>=0.1.1",
     "dotenvx>=0.0.0",
     # Corpus runtime
     "context-fabric>=0.5.0"
@@ -43,9 +43,9 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 # Resolve workspace members from local paths during development
-common = { workspace = true }
-mcp = { workspace = true }
-admin  = { workspace = true }
+corpora-common = { workspace = true }
+corpora-mcp = { workspace = true }
+corpora-admin  = { workspace = true }
 
 [dependency-groups]
 # Dev-only tools (not shipped in any package)

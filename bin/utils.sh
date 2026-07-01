@@ -17,10 +17,6 @@ ENV_FILE="$ROOT/.env.development"
 DEMO_APP_DIR="$ROOT/demo"
 VITE_URL="http://localhost:5173"
 
-# Match any running Supabase Studio container
-SUPABASE_STUDIO_FILTER="supabase_studio"
-SUPABASE_PROJECT_DIR="$(cd "$ROOT/.." && pwd)/corpora-supabase"
-
 # ── Tooling helpers ───────────────────────────────────────────────────────────
 
 ensure_tool() {
@@ -39,12 +35,6 @@ ensure_tool() {
       exit 1
     fi
   fi
-}
-
-is_supabase_running() {
-  local out
-  out=$(docker ps --filter "name=${SUPABASE_STUDIO_FILTER}" --format '{{.Names}}' 2>/dev/null || true)
-  [[ -n "$out" ]]
 }
 
 # ── dotenvx wrapper ───────────────────────────────────────────────────────────
@@ -147,5 +137,4 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   echo "utils.sh loaded."
   echo "ROOT=$ROOT"
   echo "ENV_FILE=$ENV_FILE"
-  echo "SUPABASE_PROJECT_DIR=$SUPABASE_PROJECT_DIR"
 fi

@@ -55,7 +55,7 @@ build_demo_python_runtime() {
     "$SCRIPT_DIR/build/embedded.sh"
   else
     # Fall back to the Python entry point (uv run style)
-    run --no-dotenvx -- python -m scripts.build.embedded
+    break
   fi
 }
 

@@ -6,6 +6,6 @@ Per-user sessions are passed explicitly via JWTs (see shared.auth).
 
 import api
 
-from . import client, storage
+from . import background_tasks, websocket
 
-__all__ = ["client", "storage", "api"]
+__all__ = ["background_tasks", "websocket", "api"]

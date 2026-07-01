@@ -144,7 +144,7 @@ def convert_document(
             "sectionFeatures": "title",
             "fmt:text-orig-full": "{text}{after}",
         },
-        generic={"converter": "corpora-admin-py", "format": parser.format.value},
+        generic={"converter": "corpora-admin", "format": parser.format.value},
     )
     if not good:
         raise RuntimeError(f"Text-Fabric conversion failed for {source!r}")

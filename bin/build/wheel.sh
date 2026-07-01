@@ -21,9 +21,9 @@ build_wheels() {
   mkdir -p "$out_dir"
 
   log "Building workspace wheels with uv..."
-  run_cmd uv build --package corpora-shared-py --wheel "--out-dir=$out_dir"
-  run_cmd uv build --package corpora-client-py --wheel "--out-dir=$out_dir"
-  run_cmd uv build --package corpora-admin-py --wheel "--out-dir=$out_dir"
+  run_cmd uv build --package corpora-shared --wheel "--out-dir=$out_dir"
+  run_cmd uv build --package corpora-client --wheel "--out-dir=$out_dir"
+  run_cmd uv build --package corpora-admin --wheel "--out-dir=$out_dir"
   # Umbrella last
   run_cmd uv build --wheel "--out-dir=$out_dir"
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+# !/usr/bin/env bash
 #
 # git_work.sh
 # Shell equivalent of scripts/git_work.py
@@ -11,7 +11,7 @@
 # Usage:
 #   git add ...
 #   ./scripts/git_work.sh "my commit message"
-#   # or without message to be prompted
+#   or without message to be prompted
 #
 
 set -euo pipefail

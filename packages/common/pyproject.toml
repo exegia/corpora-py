@@ -1,14 +1,7 @@
 [project]
-name = "common"
+name = "corpora-common"
 version = "0.1.1"
 requires-python = ">=3.13"
-dependencies = [
-    "common>=0.1.1"
-]
-
-[tool.uv.sources]
-# Resolve corpora-shared-py from the local workspace during development
-common = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

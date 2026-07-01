@@ -3,9 +3,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
-from utils.config import settings
-from utils.helpers import generate_unique_id
-from utils.generate_ssl import CERT_FILE, KEY_FILE, generate_ssl_cert
+from common.utils.config import settings
+from common.utils.helpers import generate_unique_id
+from common.utils.helpers import CERT_FILE, KEY_FILE, generate_ssl_cert
 
 logging.basicConfig(
     level=logging.DEBUG if settings.is_development else logging.INFO,
