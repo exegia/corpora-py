@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     environment: str | None = os.getenv("ENVIRONMENT")
     cors_origins: str | None = os.getenv("CORS_ORIGINS")
     # AI
-    open_ai_key: str = model_config.get("OPENAI_KEY", "")
+    open_ai_key: str = os.getenv("OPENAI_KEY", "")
 
     # Auth (JWT verification for the combined FastAPI app -- see corpora_py.auth)
     # Defaults to enforced: this ships as a sidecar to a Tauri+Supabase desktop
@@ -37,7 +37,14 @@ class Settings(BaseSettings):
     PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."
     API_V1_STR: str = "/api/v1"
     FRONTEND_HOST: str = "http://localhost:5173"
-    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    # "development" must stay in this list: `is_development`/`.env.development`
+    # (see root CLAUDE.md's "Environment / config" section) are the documented
+    # local-dev convention, and pydantic-settings binds this field
+    # case-insensitively from the same `ENVIRONMENT` env var as the lowercase
+    # `environment` field above -- setting `ENVIRONMENT=development` used to
+    # raise a `ValidationError` here and crash the entire app at import time
+    # (any module importing `common.utils` transitively hits `Settings()`).
+    ENVIRONMENT: Literal["local", "development", "staging", "production"] = "local"
 
     @property
     def cors_origins_list(self) -> list[str]:

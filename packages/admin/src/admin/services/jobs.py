@@ -180,27 +180,64 @@ class JobManager:
         return job
 
     def _run(self, job: ConversionJob, fn: Callable[[], Path]) -> None:
-        job.status = JobStatus.RUNNING
-        job.started_at = time.time()
+        with self._lock:
+            job.status = JobStatus.RUNNING
+            job.started_at = time.time()
         try:
-            job.result_path = fn()
-            job.status = JobStatus.SUCCEEDED
+            result_path = fn()
+            error = None
         except Exception as exc:
             # Full detail server-side only -- `job.error` round-trips to
             # HTTP/WebSocket clients via `to_dict()` and must not leak
             # internal paths (work_dir, tempfile.gettempdir(), ...) or
             # library internals.
             logger.exception("Conversion job %s failed", job.id)
-            job.error = f"Conversion failed: {type(exc).__name__} (job id {job.id})"
-            job.status = JobStatus.FAILED
-        finally:
+            result_path = None
+            error = f"Conversion failed: {type(exc).__name__} (job id {job.id})"
+
+        with self._lock:
+            if job.status in _TERMINAL_STATUSES:
+                # `_check_stall` (called from `get()`, under this same lock)
+                # already marked this job FAILED for exceeding
+                # `stall_timeout_seconds` while `fn()` was still running.
+                # Don't clobber that verdict -- without this check, a job
+                # that stalls and then eventually finishes would silently
+                # flip back to SUCCEEDED/a fresh FAILED, contradicting
+                # whatever a client already observed (and already
+                # disconnected over, in the WebSocket case) when it stalled.
+                #
+                # If `fn()` did succeed here, `result_path` points at a real
+                # `.corpus` file in `_RESULTS_ROOT` that's now orphaned --
+                # this job will never report it (status stays FAILED), so it
+                # won't be cleaned up by anything that keys off job state
+                # either. Logged at warning level so an operator can find
+                # and manually reap it; not auto-recovered, since there's no
+                # client left to hand a late "actually it succeeded" to in
+                # the common case (the WebSocket already closed on FAILED).
+                logger.warning(
+                    "Conversion job %s finished (result_path=%s, error=%s) after already "
+                    "being marked %s by the stall watchdog; keeping the watchdog's verdict "
+                    "-- any produced result_path above is now an orphaned file",
+                    job.id,
+                    result_path,
+                    error,
+                    job.status.value,
+                )
+                return
+            job.result_path = result_path
+            job.error = error
+            job.status = JobStatus.FAILED if error else JobStatus.SUCCEEDED
             job.finished_at = time.time()
 
     def _check_stall(self, job: ConversionJob) -> None:
         """Mark a job FAILED if it's been RUNNING past `stall_timeout_seconds`.
 
-        See the class docstring: this only updates the reported status, it
-        does not stop the underlying worker thread.
+        Called under `self._lock` from `get()` -- the only place this runs.
+        There is no background timer: a stalled job whose id nobody ever
+        polls/downloads again stays reported as RUNNING forever, even though
+        its worker thread is, per the class docstring, never reclaimed
+        either way. This only affects the *reported* status, not whether the
+        pool slot is stuck.
         """
         if (
             job.status == JobStatus.RUNNING

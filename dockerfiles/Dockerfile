@@ -15,7 +15,7 @@
 #     -v ~/.exegia/datasets:/data/datasets \
 #     -v ~/sources:/data/sources:ro \
 #     --entrypoint python corpora-py \
-#     -m admin.utils.convert_epub_to_tf /data/sources/book.epub /data/datasets/out
+#     -c "from admin.converters import convert_epub_to_tf; convert_epub_to_tf('/data/sources/book.epub', '/data/datasets/out')"
 
 # ── Stage 1: build all workspace wheels ──────────────────────────────────────
 FROM python:3.13-slim AS builder
@@ -61,12 +61,15 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    ENVIRONMENT=production
+    ENVIRONMENT=production \
+    UVICORN_HOST=0.0.0.0
 
 VOLUME ["/data/datasets", "/data/sources"]
 EXPOSE 8000
 
-# `corpora_py.app.main()` binds 127.0.0.1 (correct for local `corpora-api`
-# usage outside a container) — invoke uvicorn directly here so the server is
-# actually reachable from outside the container.
-ENTRYPOINT ["uvicorn", "corpora_py.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Goes through `corpora_py.app.main()` (not a raw `uvicorn ...` command) so
+# its `workers=1` guard (JobManager is an in-process singleton -- see
+# jobs.py) can't be silently bypassed by editing this line. `UVICORN_HOST`
+# above makes main() bind 0.0.0.0 instead of its local-dev-only 127.0.0.1
+# default.
+ENTRYPOINT ["corpora-api"]

@@ -93,8 +93,22 @@ async def root() -> dict[str, str]:
 
 
 def main() -> None:
-    """Entry point for the `corpora-api` console script."""
+    """Entry point for the `corpora-api` console script.
+
+    `dockerfiles/Dockerfile` invokes this (not a raw `uvicorn corpora_py.app:app`
+    command) specifically so the `workers=1` guard below is a single source
+    of truth -- a container CMD that called uvicorn directly could add
+    `--workers N` without ever seeing this comment.
+    """
+    import os
+
     import uvicorn
+
+    # 127.0.0.1 is correct for local (`uv run corpora-api`) use; the
+    # container needs 0.0.0.0 to be reachable from outside it. `UVICORN_HOST`
+    # is set in the image's `ENV` rather than hardcoded here so this
+    # entrypoint is identical for both.
+    host = os.getenv("UVICORN_HOST", "127.0.0.1")
 
     # workers MUST stay 1: JobManager (admin.services.jobs) is an in-memory,
     # per-process singleton. Running with workers>1 silently splits job
@@ -103,7 +117,7 @@ def main() -> None:
     # stale state. There is no cross-process job registry (Redis, etc.)
     # backing this yet; see JobManager's docstring. Don't add a `workers=`
     # kwarg here without addressing that first.
-    uvicorn.run("corpora_py.app:app", host="127.0.0.1", port=8000, reload=False, workers=1)
+    uvicorn.run("corpora_py.app:app", host=host, port=8000, reload=False, workers=1)
 
 
 if __name__ == "__main__":

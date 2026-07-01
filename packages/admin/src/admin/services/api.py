@@ -101,7 +101,17 @@ async def _save_upload(upload: UploadFile, dest_dir: Path) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     # `.name` strips any path segments from the client-supplied filename
     # (e.g. `../../etc/passwd` -> `passwd`) before joining with `dest_dir`.
-    dest = dest_dir / Path(upload.filename or "source").name
+    # A filename of exactly "." is the one input where `.name` returns an
+    # empty string (`Path("..").name` is `".."`, not empty, but joining
+    # that back onto `dest_dir` just re-selects `dest_dir`'s parent entry,
+    # same failure mode) -- either way `dest_dir / ""` or `dest_dir / ".."`
+    # resolves to an existing directory, not a new file, so `.open("wb")`
+    # below would raise `IsADirectoryError` instead of a clean 4xx. Reject
+    # both explicitly rather than let that surface as an unhandled 500.
+    filename = Path(upload.filename or "source").name or "source"
+    if filename in (".", ".."):
+        raise HTTPException(status_code=422, detail="Invalid upload filename")
+    dest = dest_dir / filename
     total = 0
     with dest.open("wb") as out:
         while chunk := await upload.read(_UPLOAD_CHUNK_SIZE):
@@ -187,9 +197,14 @@ async def create_conversion(
             )
         except JobQueueFull as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
-    except HTTPException:
-        # The job never started (rejected upload or full queue) -- nothing
-        # will clean up `work_dir` for us, so do it here.
+    except Exception:
+        # The job never started (rejected upload, full queue, or some
+        # unexpected failure mid-upload e.g. a full disk) -- nothing will
+        # clean up `work_dir` for us in any of those cases, so do it here
+        # regardless of what went wrong. Deliberately broader than `except
+        # HTTPException`: an unanticipated exception from `_save_upload`
+        # must not leak `work_dir` just because it wasn't one of the
+        # exceptions this function already knows how to raise.
         shutil.rmtree(work_dir, ignore_errors=True)
         raise
 
