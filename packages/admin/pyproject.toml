@@ -22,6 +22,9 @@ dependencies = [
     "text-fabric>=13.1.0",
     # PDF parsing
     "pypdf>=5.0.0",
+    # Context-Fabric compilation (.cfm) and .corpus packaging
+    "context-fabric>=0.5.0",
+    "pyyaml>=6.0",
 ]
 
 [tool.uv.sources]
