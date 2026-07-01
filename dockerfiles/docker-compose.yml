@@ -1,0 +1,86 @@
+# docker-compose.yml
+# Local orchestration for the Corpora platform services.
+#
+# Services:
+#   client  — MCP server (SSE on 8000). Connect Claude Desktop or any MCP client.
+#   admin   — Admin/conversion tools shell. Run conversion commands interactively.
+#
+# Quick start:
+#   docker compose up client                      # start MCP server
+#   docker compose --profile admin run --rm admin # admin shell
+#   docker compose up                             # start all default services
+#
+# Env vars: copy .env.example → .env and fill in values, or export them in your shell.
+#   Required: PROJECT_REF, SUPABASE_SECRET_KEY
+#   Optional: DATASETS_DIR (default: ~/.exegia/datasets), SOURCES_DIR (default: ~/sources)
+
+services:
+  # NOTE: `api` and `caddy` below don't correspond to anything else in this
+  # repo (there's no `./dockerfiles/python${PYTHON_VERSION}/Dockerfile`, no
+  # Caddyfile at the repo root) — they look like leftover boilerplate from a
+  # template and haven't been touched here; the real combined app is the
+  # `corpora` service further down.
+  api:
+    restart: unless-stopped
+    env_file:
+      - .env
+    build:
+      context: ./
+      dockerfile: ./dockerfiles/python${PYTHON_VERSION}/Dockerfile
+      labels:
+        - fastapi
+    ports:
+      - "5001:5001"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5002:5002"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+      - type: volume
+        source: caddy_data
+        target: /data
+      - type: volume
+        source: caddy_config
+        target: /config
+    depends_on:
+      - api
+
+  # ── Combined FastAPI app: MCP server + admin conversion API (corpora-py) ───
+  corpora:
+    build:
+      context: .
+      dockerfile: ./dockerfiles/Dockerfile
+    image: corpora-py:latest
+    container_name: corpora-py
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount your local datasets directory read-only.
+      - "${DATASETS_DIR:-~/.corpora/datasets}:/data/datasets"
+      - "${SOURCES_DIR:-~/sources}:/data/sources:ro"
+    env_file:
+      - path: .env
+        required: false # silently skipped if .env doesn't exist; use shell env instead
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "from corpora_mcp.corpus import corpus_manager; print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  caddy_data:
+  caddy_config:

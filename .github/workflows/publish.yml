@@ -3,12 +3,12 @@ name: Publish
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"   # e.g. v1.2.3
+      - "v[0-9]+.[0-9]+.[0-9]+" # e.g. v1.2.3
       - "v[0-9]+.[0-9]+.[0-9]+-*" # e.g. v1.2.3-rc1
 
   pull_request:
-    types: [ closed ]
-    branches: [ master, main ]
+    types: [closed]
+    branches: [master, main]
 
   workflow_dispatch:
     inputs:
@@ -69,8 +69,8 @@ jobs:
       - name: Build
         uses: ./.github/actions/build-dist
 
-  # Publishes all workspace wheels to PyPI (corpora-shared-py, corpora-client-py,
-  # corpora-admin-py, corpora-py). Uses OIDC trusted publishing — no stored token.
+  # Publishes all workspace wheels to PyPI (corpora-common, corpora-mcp,
+  # corpora-admin, corpora-py). Uses OIDC trusted publishing — no stored token.
   publish:
     name: Publish Python 🐍 distributions 📦 to PyPI
     needs: [bump, build]
@@ -85,7 +85,7 @@ jobs:
       url: https://pypi.org/p/corpora-py
     permissions:
       actions: read
-      id-token: write  # mandatory for OIDC trusted publishing
+      id-token: write # mandatory for OIDC trusted publishing
       contents: read
     steps:
       - uses: actions/checkout@v4

@@ -13,8 +13,9 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true
   },
+
   appType: "spa",
-	server: {
+  server: {
 		port: 5173,
 		strictPort: true,
 	},

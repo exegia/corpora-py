@@ -7,4 +7,9 @@ type State = {
   theme: "dark" | "light"
 };
 
-export type { State as WindowState }
+type SocketMessage = {
+  id: string;
+  payload: any;
+}
+
+export type { State as WindowState, SocketMessage }

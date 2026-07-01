@@ -20,6 +20,8 @@ export default [
 		route(":id", "routes/corpus/layout.tsx", [
 			index("routes/corpus/detail.tsx"),
 			route("view", "routes/corpus/view.tsx"),
-		]),
-	]),
+    ]),
+
+  ]),
+	route("logs", "routes/logs.tsx")
 ] satisfies RouteConfig;

@@ -1,7 +1,7 @@
 
 import {  Updater, Utils } from "electrobun/bun";
-import { getAuth } from "./example-usage";
 import { windowManager } from "./windows";
+import { connect } from "./websocket";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -38,7 +38,15 @@ const start = async () => {
   }
   console.log("Opening window now..");
   main.show();
+
+  // Connect the socket server once the window is showing.
+
+  if (main.state == "creating") await connect.start();
+  console.log("WINDOW STATE:", main.state);
+
+  main.on("close", () => {
+    void connect.close();
+  });
 };
 
 await start();
-await getAuth();
