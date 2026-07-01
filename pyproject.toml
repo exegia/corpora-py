@@ -12,6 +12,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
 ]
+license = "MIT"
+license-files = ["LICENSE"]
 # Umbrella: pulling this installs all three workspace packages.
 # Used by the sidecar/demo build to get everything in one install.
 dependencies = [

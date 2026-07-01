@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 from utils.config import settings
+from utils.helpers import generate_unique_id
 from utils.generate_ssl import CERT_FILE, KEY_FILE, generate_ssl_cert
 
 logging.basicConfig(
@@ -19,11 +20,11 @@ if settings.is_development:
 app = FastAPI(
     title="Exegia API",
     description="Exegia GraphQL API",
+     swagger_ui_init_oauth=None,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     generate_unique_id_function=generate_unique_id,
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs"
 )
 
 # CORS
