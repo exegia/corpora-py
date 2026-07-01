@@ -123,9 +123,9 @@ class ConversionJob:
 class JobManager:
     """Tracks conversion jobs and runs them on a background thread pool.
 
-    A process-local singleton is sufficient here: conversion output lands on
-    local disk (see `convert_to_corpus`), so a multi-worker/multi-process
-    deployment would need a shared store + queue (Redis, Celery, ...) instead
+    A process-local singleton is enough here: conversion output lands on
+     the local disk (see `convert_to_corpus`), so a multi-worker/multi-process
+    deployment would need a shared store and queue (Redis, Celery, ...) instead
     of this in-memory registry. That's a deliberate scope cut for a
     single-process admin/conversion service, not an oversight -- revisit if
     this ever needs to run behind more than one uvicorn worker. See
@@ -276,6 +276,7 @@ class JobManager:
                 f"Conversion timed out after {self._stall_timeout_seconds / 60:.0f} minutes"
             )
             job.status = JobStatus.FAILED
+        finally:
             job.finished_at = time.time()
 
     def log(self, job_id: str, message: str) -> None:

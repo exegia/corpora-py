@@ -9,15 +9,15 @@ and collapse the slim-client/heavy-admin split described in the root
 `CLAUDE.md`.
 
 Layout:
-    /mcp/* -- the FastMCP server (`corpora_mcp.mcp`), mounted as an ASGI
+    /mcp/*      -- the FastMCP server (`corpora_mcp.mcp`), mounted as an ASGI
                    sub-app. This is what AI clients (Claude, etc.) talk to
                    over streamable HTTP.
-    /convert/* -- the admin conversion API (`admin.services.api` +
+    /convert/*  -- the admin conversion API (`admin.services.api` +
                    `admin.services.websocket`): upload a document, poll or
                    watch a WebSocket for status, download the `.corpus`
                    result. See `admin/services/api.py` for why conversion is
                    job-based rather than synchronous.
-    /health -- liveness check for the combined app.
+    /health     -- liveness check for the combined app.
 
 This ships as a sidecar spawned by a Tauri+Supabase desktop app, not a public
 multi-tenant service -- but it's still a locally reachable port, so every
@@ -36,10 +36,14 @@ platform webview) versus the Vite dev server's `http://localhost:5173`.
 preflight against `WebSocket`), so it doesn't need to know about `/convert/{id}/ws`.
 
 Mounting a FastMCP ASGI app requires forwarding its lifespan into the parent
+FastAPI app, or its session manager never starts and every request to /mcp
 FastAPI app, or its session manager never starts, and every request to /mcp
 fails at runtime despite importing fine -- see
 https://gofastmcp.com/integrations/fastapi (Lifespan Management). This is
 the one part of wiring this up that fails silently at import time and only
+breaks when a request actually comes in, so it's covered by
+`tests/test_app.py` (spins up the app with a real ASGI transport and hits
+both surfaces) rather than left to be caught by hand.
 breaks when a request actually comes in -- verify it by actually sending a
 request through (e.g., a `TestClient`/ASGI-transport `initialize` call to
 `/mcp`), not just by importing this module. There is no automated test
@@ -119,12 +123,13 @@ def main() -> None:
     """Entry point for the `corpora-api` console script.
 
     `dockerfiles/Dockerfile` invokes this (not a raw `uvicorn corpora_py.app:app`
-    command) specifically so the `workers=1` guard below is a single source
+    command) specifically, so the `workers=1` guard below is a single source
     of truth -- a container CMD that called uvicorn directly could add
     `--workers N` without ever seeing this comment.
     """
     import os
 
+    """Entry point for the `corpora-api` console script."""
     import uvicorn
 
     # 127.0.0.1 is correct for local (`uv run corpora-api`) use; the

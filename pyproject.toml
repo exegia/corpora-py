@@ -19,17 +19,17 @@ dependencies = [
     "corpora-client-py>=0.1.1",
     "corpora-admin-py>=0.1.1",
     "dotenvx>=0.0.0",
-]
-
-[project.optional-dependencies]
-# Pulls in text-fabric for corpus conversion tools
-full = [
-    "corpora-admin-py[full]>=0.1.1",
+    # Corpus runtime
+    "context-fabric>=0.5.0",
+    # Combined FastAPI app (MCP + conversion API)
+    "uvicorn[standard]>=0.30.0",
 ]
 
 [project.scripts]
-# Re-exported from corpora-client for convenience
-cf-mcp = "client.mcp:main"
+# Re-exported from corpora-mcp for convenience
+cf-mcp = "corpora_mcp.server:main"
+# Combined FastAPI app: MCP server + admin conversion API
+corpora-api = "corpora_py.app:main"
 
 [build-system]
 requires = ["hatchling"]
