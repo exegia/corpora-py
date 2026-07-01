@@ -4,7 +4,7 @@ Primarily the MCP server surface (FastMCP + corpus query tools) that
 powers AI clients (Claude etc.) and desktop app corpus browsing.
 """
 
-from shared import __version__  # re-export for convenience
+from common import __version__  # re-export for convenience
 
 from . import mcp
 

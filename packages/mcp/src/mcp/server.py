@@ -7,7 +7,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from client.mcp.corpus import corpus_manager
+from .corpus import corpus_manager
 
 mcp = FastMCP(
     "Context-Fabric",

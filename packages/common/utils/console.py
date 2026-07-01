@@ -1,5 +1,4 @@
 import logging
-from typing import Literal
 
 def configure_logger(instance: logging.Logger) -> None:
     """Configure a custom logger."""

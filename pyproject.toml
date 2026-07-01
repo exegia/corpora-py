@@ -17,21 +17,17 @@ license-files = ["LICENSE"]
 # Umbrella: pulling this installs all three workspace packages.
 # Used by the sidecar/demo build to get everything in one install.
 dependencies = [
-    "corpora-shared-py>=0.1.1",
-    "corpora-client-py>=0.1.1",
-    "corpora-admin-py>=0.1.1",
+    "admin>=0.1.1",
+    "common>=0.1.1",
+    "mcp>=0.1.1",
     "dotenvx>=0.0.0",
-]
-
-[project.optional-dependencies]
-# Pulls in text-fabric for corpus conversion tools
-full = [
-    "corpora-admin-py[full]>=0.1.1",
+    # Corpus runtime
+    "context-fabric>=0.5.0"
 ]
 
 [project.scripts]
 # Re-exported from corpora-client for convenience
-cf-mcp = "client.mcp:main"
+cf-mcp = "mcp:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -47,9 +43,9 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 # Resolve workspace members from local paths during development
-corpora-shared-py = { workspace = true }
-corpora-client-py = { workspace = true }
-corpora-admin-py  = { workspace = true }
+common = { workspace = true }
+mcp = { workspace = true }
+admin  = { workspace = true }
 
 [dependency-groups]
 # Dev-only tools (not shipped in any package)
