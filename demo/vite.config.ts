@@ -15,6 +15,7 @@ export default defineConfig({
     emptyOutDir: true
   },
   appType: "spa",
+  root: ".",
   server: {
     open: true,
 		port: 5173,

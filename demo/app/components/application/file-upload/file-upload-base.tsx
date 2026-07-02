@@ -1,5 +1,5 @@
 import type { ComponentProps, ComponentPropsWithRef } from "react";
-import { useId, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import type { FileIcon } from "@untitledui/file-icons";
 import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
 import { CheckCircle, Trash01, UploadCloud02, XCircle } from "@untitledui/icons";
@@ -7,8 +7,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { ProgressBar } from "@/components/base/progress-indicators/progress-indicators";
-import { FeaturedIcon } from "@/components/foundations/featured-icon/featured-icon";
 import { cx } from "@/utils/cx";
+import { Illustration } from "@/components/shared-assets/illustrations";
+import { useTableHeaderRow } from "react-aria";
+import { useTheme } from "@heroui/react";
+
 
 /**
  * Returns a human-readable file size.
@@ -80,7 +83,9 @@ export const FileUploadDropZone = ({
     const id = useId();
     const inputRef = useRef<HTMLInputElement>(null);
     const [isInvalid, setIsInvalid] = useState(false);
-    const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const { theme } = useTheme();
+  const isDark = useMemo(() => theme === 'dark', [theme])
 
     const isFileTypeAccepted = (file: File): boolean => {
         if (!accept) return true;
@@ -205,7 +210,8 @@ export const FileUploadDropZone = ({
                 className,
             )}
         >
-            <FeaturedIcon icon={UploadCloud02} color="gray" theme="modern" size="md" className={cx(isDisabled && "opacity-50")} />
+
+        <Illustration type="box" size="md" svgClassName="" childrenClassName="brightness-0  dark:brightness-100" />
 
             <div className="flex flex-col gap-1 text-center">
                 <div className="flex justify-center gap-1 text-center">
