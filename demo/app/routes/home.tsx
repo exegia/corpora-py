@@ -1,8 +1,7 @@
-import { Button, Card, Surface, Typography } from "@heroui/react";
-import { Icon } from "@iconify/react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { socketBridge, type BridgeStatus } from "../socket";
+import { FileUploadProgressFill } from "@/components/upload";
 
 export function meta() {
   return [{ title: "Corpora" }];
@@ -54,24 +53,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-
-
-      <Card variant="transparent">
-        <Card.Header>
-          <Card.Title>Get started</Card.Title>
-          <Card.Description>
-            Upload an existing corpus or convert a source document.
-          </Card.Description>
-        </Card.Header>
-        <Card.Footer className="flex gap-2">
-          <Button variant="primary" onPress={() => navigate("/corpus/upload")}>
-            Upload corpus
-          </Button>
-          <Button variant="secondary" onPress={() => navigate("/corpus/convert")}>
-            Convert source
-          </Button>
-        </Card.Footer>
-      </Card>
+      <FileUploadProgressFill />
     </div>
   );
 }

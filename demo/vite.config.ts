@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
+import { resolve } from 'path';
 
 export default defineConfig({
 	// Framework mode: the reactRouter() plugin owns the app dir (./app) and the
@@ -17,6 +18,11 @@ export default defineConfig({
   server: {
     open: true,
 		port: 5173,
-		strictPort: true,
-	},
+    strictPort: true
+  },
+  resolve: {
+      alias: {
+      '@': resolve(__dirname, './app'),
+      },
+    }
 });

@@ -7,7 +7,7 @@ import {
 	ScrollRestoration,
   useNavigate,
 } from "react-router";
-import { Typography, RouterProvider, useTheme } from "@heroui/react";
+import { Typography, useTheme } from "@heroui/react";
 
 import "./app.css";
 
@@ -45,33 +45,13 @@ export default function App() {
 	return (
     <div className="flex min-h-screen flex-col relative select-none">
 
-      <div className="electrobun-webkit-app-region-drag w-full flex flex-col  justify-center py-1.5 fixed top-0 border-b border-neutral-200 dark:border-neutral-700 z-50  backdrop-blur-xl">
+      <div className="electrobun-webkit-app-region-drag w-full flex flex-col  justify-center py-1.5 fixed top-0 border-b border-tertiary/10 z-50  backdrop-blur-xl h-12">
        	<NavLink to="/" className="no-underline">
 					<Typography type="body-sm" className="font-bold text-center">Corpora</Typography>
 				</NavLink>
-       	<header className="flex items-center justify-center  px-4 py-2">
-				<nav className="flex items-center gap-1">
-					{NAV.map(({ to, label, end }) => (
-						<NavLink
-							key={to}
-							to={to}
-							end={end}
-							className={({ isActive }) =>
-								`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-									isActive
-										? "bg-neutral-200 font-medium dark:bg-neutral-800"
-										: "text-neutral-600 hover:bg-neutral-200/60 dark:text-neutral-400 dark:hover:bg-neutral-800/60"
-								}`
-							}
-						>
-							{label}
-						</NavLink>
-					))}
-				</nav>
-			</header>
       </div>
 
-      <main className="flex-1 px-6 py-8 flex flex-col justify-center relative">
+      <main className="flex-1 px-6 py-8 flex flex-col justify-center relative bg-background-secondary">
           <Outlet />
 			</main>
 		</div>
