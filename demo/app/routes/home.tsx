@@ -43,11 +43,11 @@ export default function Home() {
 
     void connect();
 
-    // return () => {
-    //   offStatus();
-    //   offPythonEvent();
-    //   unregisterEcho();
-    // };
+    return () => {
+      offStatus();
+      offPythonEvent();
+      unregisterEcho();
+    };
   }, []);
 
 

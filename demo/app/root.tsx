@@ -46,9 +46,7 @@ export default function App() {
     <div className="flex min-h-screen flex-col relative select-none">
 
       <div className="electrobun-webkit-app-region-drag w-full flex flex-col  justify-center py-1.5 fixed top-0 border-b border-tertiary/10 z-50  backdrop-blur-xl h-12">
-       	<NavLink to="/" className="no-underline">
 					<Typography type="body-sm" className="font-bold text-center">Corpora</Typography>
-				</NavLink>
       </div>
 
       <main className="flex-1 px-6 py-8 flex flex-col justify-center relative bg-background-secondary">

@@ -95,7 +95,7 @@ export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
                         {...file}
                     size={file.size}
                     fileIconVariant="gray"
-                    className="bg-surface"
+                    className="bg-surface border border-utility-neutral-300 dark:border-utility-neutral-800"
                         onDelete={() => handleDeleteFile(file.id)}
                         onRetry={() => handleRetryFile(file.id)}
                     />

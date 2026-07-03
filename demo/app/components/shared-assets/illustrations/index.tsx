@@ -24,5 +24,9 @@ export const Illustration = (props: IllustrationProps & { type: keyof typeof typ
 
     const Component = types[type];
 
-    return <Component {...props} />;
+
+  return <div className="relative">
+
+    <Component {...props} />
+  </div>;
 };

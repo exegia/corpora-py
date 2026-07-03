@@ -9,7 +9,6 @@ import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { ProgressBar } from "@/components/base/progress-indicators/progress-indicators";
 import { cx } from "@/utils/cx";
 import { Illustration } from "@/components/shared-assets/illustrations";
-import { useTableHeaderRow } from "react-aria";
 import { useTheme } from "@heroui/react";
 
 
@@ -186,7 +185,6 @@ export const FileUploadDropZone = ({
 
     const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
         if (isDisabled) return;
-
         handleDragOut(event);
         processFiles(Array.from(event.dataTransfer.files));
     };
@@ -204,14 +202,17 @@ export const FileUploadDropZone = ({
             onDragEnd={handleDragOut}
             onDrop={handleDrop}
             className={cx(
-                "relative flex flex-col items-center gap-3 rounded-xl bg-background-tertiary px-6 py-10 placeholder-text-placeholder border-1 border-dashed border-text-placeholder transition duration-100 ease-linear",
-                isDraggingOver && "border-2 border-brand bg-brand-500/30",
+                "relative flex flex-col items-center gap-3 rounded-xl bg-background-tertiary px-6 py-10 placeholder-text-placeholder border-2 border-dashed border-utility-neutral-400 dark:border-utility-neutral-800 transition duration-100 ease-linear overflow-clip",
+                isDraggingOver && "border-2 border-brand dark:border-brand-500",
                 isDisabled && "cursor-not-allowed bg-secondary",
                 className,
             )}
         >
 
-        <Illustration type="box" size="md" svgClassName="" childrenClassName="brightness-0  dark:brightness-100" />
+        <div className={cx("transition duration-100 ease-linear bg-brand-500 opacity-0 w-full h-full absolute top-0 left-0 z-10", isDraggingOver && "opacity-20")}></div>
+
+          <Illustration type="box" size="md" />
+
 
             <div className="flex flex-col gap-1 text-center">
                 <div className="flex justify-center gap-1 text-center">
@@ -273,7 +274,7 @@ export const FileListItemProgressBar = ({ name, size, progress, failed, type, fi
                 className,
             )}
         >
-            <FileTypeIcon className="size-10 shrink-0 dark:hidden" type={type ?? "empty"} theme="light" variant={fileIconVariant ?? "default"} />
+            <FileTypeIcon className="size-10 shrink-0 dark:hidden" type={type ?? "empty"} variant={fileIconVariant ?? "default"} />
             <FileTypeIcon className="size-10 shrink-0 not-dark:hidden" type={type ?? "empty"} theme="dark" variant={fileIconVariant ?? "default"} />
 
             <div className="flex min-w-0 flex-1 flex-col items-start">
@@ -326,7 +327,7 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
             {/* Progress fill. */}
             <div
                 style={{ transform: `translateX(-${100 - progress}%)` }}
-                className={cx("absolute inset-0 size-full bg-secondary dark:bg-white/10 transition duration-75 ease-linear", isComplete && "opacity-0")}
+                className={cx("absolute inset-0 size-full bg-black/10 dark:bg-white/10 transition duration-75 ease-linear", isComplete && "opacity-0")}
                 role="progressbar"
                 aria-valuenow={progress}
                 aria-valuemin={0}
@@ -340,15 +341,15 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
                 )}
             />
             <FileTypeIcon className="relative size-10 shrink-0 dark:hidden" type={type ?? "empty"} theme="light" variant={fileIconVariant ?? "solid"} />
-            <FileTypeIcon className="relative size-10 shrink-0 not-dark:hidden" type={type ?? "empty"} theme="dark" variant={fileIconVariant ?? "solid"} />
+            <FileTypeIcon className="relative size-10 shrink-0 shadow hidden dark:block" type={type ?? "empty"} theme="dark" variant={fileIconVariant ?? "solid"} />
 
             <div className="relative flex min-w-0 flex-1">
                 <div className="relative flex min-w-0 flex-1 flex-col items-start">
                     <div className="w-full min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-pretty">{name}</p>
+              <p className={cx("truncate text-sm font-medium text-pretty", (progress == 0 || progress != 100) && "font-bold")}>{name}</p>
 
                         <div className="mt-0.5 flex items-center gap-2">
-                            <p className="text-sm text-neutral-400">{failed ? "Upload failed, please try again" : getReadableFileSize(size)}</p>
+                <p className={cx("text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>{failed ? "Upload failed, please try again" : getReadableFileSize(size)}</p>
 
                             {!failed && (
                                 <>
@@ -357,7 +358,7 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
                                         {isComplete && <CheckCircle className="size-4 stroke-[2.5px] text-fg-success-primary" />}
                                         {!isComplete && <UploadCloud02 className="size-4 stroke-[2.5px] text-fg-tertiary" />}
 
-                                        <p className="text-sm text-neutral-400">{progress}%</p>
+                                        <p className={cx("text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>{progress}%</p>
                                     </div>
                                 </>
                             )}
