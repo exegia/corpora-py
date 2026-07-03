@@ -24,6 +24,16 @@ path except health/docs is gated behind a Supabase JWT by default (see
 `corpora_py.auth.AuthMiddleware`; opt out for local dev with
 `AUTH_REQUIRED=false`).
 
+CORS is wide open (`allow_origins=["*"]`) rather than restricted to a known
+dev-server origin, because the actual access-control boundary here is the
+JWT (`AuthMiddleware`), not the browser's origin check -- auth uses a Bearer
+header, not cookies, so CORS's usual credential-leak concern doesn't apply.
+This also sidesteps having to guess what `Origin` a packaged ElectroBun
+webview reports for its `views://` custom scheme (untested, varies by
+platform webview) versus the Vite dev server's `http://localhost:5173`.
+`CORSMiddleware` only intercepts `http` scope (browsers don't run CORS
+preflight against `WebSocket`), so it doesn't need to know about `/convert/{id}/ws`.
+
 Mounting a FastMCP ASGI app requires forwarding its lifespan into the parent
 FastAPI app, or its session manager never starts and every request to /mcp
 fails at runtime despite importing fine -- see
@@ -51,6 +61,7 @@ from admin.services.jobs import job_manager
 from admin.services.websocket import router as conversion_ws_router
 from corpora_mcp import mcp
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastmcp.utilities.lifespan import combine_lifespans
 
 from .auth import AuthMiddleware
@@ -77,6 +88,17 @@ app = FastAPI(
 )
 
 app.add_middleware(AuthMiddleware)
+# Added after AuthMiddleware so it ends up OUTERMOST in the stack (Starlette
+# wraps in reverse registration order) -- it needs to see and answer CORS
+# preflight (OPTIONS) requests before AuthMiddleware would otherwise 401 them
+# for lacking a bearer token.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/mcp", _mcp_app)
 app.include_router(conversion_router)
 app.include_router(conversion_ws_router)

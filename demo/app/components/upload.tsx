@@ -1,94 +1,40 @@
-// UploadDeliverables.tsx
-import { useState } from "react"
-import {
-  FileUpload,
-  getReadableFileSize
-} from "@/components/application/file-upload/file-upload-base"
+import { FileUpload } from "@/components/application/file-upload/file-upload-base"
+import { useUpload } from "../hooks/use-upload"
 
-const uploadFile = (file: File, onProgress: (progress: number) => void) => {
-  // Add your upload logic here...
+// Keep in sync with `_EXTENSION_TO_FORMAT` in src/corpora_py/bridge.py --
+// source format there is auto-detected from the filename extension, so
+// anything not in that map fails server-side after a full upload+decode
+// round trip. Restricting the picker/drop target here catches that earlier.
+const ACCEPTED_EXTENSIONS = ".epub,.html,.htm,.xml,.tei,.pdf,.txt,.text"
 
-  // This is dummy upload logic
-  let progress = 0
-  const interval = setInterval(() => {
-    onProgress(++progress)
-    if (progress === 100) {
-      clearInterval(interval)
-    }
-  }, 100)
-}
-
-type UploadedFile = {
-  id: string
-  name: string
-  type: string
-  size: number
-  progress: number
-}
-
-export const FileUploadSection = (props: { isDisabled?: boolean }) => {
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
+  const { uploads, uploadFile, deleteUpload, retryUpload } = useUpload()
 
   const handleDropFiles = (files: FileList) => {
-    const newFiles = Array.from(files)
-    const newFilesWithIds = newFiles.map((file) => ({
-      id: Math.random().toString(),
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      progress: 0,
-      fileObject: file
-    }))
-
-    setUploadedFiles([
-      ...newFilesWithIds.map(({ fileObject: _, ...file }) => file),
-      ...uploadedFiles
-    ])
-
-    newFilesWithIds.forEach(({ id, fileObject }) => {
-      uploadFile(fileObject, (progress) => {
-        setUploadedFiles((prev) =>
-          prev.map((uploadedFile) =>
-            uploadedFile.id === id ? { ...uploadedFile, progress } : uploadedFile
-          )
-        )
-      })
-    })
-  }
-
-  const handleDeleteFile = (id: string) => {
-    setUploadedFiles((prev) => prev.filter((file) => file.id !== id))
-  }
-
-  const handleRetryFile = (id: string) => {
-    const file = uploadedFiles.find((file) => file.id === id)
-    if (!file) return
-
-    uploadFile(new File([], file.name, { type: file.type }), (progress) => {
-      setUploadedFiles((prev) =>
-        prev.map((uploadedFile) =>
-          uploadedFile.id === id
-            ? { ...uploadedFile, progress, failed: false }
-            : uploadedFile
-        )
-      )
-    })
+    Array.from(files).forEach((file) => void uploadFile(file))
   }
 
   return (
     <FileUpload.Root>
-      <FileUpload.DropZone isDisabled={props.isDisabled} onDropFiles={handleDropFiles} />
+      <FileUpload.DropZone
+        isDisabled={props.isDisabled}
+        accept={ACCEPTED_EXTENSIONS}
+        hint="EPUB, HTML, TEI/XML, PDF, or plain text"
+        onDropFiles={handleDropFiles}
+      />
 
       <FileUpload.List>
-        {uploadedFiles.map((file) => (
+        {Object.values(uploads).map((upload) => (
           <FileUpload.ListItemProgressFill
-            key={file.id}
-            {...file}
-            size={file.size}
+            key={upload.id}
+            name={upload.name}
+            size={upload.size}
+            progress={upload.progress}
+            failed={upload.status === "error"}
             fileIconVariant="gray"
             className="bg-surface border border-utility-neutral-300 dark:border-utility-neutral-800"
-            onDelete={() => handleDeleteFile(file.id)}
-            onRetry={() => handleRetryFile(file.id)}
+            onDelete={() => deleteUpload(upload.id)}
+            onRetry={() => retryUpload(upload.id)}
           />
         ))}
       </FileUpload.List>
