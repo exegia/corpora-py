@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from bs4 import BeautifulSoup, NavigableString, Tag
-from tf.convert.walker import CV
 
 
 class HTMLToTFConverter:
@@ -88,6 +87,8 @@ class HTMLToTFConverter:
         Returns:
             Path to the generated TF directory
         """
+        from tf.convert.walker import CV
+
         if not self.input_dir.exists():
             raise FileNotFoundError(f"Input directory not found: {self.input_dir}")
 

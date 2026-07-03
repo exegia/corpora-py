@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 class CorpusManager:
     def __init__(self) -> None:
         self._corpora: dict[str, tuple[Any, Any]] = {}  # name -> (Fabric, api)
+        self._paths: dict[str, Path] = {}  # name -> dataset directory
         self._current: str | None = None
 
     @property
@@ -32,6 +33,7 @@ class CorpusManager:
             raise RuntimeError(f"Failed to load corpus from {p}")
 
         self._corpora[corpus_name] = (tf, api)
+        self._paths[corpus_name] = p
         if self._current is None:
             self._current = corpus_name
 
@@ -47,6 +49,15 @@ class CorpusManager:
             raise KeyError(f"Corpus '{target}' not found. Loaded: {loaded}")
         return self._corpora[target][1]
 
+    def get_path(self, name: str | None = None) -> Path:
+        target = name or self._current
+        if target is None:
+            raise RuntimeError("No corpus loaded. Pass --corpus when starting the server.")
+        if target not in self._paths:
+            loaded = self.list_corpora()
+            raise KeyError(f"Corpus '{target}' not found. Loaded: {loaded}")
+        return self._paths[target]
+
     def list_corpora(self) -> list[str]:
         return list(self._corpora.keys())
 
@@ -59,6 +70,7 @@ class CorpusManager:
         if name not in self._corpora:
             raise KeyError(f"Corpus '{name}' not loaded")
         del self._corpora[name]
+        self._paths.pop(name, None)
         if self._current == name:
             self._current = next(iter(self._corpora), None)
 
