@@ -10,9 +10,9 @@
 @plugin "tailwindcss-animate";
 @plugin "tailwindcss-react-aria-components";
 
-/*@custom-variant dark (&:where(.dark-mode, .dark-mode *));*/
-@custom-variant label (& [data-label]);
-@custom-variant focus-input-within (&:has(input:focus));
+@import '@astryxdesign/core/reset.css';
+@import '@astryxdesign/core/astryx.css';
+@import '@astryxdesign/theme-neutral/theme.css';
 
 @utility scrollbar-hide {
     /* For Webkit-based browsers (Chrome, Safari and Opera) */
@@ -55,19 +55,7 @@ input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
-/* Firefox */
-input[type="number"] {
-    -moz-appearance: textfield;
-}
-
 /* Hide the default clear button (X) from search inputs. */
 input[type="search"]::-webkit-search-cancel-button {
     -webkit-appearance: none;
-}
-
-/* Hide the default outline on chart elements. */
-.recharts-surface,
-.recharts-surface g,
-.recharts-surface path {
-    outline: none;
 }

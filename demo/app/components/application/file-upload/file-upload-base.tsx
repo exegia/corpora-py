@@ -202,8 +202,7 @@ export const FileUploadDropZone = ({
             onDragEnd={handleDragOut}
             onDrop={handleDrop}
             className={cx(
-                "relative flex flex-col items-center gap-3 rounded-xl bg-background-tertiary px-6 py-10 placeholder-text-placeholder border-2 border-dashed border-utility-neutral-400 dark:border-utility-neutral-800 transition duration-100 ease-linear overflow-clip",
-                isDraggingOver && "border-2 border-brand dark:border-brand-500",
+                "relative flex flex-col items-center gap-3 rounded-xl bg-background-tertiary px-6 py-10 placeholder-text-placeholder border-2 border-dashed border-neutral-300 overflow-clip",
                 isDisabled && "cursor-not-allowed bg-secondary",
                 className,
             )}
@@ -226,7 +225,7 @@ export const FileUploadDropZone = ({
                         multiple={allowsMultiple}
                         onChange={handleInputFileChange}
                     />
-                    <label htmlFor={id} className="flex cursor-pointer">
+                    <label htmlFor={id} className="flex cursor-pointer text-sm items-center">
                         <Button color="link-color" size="md" isDisabled={isDisabled} onClick={() => inputRef.current?.click()}>
                             Click to upload <span className="md:hidden">and attach files</span>
                         </Button>
@@ -263,7 +262,9 @@ export interface FileListItemProps {
 }
 
 export const FileListItemProgressBar = ({ name, size, progress, failed, type, fileIconVariant, onDelete, onRetry, className }: FileListItemProps) => {
-    const isComplete = progress === 100;
+  const isComplete = progress === 100;
+  const { theme } = useTheme();
+  const isDark = useMemo(() => theme === 'dark', [theme])
 
     return (
         <motion.li
@@ -274,8 +275,7 @@ export const FileListItemProgressBar = ({ name, size, progress, failed, type, fi
                 className,
             )}
         >
-            <FileTypeIcon className="size-10 shrink-0 dark:hidden" type={type ?? "empty"} variant={fileIconVariant ?? "default"} />
-            <FileTypeIcon className="size-10 shrink-0 not-dark:hidden" type={type ?? "empty"} theme="dark" variant={fileIconVariant ?? "default"} />
+          <FileTypeIcon className="size-10 shrink-0" type={"zip"} variant={fileIconVariant ?? "default"} theme={isDark ? 'light' : 'dark'} />
 
             <div className="flex min-w-0 flex-1 flex-col items-start">
                 <div className="flex w-full max-w-full min-w-0 flex-1">
@@ -320,14 +320,16 @@ export const FileListItemProgressBar = ({ name, size, progress, failed, type, fi
 };
 
 export const FileListItemProgressFill = ({ name, size, progress, failed, type, fileIconVariant, onDelete, onRetry, className }: FileListItemProps) => {
-    const isComplete = progress === 100;
+  const isComplete = progress === 100;
+  const { theme } = useTheme();
+  const isDark = useMemo(() => theme === 'dark', [theme])
 
     return (
         <motion.li layout="position" className={cx("relative flex gap-3 overflow-hidden rounded-xl bg-primary p-4", className)}>
             {/* Progress fill. */}
             <div
                 style={{ transform: `translateX(-${100 - progress}%)` }}
-                className={cx("absolute inset-0 size-full bg-black/10 dark:bg-white/10 transition duration-75 ease-linear", isComplete && "opacity-0")}
+                className={cx("absolute inset-0 size-full bg-black/10 dark:bg-neutral-700/50 transition duration-75 ease-linear", isComplete && "opacity-0")}
                 role="progressbar"
                 aria-valuenow={progress}
                 aria-valuemin={0}
@@ -340,8 +342,7 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
                     failed && "ring-2 ring-error",
                 )}
             />
-            <FileTypeIcon className="relative size-10 shrink-0 dark:hidden" type={type ?? "empty"} theme="light" variant={fileIconVariant ?? "solid"} />
-            <FileTypeIcon className="relative size-10 shrink-0 shadow hidden dark:block" type={type ?? "empty"} theme="dark" variant={fileIconVariant ?? "solid"} />
+            <FileTypeIcon className="size-10 shrink-0" type={"zip"} variant={fileIconVariant ?? "default"} theme={isDark ? 'light' : 'dark'} />
 
             <div className="relative flex min-w-0 flex-1">
                 <div className="relative flex min-w-0 flex-1 flex-col items-start">
