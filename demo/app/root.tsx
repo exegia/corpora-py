@@ -14,6 +14,10 @@ import { StatusBar } from "./components"
 import { useEffect } from "react"
 import { BrowserView } from "electrobun"
 
+import { StatusBar } from "./components";
+import { useEffect } from "react";
+import { BrowserView } from "electrobun";
+
 const NAV = [
   { to: "/", label: "Home", end: true },
   { to: "/corpus/upload", label: "Upload", end: false },

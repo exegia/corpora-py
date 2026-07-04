@@ -2,13 +2,13 @@
 # Local orchestration for the Corpora platform services.
 #
 # Services:
-#   client  — MCP server (SSE on 8000). Connect Claude Desktop or any MCP client.
-#   admin   — Admin/conversion tools shell. Run conversion commands interactively.
+#   client — MCP server (SSE on 8000). Connect Claude Desktop or any MCP client.
+#   admin — Admin/conversion tools shell. Run conversion commands interactively.
 #
 # Quick start:
-#   docker compose up client                      # start MCP server
+#   docker compose up client # start MCP server
 #   docker compose --profile admin run --rm admin # admin shell
-#   docker compose up                             # start all default services
+#   docker compose up # start all default services
 #
 # Env vars: copy .env.example → .env and fill in values, or export them in your shell.
 #   Required: PROJECT_REF, SUPABASE_SECRET_KEY
