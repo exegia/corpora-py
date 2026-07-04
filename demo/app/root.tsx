@@ -6,17 +6,13 @@ import {
   ScrollRestoration,
   useNavigate
 } from "react-router"
-import { Typography, useTheme } from "@heroui/react"
+import { useTheme } from "@heroui/react"
+import { TopNav, TopNavHeading, TopNavItem } from "@astryxdesign/core/TopNav"
 
 import "./app.css"
 
 import { StatusBar } from "./components"
 import { useEffect } from "react"
-import { BrowserView } from "electrobun"
-
-import { StatusBar } from "./components";
-import { useEffect } from "react";
-import { BrowserView } from "electrobun";
 
 const NAV = [
   { to: "/", label: "Home", end: true },
@@ -24,6 +20,24 @@ const NAV = [
   { to: "/corpus/convert", label: "Convert", end: false },
   { to: "./logs", label: "Logs", end: true }
 ]
+
+export function TopNavigation() {
+  return (
+    <TopNav
+      label="Main navigation"
+      heading={<TopNavHeading heading="App" />}
+      startContent={
+        <>
+          {
+            NAV.map((navItem) => (
+              <TopNavItem key={navItem.label} label={navItem.label} href={navItem.to} />
+            ))
+          }
+        </>
+      }
+    />
+  )
+}
 
 // Global document shell — everything renders inside this.
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -51,14 +65,13 @@ export default function App() {
   const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
   const { theme, setTheme } = useTheme(mediaQuery.matches ? "dark" : "light")
 
+
   useEffect(() => {
     setTheme(mediaQuery.matches ? "dark" : "light")
   }, [])
 
   useEffect(() => {
-    const listener = mediaQuery.addEventListener("change", event => setTheme(event.matches ? "dark" : "light"))
-
-    return listener
+    mediaQuery.addEventListener("change", event => setTheme(event.matches ? "dark" : "light"))
   }, [mediaQuery.matches])
 
   return (
@@ -66,7 +79,7 @@ export default function App() {
 
       <div
         className="electrobun-webkit-app-region-drag w-full flex flex-col  justify-center py-1.5 fixed top-0 border-b border-tertiary/10 z-50  backdrop-blur-xl h-12">
-        <Typography type="body-sm" className="font-bold text-center">Corpora {theme}</Typography>
+        <TopNavigation />
       </div>
 
       <main className="flex-1 px-6 py-8 flex flex-col justify-center relative bg-background-secondary">

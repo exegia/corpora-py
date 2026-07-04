@@ -15,8 +15,8 @@ export default [
     route("convert", "routes/corpus/convert.tsx"),
 
     // corpus/:id — shared layout (header + tabs) for a single corpus.
-    //   index -> corpus/:id      (detail)
-    //   view  -> corpus/:id/view (reader)
+    //   index -> corpus/:id (detail)
+    //   view -> corpus/:id/view (reader)
     route(":id", "routes/corpus/layout.tsx", [
       index("routes/corpus/detail.tsx"),
       route("view", "routes/corpus/view.tsx")
