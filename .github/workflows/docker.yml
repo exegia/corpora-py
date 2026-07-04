@@ -46,7 +46,7 @@ on:
 # ── Permissions ───────────────────────────────────────────────────────────────
 permissions:
   contents: read
-  packages: write   # required to push to GHCR
+  packages: write # required to push to GHCR
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 jobs:
@@ -55,20 +55,12 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
-      fail-fast: false   # keep building other images if one fails
+      fail-fast: false # keep building other images if one fails
       matrix:
         image:
           - name: corpora-py
-            dockerfile: Dockerfile
+            dockerfile: dockerfiles/Dockerfile
             description: "Corpora platform — MCP server + admin tools (full umbrella)"
-
-          - name: corpora-client
-            dockerfile: Dockerfile.client
-            description: "Corpora MCP server (lightweight, client package only)"
-
-          - name: corpora-admin
-            dockerfile: Dockerfile.admin
-            description: "Corpora admin/conversion tools with text-fabric"
 
     steps:
       - name: Checkout
@@ -119,11 +111,15 @@ jobs:
           context: .
           file: ${{ matrix.image.dockerfile }}
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.push) }}
+          push:
+            ${{ github.event_name != 'pull_request' && (github.event_name !=
+            'workflow_dispatch' || inputs.push) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Layer cache: reuse layers across runs via GHCR cache.
-          # cache-to is skipped on PRs — login is skipped so we can't push cache.
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:buildcache
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref=ghcr.io/{0}/{1}:buildcache,mode=max', github.repository_owner, matrix.image.name) || '' }}
-
+          # Layer cache: reuse layers across runs via GHCR cache
+          cache-from:
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name
+            }}:buildcache
+          cache-to:
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name
+            }}:buildcache,mode=max
