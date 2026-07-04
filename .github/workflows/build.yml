@@ -1,19 +1,5 @@
 name: Build and test containers
 
-<<<<<<< HEAD
-on:
-  push:
-
-  pull_request:
-    branches:
-      - master
-  schedule:
-    # Every Sunday at 8:05 UTC
-    - cron: "5 8 * * 0"
-
-permissions:
-  contents: read
-=======
 # Manual-only for now: this workflow spins up the combined FastAPI app
 # (docker compose, health check on :5002 via Caddy) which depends on
 # src/corpora_py/app.py — not yet ported to the merged package layout
@@ -21,7 +7,9 @@ permissions:
 # triggers once the corpora-api port lands.
 on:
   workflow_dispatch:
->>>>>>> origin/dev
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
@@ -37,7 +25,6 @@ jobs:
 
     steps:
     - name: Checkout repository
-<<<<<<< HEAD
       uses: actions/checkout@v4
 
     - name: Set up Docker Buildx
@@ -48,16 +35,6 @@ jobs:
         # Create .env (gitignored) with the matrix Python version so docker-compose
         # and any tooling that reads it see the correct value.
         echo "PYTHON_VERSION=${{ matrix.python-version }}" > .env
-=======
-      uses: actions/checkout@v7
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
-
-    - name: Spin up container
-      run: |
-        sed -i "s/PYTHON_VERSION=.*/PYTHON_VERSION=${{ matrix.python-version }}/" '.env'
->>>>>>> origin/dev
         echo "Building container for Python ${{ matrix.python-version }}."
         docker compose up -d
 
@@ -65,31 +42,18 @@ jobs:
       run: |
         attempts=0
 
-<<<<<<< HEAD
         while [ $attempts -lt 20 ]; do
           # Use a TCP connection check so we don't hang on the SSE stream
           if bash -c '</dev/tcp/localhost/8000' 2>/dev/null; then
             echo "Port 8000 is reachable — container is up!"
-=======
-        while [ $attempts -lt 5 ]; do
-          if curl http://localhost:5002; then
-            echo "Success!"
->>>>>>> origin/dev
             exit 0
           fi
 
           attempts=$((attempts+1))
-<<<<<<< HEAD
           echo "Attempt $attempts: port 8000 not yet reachable, waiting 3s..."
           sleep 3
         done
 
         echo "Failed after $attempts attempts"
         docker compose logs
-=======
-          sleep 1
-        done
-
-        echo "Failed after $attempts attempts"
->>>>>>> origin/dev
         exit 1

@@ -1,12 +1,7 @@
 from pathlib import Path
 
-<<<<<<< HEAD
-from .helpers import run
-from .env_vars import PLATFORM_MAP, PYTHON_VERSION, STANDALONE_VERSION
-=======
 from .env_vars import PLATFORM_MAP, PYTHON_VERSION, STANDALONE_VERSION
 from .helpers import run
->>>>>>> origin/dev
 
 
 def download_standalone_python(platform_key: str, cache_dir: Path) -> Path:

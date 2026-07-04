@@ -1,11 +1,8 @@
 """FastMCP server exposing the Context-Fabric corpus tools."""
 
 import argparse
-<<<<<<< HEAD
-import logging
-=======
 import asyncio
->>>>>>> origin/dev
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -775,11 +772,6 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.verbose:
-<<<<<<< HEAD
-=======
-        import logging
-
->>>>>>> origin/dev
         logging.basicConfig(level=logging.DEBUG)
 
     if args.corpora:

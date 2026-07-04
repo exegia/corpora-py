@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-"""shared.corpus — dataset acquisition utilities."""
-
-from .fetch_from_git import fetch_datasets_from_git
-
-__all__ = ["fetch_datasets_from_git"]
-=======
 """shared.corpus — dataset acquisition and validation utilities."""
 
 from .fetch_from_git import fetch_datasets_from_git
@@ -24,4 +17,3 @@ __all__ = [
     "fetch_datasets_from_git",
     "validate_corpus",
 ]
->>>>>>> origin/dev

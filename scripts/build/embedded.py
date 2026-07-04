@@ -20,17 +20,10 @@ Usage:
 import argparse
 import shutil
 
-<<<<<<< HEAD
-from .env_vars import DIST_DIR, DEMO_RESOURCES, PLATFORM_MAP, ROOT
-from .helpers import run
-from .wheel import find_wheel
-from .bundle import bundle_wheel
-=======
 from .bundle import bundle_wheel
 from .env_vars import DEMO_RESOURCES, DIST_DIR, PLATFORM_MAP, ROOT
 from .helpers import run
 from .wheel import find_wheel
->>>>>>> origin/dev
 
 
 def parse_args() -> argparse.Namespace:

@@ -70,11 +70,6 @@ ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"
-<<<<<<< HEAD
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-=======
 warn_unused_configs = true
 # Third-party deps (ebooklib, text-fabric, supabase, ...) ship no type stubs.
 ignore_missing_imports = true
@@ -92,7 +87,6 @@ module = [
     "shared.backend.storage",
 ]
 ignore_errors = true
->>>>>>> origin/dev
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
