@@ -504,7 +504,7 @@ def search_syntax_guide(section: str | None = None) -> str:
     Args:
         section: Optional section name ("nodes", "relations", "quantifiers", "examples").
     """
-    GUIDE: dict[str, str] = {
+    guide: dict[str, str] = {
         "nodes": """\
 Node lines
 ----------
@@ -578,15 +578,15 @@ clause
 """,
     }
 
-    ALL = "\n\n".join(f"=== {k.upper()} ===\n{v}" for k, v in GUIDE.items())
+    all_sections = "\n\n".join(f"=== {k.upper()} ===\n{v}" for k, v in guide.items())
 
     if section:
         key = section.lower()
-        if key in GUIDE:
-            return GUIDE[key]
-        return f"Unknown section '{section}'. Available: {', '.join(GUIDE)}"
+        if key in guide:
+            return guide[key]
+        return f"Unknown section '{section}'. Available: {', '.join(guide)}"
 
-    return ALL
+    return all_sections
 
 
 # ── Data access tools ─────────────────────────────────────────────────────────
