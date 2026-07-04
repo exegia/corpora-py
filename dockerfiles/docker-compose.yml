@@ -15,24 +15,6 @@
 #   Optional: DATASETS_DIR (default: ~/.exegia/datasets), SOURCES_DIR (default: ~/sources)
 
 services:
-  # NOTE: `api` and `caddy` below don't correspond to anything else in this
-  # repo (there's no `./dockerfiles/python${PYTHON_VERSION}/Dockerfile`, no
-  # Caddyfile at the repo root) — they look like leftover boilerplate from a
-  # template and haven't been touched here; the real combined app is the
-  # `corpora` service further down.
-  # api:
-  #   restart: unless-stopped
-  #   env_file:
-  #     - .env
-  #   build:
-  #     context: ./
-  #     dockerfile: ./dockerfiles/python${PYTHON_VERSION}/Dockerfile
-  #     dockerfile: ./Dockerfile
-  #     labels:
-  #       - fastapi
-  #   ports:
-  #     - "8000:8000"
-
   caddy:
     image: caddy:2-alpine
     container_name: caddy
