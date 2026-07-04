@@ -23,7 +23,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /app
 
 # Copy workspace root + the packages we need to build
+<<<<<<< HEAD
+COPY pyproject.toml uv.lock* ./
+=======
 COPY pyproject.toml uv.lock* README.md ./
+>>>>>>> origin/dev
 COPY packages/shared packages/shared
 COPY packages/client  packages/client
 
