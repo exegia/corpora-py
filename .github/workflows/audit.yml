@@ -26,7 +26,7 @@ jobs:
           fi
           # Get the unique messages from the commits event.
           parsed=$(echo -n "$commits" | jq -r ".[].message" | sort -u)
-          mtch='(, refs|, closes) #[0-9]+'
+          mtch='(refs|closes) #[0-9]+'
           echo "$parsed" | while IFS= read -r raw_line; do
               line=$(echo "$raw_line" | tr -d "\r\n")
               # Ignore empty lines.
