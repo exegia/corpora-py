@@ -60,7 +60,7 @@ def _feat(api: Any, name: str) -> Any:
 
 
 @mcp.tool()
-async def download_corpus(git_url: str, name: str | None = None, ctx: Context = None) -> str:
+async def download_corpus(git_url: str, name: str | None = None, ctx: Context | None = None) -> str:
     """
     Download Text-Fabric corpora from a git repository and load them.
 
@@ -99,7 +99,7 @@ async def download_corpus(git_url: str, name: str | None = None, ctx: Context = 
 async def validate_corpus(
     corpus: str | None = None,
     path: str | None = None,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """
     Validate that a corpus is a valid Context-Fabric (.cfm) corpus.
@@ -188,6 +188,7 @@ def describe_corpus(corpus: str | None = None) -> str:
     except Exception:
         section_line = "(unavailable)"
 
+    feature_count: int | str
     try:
         feature_count = len(api.TF.features)
     except Exception:
@@ -373,8 +374,8 @@ def search(
         for tup in raw:
             for node in tup:
                 type_counter[api.F.otype.v(node)] += 1
-        lines = "\n".join(f"  {t:<20} {c:>8,}" for t, c in type_counter.most_common())
-        return f"Result statistics (total={total:,}):\n{lines}"
+        stat_lines = "\n".join(f"  {t:<20} {c:>8,}" for t, c in type_counter.most_common())
+        return f"Result statistics (total={total:,}):\n{stat_lines}"
 
     if return_type == "passages":
         lines = []

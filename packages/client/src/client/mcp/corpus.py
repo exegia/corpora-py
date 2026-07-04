@@ -26,8 +26,8 @@ class CorpusManager:
             raise FileNotFoundError(f"Corpus path not found: {p}")
 
         corpus_name = name or p.name
-        tf = Fabric(locations=str(p), silent=True)
-        api = tf.load(" ".join(features), silent=True) if features else tf.loadAll(silent=True)
+        tf = Fabric(locations=str(p), silent="deep")
+        api = tf.load(" ".join(features), silent="deep") if features else tf.loadAll(silent="deep")
 
         if api is False:
             raise RuntimeError(f"Failed to load corpus from {p}")

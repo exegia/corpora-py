@@ -16,7 +16,7 @@ SUPABASE_STUDIO_FILTER = "supabase_studio"
 SUPABASE_PROJECT_DIR = str(ROOT.parent / "corpora-supabase")
 
 
-def ensure_tool(name: str, hint: str, install: list[str] = None) -> None:
+def ensure_tool(name: str, hint: str, install: list[str] | None = None) -> None:
     if install is None:
         install = []
     if shutil.which(name) is None:

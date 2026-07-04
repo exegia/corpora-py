@@ -42,7 +42,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, NavigableString, PageElement, Tag
 from shared.utils.parse_epub import extract_assets, extract_pages, get_metadata
 
 # Sentence-ending / clause-ending punctuation. Greek uses ";" as the question
@@ -373,7 +373,7 @@ class EPUBToTFConverter:
         for child in soup.children:
             self._walk_element(child)
 
-    def _walk_element(self, element: Tag | NavigableString) -> None:
+    def _walk_element(self, element: PageElement) -> None:
         """Recursively walk cleaned HTML, creating nodes and word slots."""
         if isinstance(element, NavigableString):
             self._emit_text(str(element))

@@ -4,6 +4,7 @@ Requires the admin [full] extra (text-fabric): uv sync --extra full
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -198,7 +199,7 @@ def test_novel_has_book_chapter_sections(novel_tf: Path):
 def test_novel_structure(novel_tf: Path):
     import cfabric
 
-    api = cfabric.Fabric(locations=str(novel_tf), silent="deep").loadAll(silent="deep")
+    api: Any = cfabric.Fabric(locations=str(novel_tf), silent="deep").loadAll(silent="deep")
     assert "verse" not in api.F.otype.all
     chapters = api.F.otype.s("chapter")
     assert len(chapters) == 2  # nav page excluded

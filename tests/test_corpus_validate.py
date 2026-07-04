@@ -36,8 +36,8 @@ def mini_corpus(tmp_path: Path) -> Path:
     return corpus_dir
 
 
-def _stats(**overrides) -> CorpusStats:
-    base = dict(max_slot=6, max_node=8, node_types=2, node_features=3, edge_features=1)
+def _stats(**overrides: object) -> CorpusStats:
+    base: dict = dict(max_slot=6, max_node=8, node_types=2, node_features=3, edge_features=1)
     base.update(overrides)
     return CorpusStats(**base)
 
@@ -112,6 +112,7 @@ def test_validate_corpus_valid(mini_corpus: Path):
     assert (mini_corpus / ".cfm").exists()
     # samples were collected on both loading paths and match
     assert result.cf_stats.samples is not None
+    assert result.cf_mmap_stats.samples is not None
     assert result.cf_stats.samples.node_samples["word"] == (
         result.cf_mmap_stats.samples.node_samples["word"]
     )
