@@ -18,7 +18,7 @@ const ROOT = resolve(import.meta.dir, "..");
 const DIRS_TO_REMOVE = [
   "build",
   "dist",
-  "build/lib",
+  "public/resources",
   "node_modules",
   ".cache",
   "artifacts",

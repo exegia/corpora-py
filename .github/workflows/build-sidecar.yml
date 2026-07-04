@@ -54,13 +54,17 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Build workspace wheel
+      - name: Build all workspace wheels
         run: |
+          uv build --package corpora-shared-py --wheel --out-dir dist/
+          uv build --package corpora-client-py --wheel --out-dir dist/
+          uv build --package corpora-admin-py  --wheel --out-dir dist/
+          # Umbrella last — its deps are now present in dist/
           uv build --wheel --out-dir dist/
           echo "Built wheels:"
           ls -lh dist/*.whl
 
-      - name: Upload wheel
+      - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels
@@ -112,10 +116,10 @@ jobs:
       - name: Bundle (unsigned)
         if: ${{ inputs.skip_sign == true }}
         run: |
-          ./bin/build.sh \
-             --platform ${{ matrix.platform }} \
-             --skip-sign \
-             --skip-build
+          uv run python -m scripts.build \
+            --platform ${{ matrix.platform }} \
+            --skip-sign \
+            --skip-build
         env:
           APP_IDENTIFIER: ${{ vars.APP_IDENTIFIER }}
           APP_CHANNEL: ${{ vars.APP_CHANNEL || 'stable' }}
@@ -123,7 +127,7 @@ jobs:
       - name: Bundle + sign (macOS)
         if: ${{ inputs.skip_sign != true && startsWith(matrix.platform, 'macos') }}
         run: |
-          ./bin/build.sh \
+          uv run python -m scripts.build \
             --platform ${{ matrix.platform }} \
             --skip-build
         env:
@@ -140,7 +144,7 @@ jobs:
         if: ${{ inputs.skip_sign != true && matrix.platform == 'windows-x64' }}
         shell: pwsh
         run: |
-          ./bin/build.sh `
+          uv run python -m scripts.build `
             --platform ${{ matrix.platform }} `
             --skip-build
         env:

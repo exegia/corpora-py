@@ -28,14 +28,17 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.13", "3.14"]
 
+    # uv provisions the matrix Python itself (no setup-python needed).
+    # Action refs must match the org's allowed-actions policy — use the
+    # same versions as the other passing workflows (see docker.yml).
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
+      - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -43,6 +46,7 @@ jobs:
       - name: Install the Dependencies
         run: |
           echo "Installing the dependencies..."
+          uv python install ${{ matrix.python-version }}
           uv sync
 
       - name: Check Linter

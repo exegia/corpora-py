@@ -1,30 +1,39 @@
 [project]
-name = "corpora-admin"
-version = "0.1.1"
+name = "corpora-admin-py"
+version = "0.1.2"
+description = "Admin and conversion tools for the Corpora platform (EPUB/HTML → Text-Fabric)"
+readme = "../../README.md"
+authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
 requires-python = ">=3.13"
 keywords = ["exegia", "corpora", "bible", "epub", "text-fabric", "converter"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
-    "corpora-common>=0.1.1",
+    "corpora-shared-py>=0.1.2",
     # EPUB / HTML parsing
     "ebooklib>=0.18",
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
     "python-multipart>=0.0.9",
-    "text-fabric>=13.1.0",
-    # PDF parsing
-    "pypdf>=5.0.0",
-    # Context-Fabric compilation (.cfm) and .corpus packaging
-    "context-fabric>=0.5.0",
-    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# text-fabric needed for conversion tools (epub/html → TF node hierarchy)
+full = [
+    "text-fabric>=13.0.0",
 ]
 
 [tool.uv.sources]
-# Resolve common from the local workspace during development
-corpora-common = { workspace = true }
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/admin"]
+# Resolve corpora-shared-py from the local workspace during development
+corpora-shared-py = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/admin"]

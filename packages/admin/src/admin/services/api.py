@@ -171,7 +171,7 @@ def _run_conversion(
 async def create_conversion(
     request: Request,
     file: UploadFile,
-    source_format: SourceFormat = Form(...),
+    source_format: SourceFormat = Form(...),  # noqa: B008
     name: str = Form(...),
     description: str = Form(""),
 ) -> dict[str, str]:

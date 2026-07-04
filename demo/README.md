@@ -62,7 +62,7 @@ When you run `bun run dev` (without HMR):
 
 ## Developing with Docker + SSH (recommended for consistent Python + Bun env)
 
-This repo provides a first-class Docker dev environment so the ElectroBun demo can use the local Python `corpora-py` library (split into `common` / `mcp` / `admin` workspaces, importable as `common` / `corpora_mcp` / `admin`) without manual setup.
+This repo provides a first-class Docker dev environment so the ElectroBun demo can use the local Python `corpora-py` library (now split into `shared` / `client` / `admin` workspaces) without manual setup.
 
 ### 1. Start the container
 
@@ -107,11 +107,11 @@ bun run dev
 bun run dev:hmr
 ```
 
-The Python bridge automatically uses a dev Python that has the local library installed editable (`import common`, `import corpora_mcp`, `import admin` just work).
+The Python bridge automatically uses a dev Python that has the local library installed editable (`import shared`, `import client`, `import admin` just work after the src/admin|client|shared refactor).
 
 ### 4. Rebuilding the Python side
 
-Because we use an editable install, changes to `packages/common/src/common/**/*.py`, `packages/mcp/src/corpora_mcp/**/*.py` or `packages/admin/src/admin/**/*.py` are reflected immediately (restart the Bun process if you changed top-level imports).
+Because we use an editable install, changes to `src/shared/**/*.py`, `src/client/**/*.py` or `src/admin/**/*.py` are reflected immediately (restart the Bun process if you changed top-level imports).
 
 ### Files
 

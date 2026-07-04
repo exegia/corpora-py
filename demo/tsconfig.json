@@ -17,12 +17,8 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"],
     "rootDirs": [".", "./.react-router/types"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*", "app/*"]
-    }
   },
 
-  "include": ["src", "window-custom.d.ts", ".react-router/types/**/*", "app/components"],
-  "exclude": ["node_modules", "dist", "../package/dist"]
+  "include": ["src", "window-custom.d.ts", ".react-router/types/**/*"],
+  "exclude": ["node_modules", "dist", "../package/dist"],
 }

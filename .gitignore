@@ -26,14 +26,13 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.local
 .venv/
 
-!bin/build/
-.*_cache
+!scripts/build/
 
 # caches
 .eslintcache
 .cache
 *.tsbuildinfo
-lib/**
+resources/**
 
 # local app state
 .state/
@@ -55,5 +54,5 @@ src/exegia/supabase/seeds/*_rows.sql
 src/corpora_py.egg-info/
 supabase/
 !src/shared/supabase/
-**/lib/
-lib/python/
+**/resources/
+resources/python/

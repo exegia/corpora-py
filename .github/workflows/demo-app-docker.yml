@@ -15,14 +15,14 @@ on:
     branches: [dev, next, main]
     paths:
       - "demo/app/**"
-      - "src/corpora-py/**"
+      - "src/exegia/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/demo-app-docker.yml"
   pull_request:
     paths:
       - "demo/app/**"
-      - "src/corpora-py/**"
+      - "src/exegia/**"
       - "pyproject.toml"
   workflow_dispatch:
     inputs:
@@ -74,7 +74,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: demo/docker/Dockerfile
+          file: demo/app/Dockerfile
           push: |
             ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' ? inputs.push : true) }}
           tags: ${{ steps.meta.outputs.tags }}

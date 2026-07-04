@@ -1,7 +1,5 @@
-name: "Bump Version"
-description:
-  "Bumps the version in root pyproject.toml and all workspace package pyproject.toml files,
-  commits, and tags"
+name: 'Bump Version'
+description: 'Bumps the version in root pyproject.toml and all workspace package pyproject.toml files, commits, and tags'
 inputs:
   github_token:
     description: "GitHub Token"
@@ -17,7 +15,7 @@ outputs:
     description: "The new version tag"
     value: ${{ steps.bump.outputs.tag }}
   version:
-    description: "The new version string (without v prefix)"
+    description: 'The new version string (without v prefix)'
     value: ${{ steps.bump.outputs.version }}
 runs:
   using: "composite"
@@ -37,9 +35,19 @@ runs:
         # Update root pyproject.toml
         sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
 
+        # Update all workspace package pyproject.toml files
+        for pkg_toml in packages/*/pyproject.toml; do
+          sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" "$pkg_toml"
+          # Also update the inter-package dependency pins (corpora-*-py>=$VERSION)
+          sed -i "s/corpora-shared-py>=$VERSION/corpora-shared-py>=$NEW_VERSION/g" "$pkg_toml"
+          sed -i "s/corpora-client-py>=$VERSION/corpora-client-py>=$NEW_VERSION/g" "$pkg_toml"
+          sed -i "s/corpora-admin-py>=$VERSION/corpora-admin-py>=$NEW_VERSION/g" "$pkg_toml"
+          echo "  Updated $pkg_toml"
+        done
+
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add pyproject.toml
+        git add pyproject.toml packages/*/pyproject.toml
         git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
         git tag "$TAG"
 
