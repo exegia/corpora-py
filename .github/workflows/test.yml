@@ -1,0 +1,58 @@
+name: Run unit tests
+
+on:
+  push:
+
+  pull_request:
+    branches:
+      - master
+
+  schedule:
+    # Every sunday at 8:05 UTC
+    - cron: "5 8 * * 0"
+
+# If you trigger a new workflow while the previous one is running,
+# this will cancel the previous one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Use matrix strategy to run the tests on multiple Py versions on multiple OSs.
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.13", "3.14"]
+
+    # uv provisions the matrix Python itself (no setup-python needed).
+    # Action refs must match the org's allowed-actions policy — use the
+    # same versions as the other passing workflows (see docker.yml).
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install the Dependencies
+        run: |
+          echo "Installing the dependencies..."
+          uv python install ${{ matrix.python-version }}
+          uv sync
+
+      - name: Check Linter
+        run: |
+          echo "Checking linter formatting..."
+          make lint-check
+
+      - name: Run Tests
+        run: |
+          echo "Running the tests..."
+          make test

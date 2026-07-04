@@ -7,8 +7,8 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+-*" # e.g. v1.2.3-rc1
 
   pull_request:
-    types: [ closed ]
-    branches: [ master, main ]
+    types: [closed]
+    branches: [master, main]
 
   workflow_dispatch:
     inputs:
@@ -35,7 +35,7 @@ jobs:
     outputs:
       tag: ${{ steps.bump.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
@@ -61,7 +61,7 @@ jobs:
       )
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           # Use the newly-created tag when bump ran; otherwise the triggering ref.
           ref: ${{ needs.bump.outputs.tag || github.ref }}
@@ -88,7 +88,7 @@ jobs:
       id-token: write  # mandatory for OIDC trusted publishing
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Publish
         uses: ./.github/actions/publish-pypi

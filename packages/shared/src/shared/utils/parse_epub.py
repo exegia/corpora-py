@@ -4,10 +4,24 @@ content, and tracks extraction progress via a simple callback.
 """
 
 import re
-from typing import Any, Callable
+import tempfile
+import urllib.request
+from collections.abc import Callable
+from typing import Any
 
 import ebooklib
 from bs4 import BeautifulSoup, NavigableString, Tag
+from ebooklib import epub
+
+
+def _load_book(path: str) -> epub.EpubBook:
+    """Open an EPUB from a filesystem path or HTTP(S) URL."""
+    if path.startswith(("http://", "https://")):
+        with urllib.request.urlopen(path) as response:  # noqa: S310
+            with tempfile.NamedTemporaryFile(suffix=".epub", delete=False) as fh:
+                fh.write(response.read())
+                path = fh.name
+    return epub.read_epub(path)
 
 # ── HTML cleaner ──────────────────────────────────────────────────────────────
 
@@ -126,10 +140,10 @@ def _clean_html(html_bytes: bytes) -> str:
                 node.replace_with(cleaned)
 
     # 5. Drop tags that are now empty (no text, no children) except void elements.
-    _VOID = {"br", "hr", "img"}
+    void_tags = {"br", "hr", "img"}
     for tag in reversed(soup.find_all(True)):
         if (
-            tag.name not in _VOID
+            tag.name not in void_tags
             and not tag.get_text(strip=True)
             and not tag.find("img")
         ):
@@ -185,6 +199,27 @@ def get_metadata(path: str) -> dict[str, Any]:
         "documents": items,
         "total_pages": len(items),
     }
+
+
+def extract_assets(path: str) -> list[dict[str, Any]]:
+    """
+    Extract binary assets (images, cover) from the EPUB.
+
+    Returns a list of asset dicts, each with:
+        - name       : item path inside the EPUB (e.g. "images/map.png")
+        - media_type : MIME type (e.g. "image/png")
+        - content    : raw bytes
+    """
+    book = _load_book(path)
+    return [
+        {
+            "name": item.get_name(),
+            "media_type": item.media_type,
+            "content": item.get_content(),
+        }
+        for item in book.get_items()
+        if item.get_type() in (ebooklib.ITEM_IMAGE, ebooklib.ITEM_COVER)
+    ]
 
 
 def extract_pages(

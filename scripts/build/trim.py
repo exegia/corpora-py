@@ -3,8 +3,9 @@ import platform
 import shutil
 import subprocess
 from pathlib import Path
-from .helpers import pylib_dir
+
 from .env_vars import STDLIB_TRIM
+from .helpers import pylib_dir
 
 # Note on trimming: we only remove stdlib modules that are provably unused
 # by the runtime packages (cfabric, supabase stack, fastmcp, exegia, etc.)

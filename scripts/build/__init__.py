@@ -38,12 +38,12 @@ from pathlib import Path
 
 from .archive import create_unsigned_archive, extract_python
 from .download import download_standalone_python
+from .env_vars import PLATFORM_MAP, PYTHON_VERSION, STANDALONE_VERSION
 from .helpers import detect_platform, generate_app_paths, parse_args
 from .sign import sign_macos, sign_windows
 from .trim import trim_stdlib
 from .wheel import build_wheel, find_wheel, install_wheel
 
-from .env_vars import PLATFORM_MAP, PYTHON_VERSION, STANDALONE_VERSION
 
 def main():
     args = parse_args()
@@ -100,7 +100,7 @@ def main():
     size_mb = archive.stat().st_size / (1024 * 1024)
     triple = PLATFORM_MAP[platform_key]["tauri_triple"]
     print()
-    print(f"==> Done.")
+    print("==> Done.")
     print(f"    Archive:       {archive}")
     print(f"    Size:          {size_mb:.1f} MB")
     print(f"    Tauri triple:  {triple}")

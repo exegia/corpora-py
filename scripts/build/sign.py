@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .helpers import run
 
+
 def _import_macos_cert(tmpdir: Path):
     """Decode APPLE_CERTIFICATE and import it into a temporary keychain."""
     cert_b64 = os.environ.get("APPLE_CERTIFICATE", "")

@@ -25,6 +25,9 @@ def fetch_datasets_from_git(git_url: str, temp_base: Path | None = None) -> list
     A dataset directory is any folder that contains both otext.tf and otype.tf.
     The clone is placed under temp_base/.temp (defaults to cwd/.temp).
 
+    Datasets are not validated here; run shared.corpus.validate_corpus on a
+    returned path when validation is wanted.
+
     Raises:
         subprocess.CalledProcessError: if git clone fails.
         FileNotFoundError: if git is not available on PATH.

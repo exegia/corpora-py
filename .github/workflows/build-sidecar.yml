@@ -1,7 +1,7 @@
 name: Build Sidecar
 
 # Builds corpora-py as a signed, notarized Python bundle for each platform.
-# The resulting zip archives are intended to be embedded as resources in a
+# The resulting zip archives are intended to be embedded as lib in a
 # Tauri application (see https://v2.tauri.app/develop/sidecar/).
 #
 # Note: Demo/ElectroBun embedded Python bundling lives in root scripts/
@@ -47,10 +47,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
 
@@ -65,7 +65,7 @@ jobs:
           ls -lh dist/*.whl
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheels
           path: dist/*.whl
@@ -93,22 +93,22 @@ jobs:
     runs-on: ${{ matrix.runner }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
 
       - name: Download wheels
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: wheels
           path: dist/
 
       # Cache the standalone-Python tarball — it's ~70 MB and rarely changes.
       - name: Cache standalone Python
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .cache/python-standalone
           key: python-standalone-${{ matrix.platform }}-3.13.14-20260623
@@ -154,7 +154,7 @@ jobs:
           WINDOWS_SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
 
       - name: Upload archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: corpora-py-sidecar-${{ github.run_id }}-${{ matrix.platform }}
           path: dist/corpora-py-${{ matrix.platform }}.zip
