@@ -3,10 +3,13 @@ import sys
 import json
 import subprocess
 
-def run_cmd(cmd, allow_failure=False):
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+MAJOR_BUMP_THRESHOLD = 1500  # Number of lines changed to trigger a major bump for features
+MINOR_BUMP_THRESHOLD = 1000  # Number of lines changed to trigger a minor bump for unspecified types
+
+def run_cmd(cmd_list, allow_failure=False):
+    result = subprocess.run(cmd_list, capture_output=True, text=True)
     if result.returncode != 0 and not allow_failure:
-        print(f"Error running cmd: {cmd}\n{result.stderr}")
+        print(f"Error running cmd: {' '.join(cmd_list)}\n{result.stderr}")
         sys.exit(result.returncode)
     return result.stdout.strip()
 
@@ -21,7 +24,7 @@ def main():
     print(f"Analyzing PR #{pr_number}: {pr_title}")
     
     # Get PR details
-    pr_json = run_cmd(f"gh pr view {pr_number} --json additions,deletions,title")
+    pr_json = run_cmd(["gh", "pr", "view", str(pr_number), "--json", "additions,deletions,title"])
     pr_data = json.loads(pr_json)
     additions = pr_data.get('additions', 0)
     deletions = pr_data.get('deletions', 0)
@@ -32,18 +35,19 @@ def main():
     
     # Simple agentic logic for version bump
     bump_type = "patch"
-    title_prefix = title.split(":")[0] if ":" in title else title
-    if "breaking" in title or "major" in title or "!" in title_prefix:
+    title_prefix = title.split(":")[0].strip() if ":" in title else title.strip()
+    
+    if "breaking" in title or "major" in title or title_prefix.endswith("!"):
         bump_type = "major"
     elif title.startswith("feat") or title.startswith("feature"):
-        if total_changes > 1500:
+        if total_changes > MAJOR_BUMP_THRESHOLD:
             bump_type = "major"
         else:
             bump_type = "minor"
     elif title.startswith("fix") or title.startswith("chore") or title.startswith("docs"):
         bump_type = "patch"
     else:
-        if total_changes > 1000:
+        if total_changes > MINOR_BUMP_THRESHOLD:
             bump_type = "minor"
         else:
             bump_type = "patch"
@@ -52,10 +56,10 @@ def main():
     
     # Add label
     label_name = f"bump:{bump_type}"
-    run_cmd(f"gh pr edit {pr_number} --add-label {label_name}", allow_failure=True)
+    run_cmd(["gh", "pr", "edit", str(pr_number), "--add-label", label_name], allow_failure=True)
     
     # Determine the current highest tag
-    tags_output = subprocess.run("git tag -l 'v*'", shell=True, capture_output=True, text=True).stdout.strip()
+    tags_output = run_cmd(["git", "tag", "-l", "v*"])
     tags = [t for t in tags_output.split('\n') if t]
     
     current_major, current_minor, current_patch = 0, 0, 0
@@ -67,15 +71,15 @@ def main():
             base_version = clean_tag.split('-')[0].split('+')[0]
             parts = base_version.split('.')
             if len(parts) >= 3:
-                ma = int(parts[0])
-                mi = int(parts[1])
-                pa = int(parts[2])
-                if ma > current_major:
-                    current_major, current_minor, current_patch = ma, mi, pa
-                elif ma == current_major and mi > current_minor:
-                    current_minor, current_patch = mi, pa
-                elif ma == current_major and mi == current_minor and pa > current_patch:
-                    current_patch = pa
+                major_ver = int(parts[0])
+                minor_ver = int(parts[1])
+                patch_ver = int(parts[2])
+                if major_ver > current_major:
+                    current_major, current_minor, current_patch = major_ver, minor_ver, patch_ver
+                elif major_ver == current_major and minor_ver > current_minor:
+                    current_minor, current_patch = minor_ver, patch_ver
+                elif major_ver == current_major and minor_ver == current_minor and patch_ver > current_patch:
+                    current_patch = patch_ver
         except (ValueError, IndexError):
             pass
             
@@ -92,8 +96,8 @@ def main():
     new_tag = f"v{current_major}.{current_minor}.{current_patch}-next"
     print(f"Creating new tag: {new_tag}")
     
-    run_cmd(f"git tag {new_tag}", allow_failure=True)
-    run_cmd(f"git push origin {new_tag}", allow_failure=True)
+    run_cmd(["git", "tag", new_tag], allow_failure=True)
+    run_cmd(["git", "push", "origin", new_tag], allow_failure=True)
     
 if __name__ == "__main__":
     main()
