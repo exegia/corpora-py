@@ -20,24 +20,26 @@ services:
   # Caddyfile at the repo root) — they look like leftover boilerplate from a
   # template and haven't been touched here; the real combined app is the
   # `corpora` service further down.
-  api:
-    restart: unless-stopped
-    env_file:
-      - .env
-    build:
-      context: ./
-      dockerfile: ./dockerfiles/python${PYTHON_VERSION}/Dockerfile
-      labels:
-        - fastapi
-    ports:
-      - "5001:5001"
+  # api:
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   build:
+  #     context: ./
+  #     dockerfile: ./dockerfiles/python${PYTHON_VERSION}/Dockerfile
+  #     dockerfile: ./Dockerfile
+  #     labels:
+  #       - fastapi
+  #   ports:
+  #     - "8000:8000"
 
   caddy:
     image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env.development
+        required: false # silently skipped if .env doesn't exist; use shell env instead
     ports:
       - "5002:5002"
       - "80:80"
@@ -53,7 +55,7 @@ services:
         source: caddy_config
         target: /config
     depends_on:
-      - api
+      - corpora
 
   # ── Combined FastAPI app: MCP server + admin conversion API (corpora-py) ───
   corpora:
@@ -69,13 +71,24 @@ services:
       - "${DATASETS_DIR:-~/.corpora/datasets}:/data/datasets"
       - "${SOURCES_DIR:-~/sources}:/data/sources:ro"
     env_file:
-      - path: .env
+      - path: .env.development
         required: false # silently skipped if .env doesn't exist; use shell env instead
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      # Defaults to secure (matches common.utils.config.Settings.auth_required's
+      # own default). `make docker-up-corpora` sets this to `false` at
+      # invocation time for local/demo use -- without this line, that shell
+      # var never reached the container and auth stayed enforced regardless.
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "from corpora_mcp.corpus import corpus_manager; print('ok')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from corpora_mcp.corpus import corpus_manager; print('ok')"
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

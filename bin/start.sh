@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 #
 # start.sh
-# Shell equivalent of scripts/start.py
 #
-# Start the local Supabase dev stack + demo app (ElectroBun + Vite).
+# Start the demo app (ElectroBun + Vite).
 #
 # Usage:
 #   ./scripts/start.sh
@@ -88,16 +87,6 @@ _run_electrobun_server() {
 }
 
 start_demo_app() {
-  echo "⚡ Vite HMR server starting..."
-
-  # Background non-daemon jobs (equivalent to daemon=False threads)
-  _run_vite_server &
-  local vite_pid=$!
-
-  # Give Vite a moment
-  sleep 3
-  echo "🌐 Opening browser at $VITE_URL …"
-  open_browser "$VITE_URL"
 
   echo "🖥️  Starting electrobun desktop app..."
   _run_electrobun_server &
@@ -152,31 +141,7 @@ stop_supabase_stack() {
 # ---------------------------------------------------------------------------
 
 main() {
-  local do_stop=false
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --stop) do_stop=true; shift ;;
-      -h|--help)
-        echo "Usage: $(basename "$0") [--stop]"
-        echo
-        cat <<'EOD'
-Start the local Supabase dev stack with dotenvx-loaded env.
-
-  ./scripts/start.sh          # start
-  ./scripts/start.sh --stop   # stop the local stack
-EOD
-        exit 0
-        ;;
-      *) echo "Unknown arg: $1"; exit 1 ;;
-    esac
-  done
-
-  if $do_stop; then
-    stop_supabase_stack
-  else
-    start_supabase_stack
-  fi
+    start_demo_app
 }
 
 main "$@"

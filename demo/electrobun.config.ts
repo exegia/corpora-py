@@ -4,7 +4,11 @@ export default {
 	app: {
 		name: "CorporaPy",
 		identifier: "io.exegia.Corpora",
-		version: "0.0.1",
+    version: "0.0.1",
+
+  },
+  scripts: {
+    preBuild: "scripts/pre-build.ts"
   },
   build: {
 		// React Router framework mode (SPA) builds to dist/client/, we copy from there.
@@ -21,6 +25,7 @@ export default {
 			// download the pre-built archive (see scripts/ensure_python_runtime.py).
 			"build/lib/python": "python"
     },
+
 		// Ignore Vite output in watch mode — HMR handles view rebuilds separately
 		watchIgnore: ["dist/**"],
     targets: "macos-arm64,win-x64",

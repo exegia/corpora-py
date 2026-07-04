@@ -1,245 +1,231 @@
-export const SOCKET_URL = "ws://localhost:3000";
+import { SOCKET_URL, type BridgeListener, type BridgeMessage, type BridgeStatus } from "@/types/socket";
 
-export type BridgeStatus = "idle" | "connecting" | "open" | "closed" | "error";
-export type BridgeHandler = (params: unknown) => unknown | Promise<unknown>;
-export type BridgeListener = (message: BridgeMessage) => void;
-
-export type BridgeMessage = Record<string, unknown> & {
-  id?: string;
-  type?: string;
-  method?: string;
-  methods?: string[];
-  params?: unknown;
-  result?: unknown;
-  error?: string;
-  event?: string;
-  payload?: unknown;
-};
+const createId = () =>
+	typeof crypto !== "undefined" && "randomUUID" in crypto
+		? crypto.randomUUID()
+		: `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 type PendingRequest = {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  timeout: ReturnType<typeof setTimeout>;
-};
-
-const nextId = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+	resolve: (value: unknown) => void;
+	reject: (error: Error) => void;
+	timeout: ReturnType<typeof setTimeout>;
 };
 
 class SocketBridge {
-  private ws?: WebSocket;
-  private connectPromise?: Promise<void>;
-  private readonly pending = new Map<string, PendingRequest>();
-  private readonly handlers = new Map<string, BridgeHandler>();
-  private readonly listeners = new Map<string, Set<BridgeListener>>();
-  private readonly sendQueue: BridgeMessage[] = [];
+	private ws?: WebSocket;
+	private connectPromise?: Promise<void>;
+	private readonly pending = new Map<string, PendingRequest>();
+	private readonly handlers = new Map<string, (params: unknown) => unknown | Promise<unknown>>();
+	private readonly listeners = new Map<string, Set<BridgeListener>>();
+	private readonly sendQueue: BridgeMessage[] = [];
+	status: BridgeStatus = "idle";
 
-  public status: BridgeStatus = "idle";
+	async connect(): Promise<void> {
+		if (this.ws?.readyState === WebSocket.OPEN) return;
+		if (this.connectPromise) return this.connectPromise;
 
-  async connect(): Promise<void> {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
-    if (this.connectPromise) return this.connectPromise;
+		this.setStatus("connecting");
+		this.connectPromise = new Promise((resolve, reject) => {
+			if (typeof window === "undefined") {
+				reject(new Error("Websocket bridge is only available in the browser"));
+				return;
+			}
 
-    this.setStatus("connecting");
+			const ws = new WebSocket(SOCKET_URL);
+			this.ws = ws;
 
-    this.connectPromise = new Promise<void>((resolve, reject) => {
-      if (typeof window === "undefined") {
-        reject(new Error("Websocket bridge is only available in the browser"));
-        return;
-      }
+			ws.addEventListener("open", () => {
+				this.setStatus("open");
+				this.connectPromise = undefined;
+				this.syncRegisteredMethods();
+				this.flushQueue();
+				resolve();
+			});
 
-      const ws = new WebSocket(SOCKET_URL);
-      this.ws = ws;
+			ws.addEventListener("message", async (event) => {
+				await this.handleMessage(event.data);
+			});
 
-      ws.addEventListener("open", () => {
-        this.setStatus("open");
-        this.connectPromise = undefined;
-        this.syncRegisteredMethods();
-        this.flushQueue();
-        resolve();
-      });
+			ws.addEventListener("close", () => {
+				this.ws = undefined;
+				this.connectPromise = undefined;
+				this.setStatus("closed");
+				this.rejectPending(new Error("Websocket bridge closed"));
+			});
 
-      ws.addEventListener("message", (event) => {
-        void this.handleMessage(event.data);
-      });
+			ws.addEventListener("error", () => {
+				this.ws = undefined;
+				this.connectPromise = undefined;
+				this.setStatus("error");
+				reject(new Error(`Could not connect to websocket bridge at ${SOCKET_URL}`));
+			});
+		});
 
-      ws.addEventListener("close", () => {
-        this.ws = undefined;
-        this.connectPromise = undefined;
-        this.setStatus("closed");
-        this.rejectPending(new Error("Websocket bridge closed"));
-      });
+		return this.connectPromise;
+	}
 
-      ws.addEventListener("error", () => {
-        this.ws = undefined;
-        this.connectPromise = undefined;
-        this.setStatus("error");
-        reject(new Error(`Could not connect to websocket bridge at ${SOCKET_URL}`));
-      });
-    });
+	disconnect(): void {
+		this.ws?.close();
+		this.ws = undefined;
+		this.setStatus("closed");
+	}
 
-    return this.connectPromise;
-  }
+	async callPython(method: string, params: unknown = {}): Promise<unknown> {
+		return this.request({ type: "python.call", method, params });
+	}
 
-  disconnect(): void {
-    this.ws?.close();
-    this.ws = undefined;
-    this.setStatus("closed");
-  }
+	async emit(event: string, payload: unknown): Promise<unknown> {
+		return this.request({ type: "event.emit", event, payload });
+	}
 
-  async callPython<T = unknown>(method: string, params: unknown = {}): Promise<T> {
-    return this.request<T>({ type: "python.call", method, params });
-  }
+	register(method: string, handler: (params: unknown) => unknown | Promise<unknown>): () => void {
+		this.handlers.set(method, handler);
+		this.syncRegisteredMethods();
 
-  async request<T = unknown>(message: BridgeMessage, timeoutMs = 30_000): Promise<T> {
-    await this.connect();
+		return () => {
+			this.handlers.delete(method);
+			this.syncRegisteredMethods();
+		};
+	}
 
-    const id = message.id ?? nextId();
-    const outbound = { ...message, id };
+	on(type: string, listener: BridgeListener): () => void {
+		const listeners = this.listeners.get(type) ?? new Set<BridgeListener>();
+		listeners.add(listener);
+		this.listeners.set(type, listeners);
 
-    const result = await new Promise<unknown>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Timed out waiting for bridge response: ${message.type ?? message.method}`));
-      }, timeoutMs);
+		return () => {
+			listeners.delete(listener);
+			if (listeners.size === 0) this.listeners.delete(type);
+		};
+	}
 
-      this.pending.set(id, { resolve, reject, timeout });
-      this.send(outbound);
-    });
+	private async request(message: BridgeMessage, timeoutMs = 30_000): Promise<unknown> {
+		await this.connect();
 
-    return result as T;
-  }
+		const id = message.id ?? createId();
+		const request = { ...message, id };
 
-  emit(event: string, payload?: unknown): Promise<unknown> {
-    return this.request({ type: "event.emit", event, payload });
-  }
+		return new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				this.pending.delete(id);
+				reject(new Error(`Timed out waiting for bridge response: ${message.type ?? message.method ?? "request"}`));
+			}, timeoutMs);
 
-  register(method: string, handler: BridgeHandler): () => void {
-    this.handlers.set(method, handler);
-    this.syncRegisteredMethods();
+			this.pending.set(id, { resolve, reject, timeout });
+			this.send(request);
+		});
+	}
 
-    return () => {
-      this.handlers.delete(method);
-      this.syncRegisteredMethods();
-    };
-  }
+	private async handleMessage(raw: string | Blob | ArrayBuffer): Promise<void> {
+		let message: BridgeMessage;
 
-  on(type: string, listener: BridgeListener): () => void {
-    const listeners = this.listeners.get(type) ?? new Set<BridgeListener>();
-    listeners.add(listener);
-    this.listeners.set(type, listeners);
+		try {
+			const text =
+				typeof raw === "string"
+					? raw
+					: raw instanceof Blob
+						? await raw.text()
+						: new TextDecoder().decode(raw);
+			message = JSON.parse(text) as BridgeMessage;
+		} catch (error) {
+			this.notify({ type: "error", error: `invalid_bridge_message: ${String(error)}` });
+			return;
+		}
 
-    return () => {
-      listeners.delete(listener);
-      if (listeners.size === 0) this.listeners.delete(type);
-    };
-  }
+		if (message.type === "response" || message.type === "error") {
+			this.resolvePending(message);
+			return;
+		}
 
-  private async handleMessage(raw: unknown): Promise<void> {
-    let message: BridgeMessage;
+		if (message.type === "client.call") {
+			await this.handleClientCall(message);
+			return;
+		}
 
-    try {
-      const text = typeof raw === "string" ? raw : await (raw as Blob).text();
-      message = JSON.parse(text) as BridgeMessage;
-    } catch (error) {
-      this.notify({ type: "error", error: `invalid_bridge_message: ${String(error)}` });
-      return;
-    }
+		this.notify(message);
+	}
 
-    if (message.type === "response" || message.type === "error") {
-      this.resolvePending(message);
-      return;
-    }
+	private async handleClientCall(message: BridgeMessage): Promise<void> {
+		const id = typeof message.id === "string" ? message.id : "";
+		const method = typeof message.method === "string" ? message.method : "";
 
-    if (message.type === "client.call") {
-      await this.handleClientCall(message);
-      return;
-    }
+		if (!id || !method) return;
 
-    this.notify(message);
-  }
+		const handler = this.handlers.get(method);
+		if (!handler) {
+			this.send({ type: "client.response", id, error: `No app handler registered for method: ${method}` });
+			return;
+		}
 
-  private async handleClientCall(message: BridgeMessage): Promise<void> {
-    const id = message.id;
-    const method = message.method;
+		try {
+			const result = await handler(message.params);
+			this.send({ type: "client.response", id, result });
+		} catch (error) {
+			this.send({ type: "client.response", id, error: String(error) });
+		}
+	}
 
-    if (!id || !method) return;
+	private resolvePending(message: BridgeMessage): void {
+		if (!message.id) return;
+		const pending = this.pending.get(message.id);
+		if (!pending) return;
 
-    const handler = this.handlers.get(method);
-    if (!handler) {
-      this.send({ type: "client.response", id, error: `No app handler registered for method: ${method}` });
-      return;
-    }
+		clearTimeout(pending.timeout);
+		this.pending.delete(message.id);
 
-    try {
-      const result = await handler(message.params);
-      this.send({ type: "client.response", id, result });
-    } catch (error) {
-      this.send({ type: "client.response", id, error: String(error) });
-    }
-  }
+		if (message.error) {
+			pending.reject(new Error(message.error));
+			return;
+		}
 
-  private resolvePending(message: BridgeMessage): void {
-    if (!message.id) return;
+		pending.resolve(message.result);
+	}
 
-    const pending = this.pending.get(message.id);
-    if (!pending) return;
+	private syncRegisteredMethods(): void {
+		if (this.ws?.readyState === WebSocket.OPEN) {
+			this.send({ type: "client.register", methods: Array.from(this.handlers.keys()) });
+		}
+	}
 
-    clearTimeout(pending.timeout);
-    this.pending.delete(message.id);
+	private send(message: BridgeMessage): void {
+		if (this.ws?.readyState !== WebSocket.OPEN) {
+			this.sendQueue.push(message);
+			return;
+		}
 
-    if (message.error) {
-      pending.reject(new Error(message.error));
-      return;
-    }
+		this.ws.send(JSON.stringify(message));
+	}
 
-    pending.resolve(message.result);
-  }
+	private flushQueue(): void {
+		while (this.sendQueue.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
+			const message = this.sendQueue.shift();
+			if (message) this.ws.send(JSON.stringify(message));
+		}
+	}
 
-  private syncRegisteredMethods(): void {
-    if (this.ws?.readyState !== WebSocket.OPEN) return;
-    this.send({ type: "client.register", methods: Array.from(this.handlers.keys()) });
-  }
+	private rejectPending(error: Error): void {
+		for (const pending of this.pending.values()) {
+			clearTimeout(pending.timeout);
+			pending.reject(error);
+		}
+		this.pending.clear();
+	}
 
-  private send(message: BridgeMessage): void {
-    if (this.ws?.readyState !== WebSocket.OPEN) {
-      this.sendQueue.push(message);
-      return;
-    }
+	private setStatus(status: BridgeStatus): void {
+		this.status = status;
+		this.notify({ type: "status", status });
+	}
 
-    this.ws.send(JSON.stringify(message));
-  }
+	private notify(message: BridgeMessage): void {
+		for (const listener of this.listeners.get(message.type ?? "message") ?? []) {
+			listener(message);
+		}
 
-  private flushQueue(): void {
-    while (this.sendQueue.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
-      const message = this.sendQueue.shift();
-      if (message) this.ws.send(JSON.stringify(message));
-    }
-  }
-
-  private rejectPending(error: Error): void {
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(error);
-    }
-    this.pending.clear();
-  }
-
-  private setStatus(status: BridgeStatus): void {
-    this.status = status;
-    this.notify({ type: "status", status });
-  }
-
-  private notify(message: BridgeMessage): void {
-    for (const listener of this.listeners.get(message.type ?? "message") ?? []) {
-      listener(message);
-    }
-
-    for (const listener of this.listeners.get("message") ?? []) {
-      listener(message);
-    }
-  }
+		for (const listener of this.listeners.get("message") ?? []) {
+			listener(message);
+		}
+	}
 }
 
 export const socketBridge = new SocketBridge();
+export type { BridgeMessage, BridgeStatus };

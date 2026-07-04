@@ -74,16 +74,16 @@ is_known_platform() {
 # ── Helper functions ──────────────────────────────────────────────────────────
 
 log() {
-  echo "==> $*"
+  echo "==> $*" >&2
 }
 
 log_step() {
-  echo "    $*"
+  echo "    $*" >&2
 }
 
 run_cmd() {
-  # Print and execute (like helpers.run)
-  echo "  $ $*"
+  # Print and execute (like helpers.run); stderr so stdout stays machine-readable
+  echo "  $ $*" >&2
   "$@"
 }
 

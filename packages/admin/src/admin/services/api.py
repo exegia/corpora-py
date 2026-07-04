@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +134,7 @@ def _run_conversion(
     source_format: SourceFormat,
     name: str,
     description: str,
+    job_id: str,
 ) -> Path:
     """Blocking pipeline: parse -> Text-Fabric -> .cfm -> .corpus.
 
@@ -140,14 +142,27 @@ def _run_conversion(
     async endpoint. Always cleans up `work_dir` (the upload + intermediate
     `tf/` tree) on the way out, success or failure -- only the final
     `.corpus`, written to `_RESULTS_ROOT`, survives.
+
+    The `job_manager.log()` calls bracketing each stage are coarse, fixed
+    checkpoints, not real progress -- `converter()` and `convert_to_corpus()`
+    have no progress hook to report from mid-call (see
+    `packages/admin/CLAUDE.md`'s "Known gaps"). They exist so a client
+    watching `/convert/{id}/ws` sees *something* move during a multi-minute
+    conversion instead of a status stuck on "running" with no other signal.
     """
     try:
+        job_manager.log(job_id, f"Parsing {source_format.value} source and building Text-Fabric dataset...")
         converter = CONVERTERS[source_format]
         tf_dir = work_dir / "tf"
         converter(str(source_path), tf_dir)
+
+        job_manager.log(job_id, "Text-Fabric dataset built. Compiling cache and packaging .corpus archive...")
         _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
         corpus_path = _RESULTS_ROOT / f"{work_dir.name}.corpus"
-        return convert_to_corpus(tf_dir, corpus_path, name=name, description=description)
+        result = convert_to_corpus(tf_dir, corpus_path, name=name, description=description)
+
+        job_manager.log(job_id, "Conversion complete.")
+        return result
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
@@ -176,6 +191,13 @@ async def create_conversion(
     claims = _claims(request)
     owner = claims.get("sub") if claims else None
 
+    # Minted up front (rather than reading `job.id` off the object
+    # `job_manager.submit()` returns) so the `fn` closure below can call
+    # `job_manager.log(job_id, ...)` from inside the worker thread --
+    # referencing the not-yet-returned `job` object here would race the
+    # executor, which can start running `fn` before `submit()` returns.
+    job_id = str(uuid.uuid4())
+
     _WORK_ROOT.mkdir(parents=True, exist_ok=True)
     work_dir = Path(tempfile.mkdtemp(prefix="job-", dir=str(_WORK_ROOT)))
     try:
@@ -183,6 +205,7 @@ async def create_conversion(
 
         try:
             job = job_manager.submit(
+                job_id=job_id,
                 source_format=source_format,
                 name=name,
                 owner=owner,
@@ -192,6 +215,7 @@ async def create_conversion(
                     source_format=source_format,
                     name=name,
                     description=description,
+                    job_id=job_id,
                 ),
             )
         except JobQueueFullError as exc:

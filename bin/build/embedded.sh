@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # embedded.sh
-# Shell equivalent of scripts/build/embedded.py
 #
 # Build wheels + embed into the demo's standalone Python runtime.
 # Used for DEMO / ADMIN (optionally with [full]).
@@ -9,7 +8,7 @@
 # For client opt-in full runtime: use client_runtime.sh
 #
 # Usage:
-#   ./scripts/build/embedded.sh [--platform P] [--clean] [--full]
+#   ./bin/build/embedded.sh [--platform P] [--clean] [--full]
 #
 
 set -euo pipefail
@@ -54,8 +53,8 @@ fi
 # 1. Build all workspace wheels (local dist)
 log "Building workspace wheels with uv..."
 mkdir -p "$DIST_DIR"
-run_cmd uv build --package corpora-shared --wheel "--out-dir=$DIST_DIR"
-run_cmd uv build --package corpora-client --wheel "--out-dir=$DIST_DIR"
+run_cmd uv build --package corpora-common --wheel "--out-dir=$DIST_DIR"
+run_cmd uv build --package corpora-mcp --wheel "--out-dir=$DIST_DIR"
 run_cmd uv build --package corpora-admin --wheel "--out-dir=$DIST_DIR"
 run_cmd uv build --wheel "--out-dir=$DIST_DIR"
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
 # client_runtime.sh
-# Shell equivalent of scripts/build/client_runtime.py
+# Shell equivalent of scripts/bin/client_runtime.py
 #
 # Builds the FULL runtime (with [full] extra + clean) for client opt-in.
 #
 # Usage:
-#   ./scripts/build/client_runtime.sh [--platform P]
+#   ./scripts/bin/client_runtime.sh [--platform P]
 #
 
 set -euo pipefail
@@ -20,7 +20,7 @@ Build the FULL Python runtime bundle for the consumer/client app opt-in.
 This always runs with --full --clean.
 
 See also:
-  ./scripts/build/embedded.sh --help
+  ./scripts/bin/embedded.sh --help
 EOD
   exit 0
 fi

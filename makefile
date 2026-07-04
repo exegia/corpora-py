@@ -23,7 +23,7 @@ define Comment
 	- Run `make setup` to install all dependencies.
 	- Run `make clean` to remove caches, build artifacts, and venv.
 	- Run `make build-wheel` to build workspace wheels into dist/.
-	- Run `make docker-up-corpora` / `make docker-up-demo` to start containers.
+	- Run `make docker-up-corpora` to start containers.
 	- Run `make publish` to bump version, tag, and trigger PyPI publish via CI.
 	- Run `make docker-publish` to build and push images to GHCR.
 endef
@@ -112,8 +112,8 @@ test: ## Run pytest.
 # ── Docker — local containers ───────────────────────────────────────────────
 
 .PHONY: docker-up-corpora
-docker-up-corpora: ## Start corpora-py platform containers (API, MCP, Caddy).
-	PYTHON_VERSION=$(PYTHON_VERSION) $(DOCKER_COMPOSE_CORPORA) up --build -d
+docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=false (local/demo use).
+	AUTH_REQUIRED=false PYTHON_VERSION=$(PYTHON_VERSION) $(DOCKER_COMPOSE_CORPORA) up --build -d
 
 .PHONY: docker-down-corpora
 docker-down-corpora: ## Stop corpora-py platform containers.
@@ -190,14 +190,18 @@ publish-dispatch: ## Dispatch publish workflow without a version bump.
 # ── Dev servers ───────────────────────────────────────────────────────────────
 
 .PHONY: dev
-dev: ## Start local Supabase stack + demo app (Vite + ElectroBun).
-	@chmod +x $(BIN)/start.sh $(BIN)/utils.sh
-	@$(BIN)/start.sh
+
+# Run dev servers, but only after ensuring dist/ exists
+dev: dist
+	@bun --cwd=demo concurrently -n vite,electron -c cyan,magenta -k "vite dev" "electrobun dev"
+
+# Build dist/ only if it's missing (real target = file-existence check)
+dist:
+	@bun --cwd=demo run vite:build
 
 .PHONY: dev-stop
-dev-stop: ## Stop local Supabase stack and dev processes.
-	@chmod +x $(BIN)/start.sh $(BIN)/stop.sh
-	@$(BIN)/start.sh --stop
+dev-stop: ## Stop dev processes.
+	@chmod +x $(BIN)/stop.sh
 	@$(BIN)/stop.sh
 
 # ── Help ──────────────────────────────────────────────────────────────────────

@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
 # bundle.sh
-# Shell equivalent of scripts/build/bundle.py
 #
 # Bundle a wheel (with optional [extra]) into a standalone Python runtime.
 # Also produces python-runtime-<plat>.tar.gz .
 #
 # Usage:
-#   ./scripts/build/bundle.sh <wheel.whl[extra]> [options]
+#   ./scripts/bin/bundle.sh <wheel.whl[extra]> [options]
 #
 # Options:
 #   --platform <key>
@@ -36,6 +35,28 @@ PLATFORM_KEY=""
 DEST_DIR="demo/build/lib/python"
 CACHE_DIR=".cache/python-standalone"
 FIND_LINKS=""
+
+resolve_path() {
+  # Resolve a path to absolute form even if it doesn't exist (portable, no realpath -m)
+  local target="$1"
+  if cd "$target" 2>/dev/null; then
+    pwd
+  else
+    # Directory doesn't exist: resolve parent, then re-append the final component
+    local parent base
+    parent="$(dirname "$target")"
+    base="$(basename "$target")"
+    if cd "$parent" 2>/dev/null; then
+      printf '%s/%s\n' "$(pwd)" "$base"
+    else
+      # Parent doesn't exist either: fall back to a normalized absolute path
+      case "$target" in
+        /*) printf '%s\n' "$target" ;;
+        *)  printf '%s/%s\n' "$(pwd)" "$target" ;;
+      esac
+    fi
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -96,8 +117,8 @@ if [[ -n "$extra_part" ]]; then
   install_target="${wheel_path}${extra_part}"
 fi
 
-dest="$(cd "$DEST_DIR" 2>/dev/null && pwd || echo "$(realpath -m "$DEST_DIR")")"
-cache="$(cd "$CACHE_DIR" 2>/dev/null && pwd || echo "$(realpath -m "$CACHE_DIR")")"
+dest="$(resolve_path "$DEST_DIR")"
+cache="$(resolve_path "$CACHE_DIR")"
 
 log "Platform: $PLATFORM_KEY"
 log "Python:   $PYTHON_VERSION"

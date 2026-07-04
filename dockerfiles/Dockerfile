@@ -52,8 +52,10 @@ LABEL org.opencontainers.image.title="corpora-py" \
       org.opencontainers.image.description="Corpora platform — combined MCP server + admin conversion API" \
       org.opencontainers.image.source="https://github.com/exegia/corpora-py"
 
+# libxml2/libxslt1.1 for lxml/beautifulsoup4, git for convert_to_corpus()'s
+# `.corpus` archive version-history snapshot (admin/converters/convert_to_corpus.py).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libxml2 libxslt1.1 \
+    libxml2 libxslt1.1 git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv
