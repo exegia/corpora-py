@@ -1,0 +1,62 @@
+# Dockerfile.client
+# Lightweight container running the cf-mcp MCP server (SSE / HTTP transport).
+# Installs only corpora-client + corpora-shared — no admin/text-fabric weight.
+#
+# Build:
+#   docker build -f Dockerfile.client -t corpora-client .
+#
+# Run (SSE on port 8000):
+#   docker run -p 8000:8000 \
+#     -e ENVIRONMENT=production \
+#     -e PROJECT_REF=<your-supabase-ref> \
+#     -e SUPABASE_SECRET_KEY=<key> \
+#     -v ~/.exegia/datasets:/data/datasets:ro \
+#     corpora-client \
+#     cf-mcp --corpus /data/datasets/BHSA --name BHSA --sse 8000
+
+# ── Stage 1: install dependencies into a virtual environment ─────────────────
+FROM python:3.13-slim AS builder
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+WORKDIR /app
+
+# Copy workspace root + the packages we need to build
+COPY pyproject.toml uv.lock* README.md ./
+COPY packages/shared packages/shared
+COPY packages/client  packages/client
+
+# Build wheels for just these two packages
+RUN uv build --package corpora-shared-py --wheel --out-dir /wheels/ && \
+    uv build --package corpora-client-py --wheel --out-dir /wheels/
+
+# Install into a dedicated venv (no dev deps, frozen)
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --find-links /wheels \
+        corpora-client-py
+
+# ── Stage 2: minimal runtime image ───────────────────────────────────────────
+FROM python:3.13-slim
+
+LABEL org.opencontainers.image.title="corpora-client" \
+      org.opencontainers.image.description="Corpora MCP server (client package)" \
+      org.opencontainers.image.source="https://github.com/exegia/corpora-py"
+
+# Copy only the venv from builder
+COPY --from=builder /opt/venv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    ENVIRONMENT=production
+
+# Datasets are mounted at runtime — keep image stateless
+VOLUME ["/data/datasets"]
+
+EXPOSE 8000
+
+# Default: stdio transport (for Claude Desktop / local MCP clients).
+# Override CMD or pass --sse <port> for HTTP/SSE transport.
+ENTRYPOINT ["cf-mcp"]
+CMD ["--help"]

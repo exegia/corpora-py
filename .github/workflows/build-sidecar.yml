@@ -43,7 +43,7 @@ on:
 jobs:
   # ── 1. Build all workspace wheels once on a fast Linux runner ───────────────
   build-wheel:
-    name: Build wheel
+    name: Build wheels
     runs-on: ubuntu-latest
 
     steps:

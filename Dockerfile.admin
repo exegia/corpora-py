@@ -1,0 +1,68 @@
+# Dockerfile.admin
+# Full-featured container for corpus conversion / admin tools.
+# Includes corpora-admin[full] with text-fabric, EPUB/HTML converters, etc.
+#
+# Build:
+#   docker build -f Dockerfile.admin -t corpora-admin .
+#
+# Run:
+#   docker run -it \
+#     -e ENVIRONMENT=production \
+#     -e PROJECT_REF=<your-supabase-ref> \
+#     -e SUPABASE_SECRET_KEY=<key> \
+#     -v ~/.exegia/datasets:/data/datasets \
+#     -v ~/my-epub-sources:/data/sources:ro \
+#     corpora-admin \
+#     python -m admin.utils.convert_epub_to_tf /data/sources/book.epub /data/datasets/output
+
+# ── Stage 1: install dependencies into a virtual environment ─────────────────
+FROM python:3.13-slim AS builder
+
+# Install uv + build tools (text-fabric may need Cython / gcc)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy workspace root + all packages (admin depends on shared)
+COPY pyproject.toml uv.lock* README.md ./
+COPY packages/shared packages/shared
+COPY packages/admin  packages/admin
+
+# Build wheels
+RUN uv build --package corpora-shared-py --wheel --out-dir /wheels/ && \
+    uv build --package corpora-admin-py  --wheel --out-dir /wheels/
+
+# Install into a dedicated venv with [full] extra for text-fabric
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --find-links /wheels \
+        "corpora-admin-py[full]"
+
+# ── Stage 2: runtime image ────────────────────────────────────────────────────
+FROM python:3.13-slim
+
+LABEL org.opencontainers.image.title="corpora-admin" \
+      org.opencontainers.image.description="Corpora admin and corpus conversion tools" \
+      org.opencontainers.image.source="https://github.com/exegia/corpora-py"
+
+# Runtime deps for lxml / beautifulsoup4
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libxml2 \
+    libxslt1.1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    ENVIRONMENT=production
+
+VOLUME ["/data/datasets", "/data/sources"]
+
+# Default: show available admin modules
+CMD ["python", "-c", "import admin; print('corpora-admin ready. Available: admin.utils.*')"]

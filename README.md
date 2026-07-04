@@ -212,6 +212,10 @@ in Python:
 pip install corpora-admin
 ```
 
+```bash
+pip install "corpora-admin-py[full]"
+```
+
 ```python
 from admin.converters import convert_epub_to_tf
 from admin.converters.convert_to_corpus import convert_to_corpus

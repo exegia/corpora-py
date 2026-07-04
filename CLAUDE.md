@@ -102,7 +102,12 @@ Code is organized into decoupled workspace packages under `packages/`:
   in either would create a dependency between packages that otherwise don't know about each
   other.
 
-### Module layers
+| Package | PyPI name | Source | Purpose |
+|---|---|---|---|
+| Shared | `corpora-shared-py` | `packages/shared/src/shared/` | Auth, Supabase client, models, schemas |
+| Client | `corpora-client-py` | `packages/client/src/client/` | FastMCP server + `cf-mcp` CLI |
+| Admin  | `corpora-admin-py`  | `packages/admin/src/admin/`  | EPUB/HTML → Text-Fabric converters |
+| Umbrella | `corpora-py` | (no source) | Depends on all three; used by sidecar/demo |
 
 **`corpora_mcp.server`** — The primary user-facing surface. A FastMCP server exposing 11 tools
 to AI clients (Claude Desktop, etc.). The `cf-mcp` CLI entry point (`corpora_mcp.server:main`)
