@@ -1,27 +1,39 @@
 {
   "semi": false,
+  "bracketSameLine": true,
+  "bracketSpacing": true,
+  "quoteProps": "preserve",
+  "singleAttributePerLine": true,
   "singleQuote": false,
   "useTabs": false,
-  "tabWidth": 2,
+  "tabWidth": 4,
   "trailingComma": "none",
-  "printWidth": 92,
-  "proseWrap": "always",
+  "printWidth": 120,
+  "proseWrap": "preserve",
   "arrowParens": "always",
   "embeddedLanguageFormatting": "off",
-  "overrides":
-    [
-      {
-        "files": "**/*.md",
-        "options":
-          {
-            "tabWidth": 4,
-            "singleQuote": false,
-            "trailingComma": "all",
-            "arrowParens": "avoid",
-            "printWidth": 92,
-            "proseWrap": "always",
-            "embeddedLanguageFormatting": "off"
-          }
+  "overrides": [
+    {
+      "files": [
+        "**/*.json"
+      ],
+      "options": {
+        "parser": "json5",
+        "bracketSameLine": true,
+        "quoteProps": "consistent"
       }
-    ]
+    },
+    {
+      "files": "**/*.md",
+      "options": {
+        "tabWidth": 4,
+        "singleQuote": false,
+        "trailingComma": "all",
+        "arrowParens": "avoid",
+        "printWidth": 120,
+        "proseWrap": "always",
+        "embeddedLanguageFormatting": "off"
+      }
+    }
+  ]
 }

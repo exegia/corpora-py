@@ -11,11 +11,7 @@ runs:
     - name: Build all workspace packages
       shell: bash
       run: |
-        # Build each workspace package separately so they can be published independently
-        uv build --package corpora-shared-py --wheel --out-dir dist/
-        uv build --package corpora-client-py --wheel --out-dir dist/
-        uv build --package corpora-admin-py  --wheel --out-dir dist/
-        # Also build the umbrella package (corpora-py) for sidecar/demo installs
+        # build the umbrella package (corpora-py) for sidecar/demo installs
         uv build --wheel --out-dir dist/
         echo "Built wheels:"
         ls -lh dist/*.whl
