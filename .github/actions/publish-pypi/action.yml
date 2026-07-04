@@ -1,15 +1,15 @@
 name: "Publish to PyPI"
-description: "Downloads artifacts and publishes all workspace wheels to PyPI"
+description: "Download artifact and publish all workspace wheel to PyPI"
 runs:
   using: "composite"
   steps:
     - name: Install uv
-      uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      uses: astral-sh/setup-uv@v5 # v5
       with:
         enable-cache: true
 
     - name: Download artifact
-      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      uses: actions/download-artifact@v4 # v4
       with:
         name: dist
         path: dist/
