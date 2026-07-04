@@ -45,6 +45,11 @@ class JobStatus(StrEnum):
 
 _TERMINAL_STATUSES = (JobStatus.SUCCEEDED, JobStatus.FAILED)
 
+# Coarse stage logging only fires a handful of times per job (see
+# `ConversionJob.logs`'s docstring) -- this cap is a defensive backstop, not
+# a real limit anything is expected to hit.
+_MAX_LOG_LINES = 50
+
 
 class JobQueueFullError(Exception):
     """Raised by `JobManager.submit` when too many jobs are queued/running.
@@ -66,6 +71,13 @@ class ConversionJob:
     finished_at: float | None = None
     result_path: Path | None = None
     error: str | None = None
+    # Coarse, human-readable stage markers (e.g. "Parsing source...",
+    # "Building .corpus archive...") appended by `JobManager.log()` from
+    # `_run_conversion` (see `api.py`). Not real per-unit progress -- the
+    # conversion pipeline has no progress hook (see this module's own
+    # docstring) -- just enough for a client to show *something* moving
+    # besides a stalled-looking progress bar. Capped at `_MAX_LOG_LINES`.
+    logs: list[str] = field(default_factory=list)
     # The submitter's JWT `sub` claim (see `corpora_py.auth.AuthMiddleware`),
     # or `None` if the job was created while auth was disabled. Not exposed
     # via `to_dict()` -- it's only used by `is_visible_to()` for access
@@ -82,6 +94,7 @@ class ConversionJob:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "error": self.error,
+            "last_log": self.logs[-1] if self.logs else None,
             "download_ready": self.status == JobStatus.SUCCEEDED and self.result_path is not None,
         }
 
@@ -155,6 +168,7 @@ class JobManager:
         name: str,
         fn: Callable[[], Path],
         owner: str | None = None,
+        job_id: str | None = None,
     ) -> ConversionJob:
         """Register a new job and hand `fn` to the worker pool.
 
@@ -165,9 +179,17 @@ class JobManager:
 
         `owner` should be the submitter's JWT `sub` claim (or `None` if auth
         is disabled) -- see `ConversionJob.is_visible_to()`.
+
+        `job_id`, if given, is used as the job's id instead of minting a new
+        one. This lets a caller (see `api.py`'s `create_conversion`) know the
+        id *before* `fn` runs, so `fn` can call `job_manager.log(job_id, ...)`
+        from inside the worker thread -- referencing the `ConversionJob`
+        object returned by this call from within `fn`'s closure would be a
+        race, since the executor can start running `fn` before this method
+        returns it.
         """
         job = ConversionJob(
-            id=str(uuid.uuid4()), source_format=source_format, name=name, owner=owner
+            id=job_id or str(uuid.uuid4()), source_format=source_format, name=name, owner=owner
         )
         with self._lock:
             pending = sum(1 for j in self._jobs.values() if j.status not in _TERMINAL_STATUSES)
@@ -255,6 +277,24 @@ class JobManager:
             )
             job.status = JobStatus.FAILED
             job.finished_at = time.time()
+
+    def log(self, job_id: str, message: str) -> None:
+        """Append a coarse stage message to a job's log, if it still exists.
+
+        Called from a worker thread (see `_run_conversion` in `api.py`)
+        while other threads may be reading `job.logs` via `get()`/`to_dict()`
+        -- guarded by the same lock as every other mutation. Silently a
+        no-op for an unknown `job_id` rather than raising: a job can only
+        reach this codepath through `JobManager.submit()`, so a miss here
+        would mean the job was somehow evicted mid-run, which nothing does
+        today, but this shouldn't be able to crash a worker thread either way.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            job.logs.append(message)
+            del job.logs[:-_MAX_LOG_LINES]
 
     def get(self, job_id: str) -> ConversionJob | None:
         with self._lock:

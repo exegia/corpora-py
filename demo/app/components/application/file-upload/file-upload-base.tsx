@@ -2,7 +2,7 @@ import type { ComponentProps, ComponentPropsWithRef } from "react";
 import { useId, useMemo, useRef, useState } from "react";
 import type { FileIcon } from "@untitledui/file-icons";
 import { FileIcon as FileTypeIcon } from "@untitledui/file-icons";
-import { CheckCircle, Trash01, UploadCloud02, XCircle } from "@untitledui/icons";
+import { CheckCircle, DownloadCloud02, Loading02, Trash01, UploadCloud02, XCircle } from "@untitledui/icons";
 import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
@@ -249,6 +249,28 @@ export interface FileListItemProps {
     progress: number;
     /** Whether the file failed to upload. */
     failed?: boolean;
+    /**
+     * True once the server-side step finished but a client-side follow-up
+     * (e.g. writing the result to disk) still needs the user's input.
+     * Renders a distinct "needs action" state -- separate from `failed` --
+     * so a step that can be retried on its own doesn't push the user toward
+     * "Try again", which would redo the whole (already-successful) upload.
+     */
+    needsAction?: boolean;
+    /** Label for the `needsAction` button. @default "Save" */
+    actionLabel?: string;
+    /** Called when the `needsAction` button is clicked. */
+    onAction?: () => void;
+    /**
+     * True while `progress` is a coarse in-flight estimate rather than real
+     * completion (the server has no per-unit progress hook -- see
+     * `packages/admin/CLAUDE.md`). Renders an animated, indeterminate fill
+     * instead of trusting the number at face value, since a bar frozen at a
+     * fixed percentage for minutes reads as stalled.
+     */
+    pending?: boolean;
+    /** Status line shown instead of the file size, e.g. a server-reported stage. */
+    statusText?: string;
     /** The type of the file. */
     type?: ComponentProps<typeof FileIcon>["type"];
     /** The class name of the file list item. */
@@ -319,27 +341,56 @@ export const FileListItemProgressBar = ({ name, size, progress, failed, type, fi
     );
 };
 
-export const FileListItemProgressFill = ({ name, size, progress, failed, type, fileIconVariant, onDelete, onRetry, className }: FileListItemProps) => {
-  const isComplete = progress === 100;
+export const FileListItemProgressFill = ({
+    name,
+    size,
+    progress,
+    failed,
+    needsAction,
+    actionLabel = "Save",
+    onAction,
+    pending,
+    statusText,
+    type,
+    fileIconVariant,
+    onDelete,
+    onRetry,
+    className,
+}: FileListItemProps) => {
+  const isComplete = progress === 100 && !needsAction;
   const { theme } = useTheme();
   const isDark = useMemo(() => theme === 'dark', [theme])
 
     return (
         <motion.li layout="position" className={cx("relative flex gap-3 overflow-hidden rounded-xl bg-primary p-4", className)}>
-            {/* Progress fill. */}
-            <div
-                style={{ transform: `translateX(-${100 - progress}%)` }}
-                className={cx("absolute inset-0 size-full bg-black/10 dark:bg-neutral-700/50 transition duration-75 ease-linear", isComplete && "opacity-0")}
-                role="progressbar"
-                aria-valuenow={progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-            />
+            {/* Progress fill -- while `pending`, the server only reports coarse
+                stage transitions, not a real percentage, so an animated sweep
+                communicates "still working" honestly instead of a bar frozen
+                at a fixed number that reads as stalled. */}
+            {pending ? (
+                <motion.div
+                    className="absolute inset-y-0 left-0 w-1/3 rounded-[inherit] bg-black/10 dark:bg-neutral-700/50"
+                    animate={{ x: ["-100%", "300%"] }}
+                    transition={{ repeat: Infinity, duration: 1.1, ease: "easeInOut" }}
+                    role="progressbar"
+                    aria-valuetext="In progress"
+                />
+            ) : (
+                <div
+                    style={{ transform: `translateX(-${100 - progress}%)` }}
+                    className={cx("absolute inset-0 size-full bg-black/10 dark:bg-neutral-700/50 transition duration-75 ease-linear", isComplete && "opacity-0")}
+                    role="progressbar"
+                    aria-valuenow={progress}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                />
+            )}
             {/* Inner ring. */}
             <div
                 className={cx(
                     "absolute inset-0 size-full rounded-[inherit] ring-1 ring-secondary/40 transition duration-100 ease-linear ring-inset",
                     failed && "ring-2 ring-error",
+                    needsAction && "ring-2 ring-[var(--color-fg-warning-primary)]",
                 )}
             />
             <FileTypeIcon className="size-10 shrink-0" type={"zip"} variant={fileIconVariant ?? "default"} theme={isDark ? 'light' : 'dark'} />
@@ -350,16 +401,25 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
               <p className={cx("truncate text-sm font-medium text-pretty", (progress == 0 || progress != 100) && "font-bold")}>{name}</p>
 
                         <div className="mt-0.5 flex items-center gap-2">
-                <p className={cx("text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>{failed ? "Upload failed, please try again" : getReadableFileSize(size)}</p>
+                <p className={cx("truncate text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>
+                    {failed ? "Conversion failed, please try again" : needsAction ? "Ready -- couldn't save automatically" : (statusText ?? getReadableFileSize(size))}
+                </p>
 
                             {!failed && (
                                 <>
-                                    <hr className="h-3 w-px rounded-t-full rounded-b-full border-none bg-border-primary" />
-                                    <div className="flex items-center gap-1">
+                                    <hr className="h-3 w-px shrink-0 rounded-t-full rounded-b-full border-none bg-border-primary" />
+                                    <div className="flex shrink-0 items-center gap-1">
                                         {isComplete && <CheckCircle className="size-4 stroke-[2.5px] text-fg-success-primary" />}
-                                        {!isComplete && <UploadCloud02 className="size-4 stroke-[2.5px] text-fg-tertiary" />}
+                                        {needsAction && <DownloadCloud02 className="size-4 stroke-[2.5px] text-fg-warning-primary" />}
+                                        {!isComplete && !needsAction && (
+                                            pending
+                                                ? <Loading02 className="size-4 animate-spin stroke-[2.5px] text-fg-tertiary" />
+                                                : <UploadCloud02 className="size-4 stroke-[2.5px] text-fg-tertiary" />
+                                        )}
 
-                                        <p className={cx("text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>{progress}%</p>
+                                        {!needsAction && (
+                                            <p className={cx("text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>{progress}%</p>
+                                        )}
                                     </div>
                                 </>
                             )}
@@ -369,6 +429,12 @@ export const FileListItemProgressFill = ({ name, size, progress, failed, type, f
                     {failed && (
                         <Button color="link-destructive" size="sm" onClick={onRetry} className="mt-1.5">
                             Try again
+                        </Button>
+                    )}
+
+                    {!failed && needsAction && (
+                        <Button color="link-color" size="sm" onClick={onAction} className="mt-1.5">
+                            {actionLabel}
                         </Button>
                     )}
                 </div>

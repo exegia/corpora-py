@@ -8,7 +8,7 @@ import { useUpload } from "../hooks/use-upload"
 const ACCEPTED_EXTENSIONS = ".epub,.html,.htm,.xml,.tei,.pdf,.txt,.text"
 
 export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
-  const { uploads, uploadFile, deleteUpload, retryUpload } = useUpload()
+  const { uploads, uploadFile, deleteUpload, retryUpload, saveUpload } = useUpload()
 
   const handleDropFiles = (files: FileList) => {
     Array.from(files).forEach((file) => void uploadFile(file))
@@ -31,6 +31,19 @@ export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
             size={upload.size}
             progress={upload.progress}
             failed={upload.status === "error"}
+            // "ready" = the server finished converting and the `.corpus`
+            // bytes are already downloaded, but the local save-to-disk step
+            // hasn't completed yet -- see use-upload.ts's `trySave`.
+            needsAction={upload.status === "ready"}
+            actionLabel="Save file"
+            onAction={() => saveUpload(upload.id)}
+            // The server has no per-unit progress hook (see
+            // packages/admin/CLAUDE.md) -- "queued"/"converting" only ever
+            // report coarse stage transitions, so the bar shows an
+            // indeterminate animation rather than a number that would sit
+            // frozen for the whole conversion.
+            pending={upload.status === "queued" || upload.status === "converting"}
+            statusText={upload.lastLog ?? undefined}
             fileIconVariant="gray"
             className="bg-surface border border-utility-neutral-300 dark:border-utility-neutral-800"
             onDelete={() => deleteUpload(upload.id)}

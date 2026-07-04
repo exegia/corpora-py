@@ -112,8 +112,8 @@ test: ## Run pytest.
 # ── Docker — local containers ───────────────────────────────────────────────
 
 .PHONY: docker-up-corpora
-docker-up-corpora: ## Start corpora-py platform containers (API, MCP, Caddy).
-	PYTHON_VERSION=$(PYTHON_VERSION) $(DOCKER_COMPOSE_CORPORA) up --build -d
+docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=false (local/demo use).
+	AUTH_REQUIRED=false PYTHON_VERSION=$(PYTHON_VERSION) $(DOCKER_COMPOSE_CORPORA) up --build -d
 
 .PHONY: docker-down-corpora
 docker-down-corpora: ## Stop corpora-py platform containers.

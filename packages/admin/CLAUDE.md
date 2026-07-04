@@ -134,6 +134,15 @@ contract both the Corpora and Exegia apps parse.
 
 ## Known gaps
 
+- **`ConversionJob.logs`/`last_log` (`services/jobs.py`) are fixed checkpoint
+  strings, not real progress.** `_run_conversion` (`services/api.py`) calls
+  `job_manager.log()` three times per job (parse start, TF-dataset-built,
+  done) so `/convert/{id}/ws` clients have *something* to show besides a
+  status stuck on `"running"` for minutes. `converter()` and
+  `convert_to_corpus()` still have no mid-call progress hook — adding real
+  per-unit progress needs threading a callback through every
+  `_{format}_to_tf.py` converter and `_walker.convert_document()`, not just
+  more log calls here.
 - **No `_xml_to_tf.py`.** `XmlParser` exists (`admin.parsers`) but there's no
   matching Text-Fabric converter — generic XML has no fixed node-type
   vocabulary to map onto, unlike TEI's `<div>`/`<p>` convention. Add one the

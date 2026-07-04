@@ -50,10 +50,12 @@ LABEL org.opencontainers.image.title="corpora-admin" \
       org.opencontainers.image.description="Corpora admin and corpus conversion tools" \
       org.opencontainers.image.source="https://github.com/exegia/corpora-py"
 
-# Runtime deps for lxml / beautifulsoup4
+# Runtime deps: libxml2/libxslt1.1 for lxml/beautifulsoup4, git for
+# convert_to_corpus()'s `.corpus` archive version-history snapshot.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libxslt1.1 \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv

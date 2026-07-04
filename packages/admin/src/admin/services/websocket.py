@@ -53,14 +53,21 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
 
     await websocket.accept()
     last_status: JobStatus | None = None
+    last_log_count = 0
     try:
         while True:
             job = job_manager.get(job_id)
             if job is None:
                 break
-            if job.status != last_status:
+            # Also re-send on a new log line even when `status` hasn't
+            # changed -- `job.logs` grows during a single `running` stretch
+            # (see `_run_conversion` in `api.py`) and a client watching for
+            # "is this still alive" needs those in-between pushes, not just
+            # the coarse queued/running/succeeded/failed transitions.
+            if job.status != last_status or len(job.logs) != last_log_count:
                 await websocket.send_json(job.to_dict())
                 last_status = job.status
+                last_log_count = len(job.logs)
             if job.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
                 break
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)
