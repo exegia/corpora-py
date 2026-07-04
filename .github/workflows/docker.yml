@@ -34,6 +34,7 @@ on:
       - "packages/**"
       - "src/**"
       - "pyproject.toml"
+      - ".github/workflows/docker.yml"
 
   workflow_dispatch:
     inputs:
@@ -82,8 +83,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # ── Login to GHCR ─────────────────────────────────────────────────────
+      # Also needed on PRs so cache-from can read the (private) buildcache.
+      # Fork PRs get a read-only token, which is fine: cache-to is disabled
+      # for PRs below.
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -122,6 +125,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.push) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Layer cache: reuse layers across runs via GHCR cache
+          # Layer cache: reuse layers across runs via GHCR cache.
+          # Writing the cache needs packages:write, which PRs don't reliably
+          # have (and PR layers shouldn't pollute the shared cache), so
+          # cache-to is disabled on pull requests.
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:buildcache
-          cache-to:   type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:buildcache,mode=max
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref=ghcr.io/{0}/{1}:buildcache,mode=max', github.repository_owner, matrix.image.name) || '' }}
