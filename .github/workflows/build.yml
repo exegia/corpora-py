@@ -1,0 +1,58 @@
+name: Build and test containers
+
+on:
+  push:
+
+  pull_request:
+    branches:
+      - master
+  schedule:
+    # Every Sunday at 8:05 UTC
+    - cron: "5 8 * * 0"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [313, 314]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Spin up container
+      run: |
+        # Create .env (gitignored) with the matrix Python version so docker-compose
+        # and any tooling that reads it see the correct value.
+        echo "PYTHON_VERSION=${{ matrix.python-version }}" > .env
+        echo "Building container for Python ${{ matrix.python-version }}."
+        docker compose up -d
+
+    - name: Wait and check the health of the container
+      run: |
+        attempts=0
+
+        while [ $attempts -lt 20 ]; do
+          # Use a TCP connection check so we don't hang on the SSE stream
+          if bash -c '</dev/tcp/localhost/8000' 2>/dev/null; then
+            echo "Port 8000 is reachable — container is up!"
+            exit 0
+          fi
+
+          attempts=$((attempts+1))
+          echo "Attempt $attempts: port 8000 not yet reachable, waiting 3s..."
+          sleep 3
+        done
+
+        echo "Failed after $attempts attempts"
+        docker compose logs
+        exit 1

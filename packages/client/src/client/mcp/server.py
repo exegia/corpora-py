@@ -1,6 +1,7 @@
 """FastMCP server exposing all 11 Context-Fabric corpus tools."""
 
 import argparse
+import logging
 import time
 import uuid
 from typing import Any
@@ -668,15 +669,16 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.verbose:
-        import logging
-
         logging.basicConfig(level=logging.DEBUG)
 
     if args.corpora:
         names = args.names or []
         for i, path in enumerate(args.corpora):
             name = names[i] if i < len(names) else None
-            corpus_manager.load(path, name=name, features=args.features)
+            try:
+                corpus_manager.load(path, name=name, features=args.features)
+            except FileNotFoundError as exc:
+                logging.warning("Corpus not loaded: %s", exc)
 
     if args.sse:
         mcp.run(transport="sse", host=args.host, port=args.sse)
