@@ -1,4 +1,3 @@
-// File: app.ts
 import { PyBridge } from 'pybridge';
 import "bun";
 
@@ -8,17 +7,12 @@ interface API {
 }
 
 
-class PythonRuntime extends PyBridge {
-
-  private load = () => {
-    const bridge = new PyBridge({ python: 'python3', cwd: __dirname });
+export async function wordSizes(words: string[]): Promise<number[]> {
+  const bridge = new PyBridge({ python: 'python3', cwd: __dirname });
+  try {
+    const api = bridge.controller<API>('script.py');
+    return await api.word_sizes(words);
+  } finally {
+    bridge.close();
   }
-
 }
-
-const api = bridge.controller<API>('script.py');
-const sizes = await api.word_sizes(['hello', 'world']);
-
-expect(sizes).toEqual([5, 5]);
-
-bridge.close();
