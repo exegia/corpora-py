@@ -3,14 +3,17 @@ import sys
 import json
 import subprocess
 
-MAJOR_BUMP_THRESHOLD = 1500  # Number of lines changed to trigger a major bump for features
-MINOR_BUMP_THRESHOLD = 1000  # Number of lines changed to trigger a minor bump for unspecified types
+MAJOR_BUMP_THRESHOLD = int(os.environ.get('MAJOR_BUMP_THRESHOLD', 1500))
+MINOR_BUMP_THRESHOLD = int(os.environ.get('MINOR_BUMP_THRESHOLD', 1000))
 
 def run_cmd(cmd_list, allow_failure=False):
     result = subprocess.run(cmd_list, capture_output=True, text=True)
-    if result.returncode != 0 and not allow_failure:
-        print(f"Error running cmd: {' '.join(cmd_list)}\n{result.stderr}")
-        sys.exit(result.returncode)
+    if result.returncode != 0:
+        if allow_failure:
+            print(f"Warning: Command failed: {' '.join(cmd_list)}\n{result.stderr}")
+        else:
+            print(f"Error running cmd: {' '.join(cmd_list)}\n{result.stderr}")
+            sys.exit(result.returncode)
     return result.stdout.strip()
 
 def main():
@@ -62,27 +65,20 @@ def main():
     tags_output = run_cmd(["git", "tag", "-l", "v*"])
     tags = [t for t in tags_output.split('\n') if t]
     
-    current_major, current_minor, current_patch = 0, 0, 0
+    current_version = (0, 0, 0)
     for t in tags:
         try:
-            # Basic parsing of vX.Y.Z-something
             clean_tag = t.lstrip('v')
-            # Extract only the base version, split by - or +
             base_version = clean_tag.split('-')[0].split('+')[0]
             parts = base_version.split('.')
             if len(parts) >= 3:
-                major_ver = int(parts[0])
-                minor_ver = int(parts[1])
-                patch_ver = int(parts[2])
-                if major_ver > current_major:
-                    current_major, current_minor, current_patch = major_ver, minor_ver, patch_ver
-                elif major_ver == current_major and minor_ver > current_minor:
-                    current_minor, current_patch = minor_ver, patch_ver
-                elif major_ver == current_major and minor_ver == current_minor and patch_ver > current_patch:
-                    current_patch = patch_ver
+                parsed_version = (int(parts[0]), int(parts[1]), int(parts[2]))
+                if parsed_version > current_version:
+                    current_version = parsed_version
         except (ValueError, IndexError):
             pass
             
+    current_major, current_minor, current_patch = current_version
     if bump_type == "major":
         current_major += 1
         current_minor = 0
