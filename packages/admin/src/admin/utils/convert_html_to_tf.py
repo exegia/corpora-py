@@ -28,7 +28,6 @@ Features:
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
@@ -48,8 +47,8 @@ class HTMLToTFConverter:
 
     def __init__(
         self,
-        input_dir: Union[str, Path],
-        output_dir: Union[str, Path],
+        input_dir: str | Path,
+        output_dir: str | Path,
         corpus_name: str = "HTMLCorpus",
         version: str = "1.0",
         tokenize: bool = True,
@@ -168,7 +167,7 @@ class HTMLToTFConverter:
         self.doc_index += 1
 
         # Read HTML content
-        with open(html_file, "r", encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         # Parse HTML
@@ -184,7 +183,7 @@ class HTMLToTFConverter:
         # End document node
         self.cv.terminate("document")
 
-    def _walk_element(self, element: Union[Tag, NavigableString], depth: int = 0):
+    def _walk_element(self, element: Tag | NavigableString, depth: int = 0):
         """
         Recursively walk through HTML elements.
 
@@ -246,7 +245,7 @@ class HTMLToTFConverter:
             self.cv.feature("text", text)
             self.cv.terminate("word")
 
-    def _tokenize_text(self, text: str) -> List[str]:
+    def _tokenize_text(self, text: str) -> list[str]:
         """
         Tokenize text into words.
 
@@ -310,7 +309,7 @@ class AdvancedHTMLToTFConverter(HTMLToTFConverter):
         self.metadata = {}
 
         # Read and parse HTML
-        with open(html_file, "r", encoding="utf-8") as f:
+        with open(html_file, encoding="utf-8") as f:
             html_content = f.read()
 
         soup = BeautifulSoup(html_content, "html.parser")
@@ -349,7 +348,7 @@ class AdvancedHTMLToTFConverter(HTMLToTFConverter):
                 self.metadata[f"meta_{name}"] = content
 
     def _walk_element_advanced(
-        self, element: Union[Tag, NavigableString], depth: int = 0
+        self, element: Tag | NavigableString, depth: int = 0
     ):
         """Walk through HTML with advanced semantic handling."""
         if isinstance(element, NavigableString):
@@ -445,8 +444,8 @@ class AdvancedHTMLToTFConverter(HTMLToTFConverter):
 
 
 def convert_html_to_tf(
-    input_dir: Union[str, Path],
-    output_dir: Union[str, Path],
+    input_dir: str | Path,
+    output_dir: str | Path,
     corpus_name: str = "HTMLCorpus",
     version: str = "1.0",
     advanced: bool = False,
@@ -519,9 +518,9 @@ if __name__ == "__main__":
         print("\n✅ Success!")
         print(f"TF files created at: {tf_path}")
         print("\nYou can now load this corpus with Context-Fabric:")
-        print(f"  import cfabric")
+        print("  import cfabric")
         print(f"  CF = cfabric.Fabric('{tf_path}')")
-        print(f"  api = CF.loadAll()")
+        print("  api = CF.loadAll()")
 
     except Exception as e:
         print(f"\n❌ Error: {e}")

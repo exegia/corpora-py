@@ -6,7 +6,8 @@ content, and tracks extraction progress via a simple callback.
 import re
 import tempfile
 import urllib.request
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import ebooklib
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -139,10 +140,10 @@ def _clean_html(html_bytes: bytes) -> str:
                 node.replace_with(cleaned)
 
     # 5. Drop tags that are now empty (no text, no children) except void elements.
-    _VOID = {"br", "hr", "img"}
+    void_tags = {"br", "hr", "img"}
     for tag in reversed(soup.find_all(True)):
         if (
-            tag.name not in _VOID
+            tag.name not in void_tags
             and not tag.get_text(strip=True)
             and not tag.find("img")
         ):
