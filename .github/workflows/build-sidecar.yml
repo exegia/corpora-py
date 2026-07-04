@@ -1,7 +1,7 @@
 name: Build Sidecar
 
 # Builds corpora-py as a signed, notarized Python bundle for each platform.
-# The resulting zip archives are intended to be embedded as resources in a
+# The resulting zip archives are intended to be embedded as lib in a
 # Tauri application (see https://v2.tauri.app/develop/sidecar/).
 #
 # Note: Demo/ElectroBun embedded Python bundling lives in root scripts/

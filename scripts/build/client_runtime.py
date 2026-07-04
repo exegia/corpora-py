@@ -23,7 +23,11 @@ from pathlib import Path
 _here = Path(__file__).resolve().parent.parent.parent   # repo root
 sys.path.insert(0, str(_here / "scripts"))
 
+<<<<<<< HEAD
 from build.embedded import main as embedded_main
+=======
+from build.embedded import main as embedded_main  # noqa: E402
+>>>>>>> origin/dev
 
 
 def main():

@@ -7,6 +7,10 @@ from pathlib import Path
 from .env_vars import PLATFORM_MAP
 from .helpers import run
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/dev
 def create_unsigned_archive(python_dir: Path, out_dir: Path, platform_key: str) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     archive = out_dir / f"corpora-py-{platform_key}.zip"

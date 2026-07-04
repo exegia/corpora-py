@@ -2,6 +2,7 @@ import enum
 
 # ── Enumerations ──────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 class BookCategory(str, enum.Enum):
 	BIBLE = "bible"
 	QURAN = "quran"
@@ -37,3 +38,40 @@ class SectionType(str, enum.Enum):
 	INDEX = "index"
 	GLOSSARY = "glossary"
 	OTHER = "other"
+=======
+class BookCategory(enum.StrEnum):
+    BIBLE = "bible"
+    QURAN = "quran"
+    TANAKH = "tanakh"
+    COMMENTARY = "commentary"
+    LEXICON = "lexicon"
+    DICTIONARY = "dictionary"
+    DEVOTIONAL = "devotional"
+    THEOLOGY = "theology"
+    HISTORY = "history"
+    PHILOSOPHY = "philosophy"
+    FICTION = "fiction"
+    OTHER = "other"
+
+
+class BookSourceType(enum.StrEnum):
+    EPUB = "epub"
+    PDF = "pdf"
+    URL = "url"
+    MANUAL = "manual"
+
+
+class SectionType(enum.StrEnum):
+    PART = "part"
+    CHAPTER = "chapter"
+    SECTION = "section"
+    ARTICLE = "article"
+    ENTRY = "entry"
+    APPENDIX = "appendix"
+    INTRODUCTION = "introduction"
+    PREFACE = "preface"
+    FOREWORD = "foreword"
+    INDEX = "index"
+    GLOSSARY = "glossary"
+    OTHER = "other"
+>>>>>>> origin/dev

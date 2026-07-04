@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -80,7 +80,7 @@ def record_session_activity(
     Raises:
         OSError: If the file cannot be written.
     """
-    timestamp = (signed_out_at or datetime.now(timezone.utc)).isoformat()
+    timestamp = (signed_out_at or datetime.now(UTC)).isoformat()
     record: dict[str, Any] = {
         "user_id": user_id,
         "signed_out_at": timestamp,

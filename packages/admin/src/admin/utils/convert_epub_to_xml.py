@@ -20,8 +20,6 @@ Dependencies:
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from xml.etree import ElementTree as ET
 
 try:
     import ebooklib
@@ -65,7 +63,7 @@ class EpubToTeiConverter:
         self.book = None
         self.metadata = {}
 
-    def convert(self, output_path: Optional[str] = None) -> str:
+    def convert(self, output_path: str | None = None) -> str:
         """
         Convert EPUB to TEI XML.
 
@@ -372,7 +370,7 @@ class EpubToTeiConverter:
                 ab.text = element.get_text()
 
             elif tag_name == "br":
-                lb = etree.SubElement(tei_parent, f"{{{self.TEI_NS}}}lb")
+                etree.SubElement(tei_parent, f"{{{self.TEI_NS}}}lb")
 
             elif tag_name == "hr":
                 milestone = etree.SubElement(tei_parent, f"{{{self.TEI_NS}}}milestone")
@@ -417,7 +415,7 @@ class EpubToTeiConverter:
         return xml_declaration + tei_string
 
 
-def convert_epub_to_tei(epub_path: str, output_path: Optional[str] = None) -> str:
+def convert_epub_to_tei(epub_path: str, output_path: str | None = None) -> str:
     """
     Convenience function to convert EPUB to TEI XML.
 

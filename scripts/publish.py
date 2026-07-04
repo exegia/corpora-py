@@ -109,7 +109,7 @@ def ensure_clean_tree() -> None:
         capture_output=True,
         text=True,
     )
-    dirty = [l for l in result.stdout.splitlines() if not l.startswith("?")]
+    dirty = [line for line in result.stdout.splitlines() if not line.startswith("?")]
     if dirty:
         sys.exit(
             "error: working tree has uncommitted changes. "

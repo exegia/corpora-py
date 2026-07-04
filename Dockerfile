@@ -28,7 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+<<<<<<< HEAD
 COPY pyproject.toml uv.lock* ./
+=======
+COPY pyproject.toml uv.lock* README.md ./
+>>>>>>> origin/dev
 COPY packages/shared  packages/shared
 COPY packages/client  packages/client
 COPY packages/admin   packages/admin
