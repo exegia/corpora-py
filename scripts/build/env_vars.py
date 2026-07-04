@@ -1,4 +1,5 @@
 from pathlib import Path
+
 # ── Version pins ──────────────────────────────────────────────────────────────
 # Version pins shared with the bundler (bundle.py)
 PYTHON_VERSION = "3.13.14"

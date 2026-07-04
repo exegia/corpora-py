@@ -20,11 +20,10 @@ import platform
 import tarfile
 from pathlib import Path
 
-from .env_vars import PLATFORM_MAP, PYTHON_VERSION
-from .helpers import detect_platform, du, run
 from .archive import extract_python
 from .download import download_standalone_python
-from .wheel import install_wheel
+from .env_vars import PLATFORM_MAP, PYTHON_VERSION
+from .helpers import detect_platform, du, run
 from .trim import trim_stdlib
 
 
