@@ -41,7 +41,7 @@ on:
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
 jobs:
-  # ── 1. Build all workspace wheels once on a fast Linux runner ───────────────
+  # ── 1. Build workspace wheel at once on a fast Linux runner ───────────────
   build-wheel:
     name: Build wheel
     runs-on: ubuntu-latest
@@ -63,7 +63,7 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheel
           path: dist/*.whl
           if-no-files-found: error
           retention-days: 1
@@ -96,15 +96,15 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Download wheels
+      - name: Download wheel
         uses: actions/download-artifact@v4
         with:
-          name: wheels
+          name: wheel
           path: dist/
 
       # Cache the standalone-Python tarball — it's ~70 MB and rarely changes.
       - name: Cache standalone Python
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cache/python-standalone
           key: python-standalone-${{ matrix.platform }}-3.13.14-20260623

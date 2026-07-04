@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 #
 # clean.sh
-# Shell equivalent of scripts/clean.py
 #
 # Clean the project: remove caches, build artifacts, and venv.
 #
 # Usage:
 #   ./scripts/clean.sh
-#   uv run scripts/clean.py   (still works via python)
 #
 
 set -euo pipefail
