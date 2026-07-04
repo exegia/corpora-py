@@ -1,17 +1,13 @@
-"""
-    This converts the tf/cfm files and embeds it to be exported as a `.corpus` file.
-    This extension is the official and recognized format that both Corpora and Exegia apps work with.
-    See the information to understand what this format contains.
+"""Package a Text-Fabric dataset (.tf + compiled .cfm cache) into a `.corpus` zip archive.
 
-    Schema file is at:
-    Path: ~obsidian/Documents/Corpora/corpora/schema.md
+The archive contains:
+- manifest.yml (ICorpusManifest)
+- toc.yml (ICorpusToc)
+- assets/ (optional cover/thumbnail/images)
+- corpora/ (the dataset payload: *.tf files + .cfm/ cache)
+- .git/ (a snapshot repo for the payload, for version history)
 
-    Canonical `.corpus` archive structure (see the schema file for full detail):
-        manifest.yml    — ICorpusManifest
-        toc.yml         — ICorpusToc
-        assets/         — cover/thumbnail/other images
-        .git/           — version history for the corpus payload
-        corpora/        — the payload: *.tf files + the required .cfm/ cache
+See packages/admin/README.md for an overview of the conversion/packaging pipeline.
 """
 
 import shutil
