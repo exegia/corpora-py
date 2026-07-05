@@ -6,7 +6,7 @@
 //   bun scripts/clean.ts
 //
 // This removes build artifacts, Vite output, generated Python runtime,
-// caches, etc. These are all gitignored (see .gitignore).
+// caches, etc. These are all gitignore (see .gitignore).
 
 import { $ } from "bun"
 import { rm } from "fs/promises"

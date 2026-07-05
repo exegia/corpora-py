@@ -22,6 +22,6 @@ export default [
       route("view", "routes/corpus/view.tsx")
     ])
 
-  ]),
-  route("logs", "routes/logs.tsx")
+  ])
+  // route("logs", "routes/logs.tsx")
 ] satisfies RouteConfig

@@ -1,7 +1,7 @@
 import { useAtom } from "jotai"
 import { useCallback, useEffect, useRef } from "react"
-import { uploadAtom, type UploadEntry } from "../atoms/upload-atom"
-import { API_URL } from "../types/socket"
+import { uploadAtom, type UploadEntry } from "@/atoms"
+import { API_URL } from "@/types"
 import { subscribeJobStatus, type JobStatusMessage } from "./use-socket"
 
 // Where past-conversion history is mirrored so it survives a page reload or
@@ -58,7 +58,7 @@ const EXTENSION_TO_FORMAT: Record<string, string> = {
   ".tei": "tei",
   ".pdf": "pdf",
   ".txt": "plain",
-  ".text": "plain",
+  ".text": "plain"
 }
 
 const detectSourceFormat = (filename: string): string => {
@@ -68,7 +68,7 @@ const detectSourceFormat = (filename: string): string => {
   if (!format) {
     throw new Error(
       `Can't auto-detect a source format from "${filename}" (extension "${extension}"). ` +
-        `Recognized: ${Object.keys(EXTENSION_TO_FORMAT).join(", ")}`,
+      `Recognized: ${Object.keys(EXTENSION_TO_FORMAT).join(", ")}`
     )
   }
   return format
@@ -90,7 +90,7 @@ const saveCorpusFile = async (filename: string, blob: Blob): Promise<void> => {
     try {
       const handle = await showSaveFilePicker({
         suggestedName: filename,
-        types: [{ description: "Corpus archive", accept: { "application/octet-stream": [".corpus"] } }],
+        types: [{ description: "Corpus archive", accept: { "application/octet-stream": [".corpus"] } }]
       })
       const writable = await handle.createWritable()
       await writable.write(blob)
@@ -200,7 +200,7 @@ export const useUpload = () => {
         console.error("Failed to save converted corpus file:", error)
       }
     },
-    [setUploads],
+    [setUploads]
   )
 
   const trackJob = useCallback(
@@ -285,7 +285,7 @@ export const useUpload = () => {
 
       unsubscribersRef.current.set(id, subscribeJobStatus(wsUrl, handleMessage))
     },
-    [setUploads, stopTracking, trySave],
+    [setUploads, stopTracking, trySave]
   )
 
   const uploadFile = useCallback(
@@ -301,7 +301,7 @@ export const useUpload = () => {
           type: file.type,
           status: "uploading",
           progress: 0,
-          error: null,
+          error: null
         }
       })
 
@@ -346,7 +346,7 @@ export const useUpload = () => {
 
       return id
     },
-    [setUploads, trackJob],
+    [setUploads, trackJob]
   )
 
   const deleteUpload = useCallback(
@@ -357,7 +357,7 @@ export const useUpload = () => {
         delete draft[id]
       })
     },
-    [setUploads, stopTracking],
+    [setUploads, stopTracking]
   )
 
   const retryUpload = useCallback(
@@ -373,7 +373,7 @@ export const useUpload = () => {
       // possible) would otherwise resurrect a deleted atom entry.
       if (file) void uploadFile(file)
     },
-    [setUploads, stopTracking, uploadFile],
+    [setUploads, stopTracking, uploadFile]
   )
 
   // Retries just the local save-to-disk step for an entry stuck in "ready"
@@ -408,7 +408,7 @@ export const useUpload = () => {
         })
       }
     },
-    [setUploads],
+    [setUploads]
   )
 
   // Rehydrates past-conversion history from localStorage once, on mount.

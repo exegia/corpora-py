@@ -1,7 +1,7 @@
 @theme {
     /* FONT FAMILY */
-    --font-body: var(--font-inter, "Inter"), -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    --font-display: var(--font-inter, "Inter"), -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-body: "Inter", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-display: "Inter", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     --font-mono: ui-monospace, "Roboto Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
     /* FONT SIZE */
@@ -78,12 +78,10 @@
     --shadow-modern-mockup-inner-md: 0px 0px 1.692px 0.564px rgba(10, 13, 18, 0.08) inset, 0px 0px 1.128px 0.564px rgba(10, 13, 18, 0.03) inset;
     --shadow-modern-mockup-inner-sm: 0px 0px 4.48px 1.493px rgba(10, 13, 18, 0.08) inset, 0px 0px 2.987px 1.493px rgba(10, 13, 18, 0.03) inset;
 
-    --shadow-modern-mockup-outer-lg:
-        0px 7.529px 10.039px -2.51px rgba(10, 13, 18, 0.08), 0px 2.51px 3.765px -1.255px rgba(10, 13, 18, 0.03),
-        0px 1.255px 1.255px -0.627px rgba(10, 13, 18, 0.04);
-    --shadow-modern-mockup-outer-md:
-        0px 3.385px 4.513px -1.128px rgba(10, 13, 18, 0.08), 0px 1.128px 1.692px -0.564px rgba(10, 13, 18, 0.03),
-        0px 0.564px 0.564px -0.282px rgba(10, 13, 18, 0.04);
+    --shadow-modern-mockup-outer-lg: 0px 7.529px 10.039px -2.51px rgba(10, 13, 18, 0.08), 0px 2.51px 3.765px -1.255px rgba(10, 13, 18, 0.03),
+    0px 1.255px 1.255px -0.627px rgba(10, 13, 18, 0.04);
+    --shadow-modern-mockup-outer-md: 0px 3.385px 4.513px -1.128px rgba(10, 13, 18, 0.08), 0px 1.128px 1.692px -0.564px rgba(10, 13, 18, 0.03),
+    0px 0.564px 0.564px -0.282px rgba(10, 13, 18, 0.04);
 
     --drop-shadow-iphone-mockup: 20px 12px 18px rgba(16, 24, 40, 0.2);
 
@@ -132,11 +130,6 @@
     --color-brand-800: rgb(83 56 158);
     --color-brand-900: rgb(66 48 125);
     --color-brand-950: rgb(44 28 95);
-
-    /* LIGHT MODE VARIABLES */
-
-    --color-alpha-white: rgb(255 255 255);
-    --color-alpha-black: rgb(0 0 0);
 
     /* UTILITY COLORS */
     --color-utility-blue-50: var(--color-blue-50);
@@ -496,7 +489,6 @@
 
 @layer base {
     /* DARK MODE VARIABLES */
-
     .dark-mode {
         --color-alpha-white: rgb(12 14 18);
         --color-alpha-black: rgb(255 255 255);

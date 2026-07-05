@@ -2,7 +2,7 @@ import { FileUpload } from "@/components/application/file-upload/file-upload-bas
 import { useUpload } from "../hooks/use-upload"
 
 // Keep in sync with `_EXTENSION_TO_FORMAT` in src/corpora_py/bridge.py --
-// source format there is auto-detected from the filename extension, so
+// a source format there is auto-detected from the filename extension, so
 // anything not in that map fails server-side after a full upload+decode
 // round trip. Restricting the picker/drop target here catches that earlier.
 const ACCEPTED_EXTENSIONS = ".epub,.html,.htm,.xml,.tei,.pdf,.txt,.text"

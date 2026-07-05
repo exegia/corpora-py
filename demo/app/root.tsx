@@ -3,8 +3,7 @@ import {
   Meta,
   Outlet,
   Scripts,
-  ScrollRestoration,
-  useNavigate
+  ScrollRestoration
 } from "react-router"
 import { useTheme } from "@heroui/react"
 import { TopNav, TopNavHeading, TopNavItem } from "@astryxdesign/core/TopNav"
@@ -22,6 +21,7 @@ const NAV = [
 ]
 
 export function TopNavigation() {
+
   return (
     <TopNav
       label="Main navigation"
@@ -61,9 +61,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 // Global UI (nav) lives in the root per framework-mode conventions.
 export default function App() {
-  const navigate = useNavigate()
+
   const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-  const { theme, setTheme } = useTheme(mediaQuery.matches ? "dark" : "light")
+  const { setTheme } = useTheme(mediaQuery.matches ? "dark" : "light")
 
 
   useEffect(() => {
