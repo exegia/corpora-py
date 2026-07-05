@@ -23,10 +23,11 @@ def _load_book(path: str) -> epub.EpubBook:
                 path = fh.name
     return epub.read_epub(path)
 
+
 # ── HTML cleaner ──────────────────────────────────────────────────────────────
 
 # Tags whose content is kept and rendered as-is (no attribute stripping needed
-# beyond what the allow-list below handles).
+# beyond what the allowlist below handles).
 _SEMANTIC_TAGS = {
     "article",
     "section",
@@ -143,9 +144,9 @@ def _clean_html(html_bytes: bytes) -> str:
     void_tags = {"br", "hr", "img"}
     for tag in reversed(soup.find_all(True)):
         if (
-            tag.name not in void_tags
-            and not tag.get_text(strip=True)
-            and not tag.find("img")
+                tag.name not in void_tags
+                and not tag.get_text(strip=True)
+                and not tag.find("img")
         ):
             tag.decompose()
 
@@ -223,8 +224,8 @@ def extract_assets(path: str) -> list[dict[str, Any]]:
 
 
 def extract_pages(
-    path: str,
-    on_progress: Callable[[int, int, float], None] | None = None,
+        path: str,
+        on_progress: Callable[[int, int, float], None] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Extract content from every document item in the EPUB.
