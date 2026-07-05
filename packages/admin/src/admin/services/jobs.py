@@ -123,9 +123,9 @@ class ConversionJob:
 class JobManager:
     """Tracks conversion jobs and runs them on a background thread pool.
 
-    A process-local singleton is enough here: conversion output lands on
-     the local disk (see `convert_to_corpus`), so a multi-worker/multi-process
-    deployment would need a shared store and queue (Redis, Celery, ...) instead
+    A process-local singleton is sufficient here: conversion output lands on
+    local disk (see `convert_to_corpus`), so a multi-worker/multi-process
+    deployment would need a shared store + queue (Redis, Celery, ...) instead
     of this in-memory registry. That's a deliberate scope cut for a
     single-process admin/conversion service, not an oversight -- revisit if
     this ever needs to run behind more than one uvicorn worker. See
@@ -149,11 +149,11 @@ class JobManager:
     """
 
     def __init__(
-        self,
-        max_workers: int = 2,
-        *,
-        max_pending: int = 50,
-        stall_timeout_seconds: float = 15 * 60,
+            self,
+            max_workers: int = 2,
+            *,
+            max_pending: int = 50,
+            stall_timeout_seconds: float = 15 * 60,
     ) -> None:
         self._jobs: dict[str, ConversionJob] = {}
         self._lock = Lock()
@@ -162,13 +162,13 @@ class JobManager:
         self._stall_timeout_seconds = stall_timeout_seconds
 
     def submit(
-        self,
-        *,
-        source_format: SourceFormat,
-        name: str,
-        fn: Callable[[], Path],
-        owner: str | None = None,
-        job_id: str | None = None,
+            self,
+            *,
+            source_format: SourceFormat,
+            name: str,
+            fn: Callable[[], Path],
+            owner: str | None = None,
+            job_id: str | None = None,
     ) -> ConversionJob:
         """Register a new job and hand `fn` to the worker pool.
 
@@ -262,9 +262,9 @@ class JobManager:
         pool slot is stuck.
         """
         if (
-            job.status == JobStatus.RUNNING
-            and job.started_at is not None
-            and time.time() - job.started_at > self._stall_timeout_seconds
+                job.status == JobStatus.RUNNING
+                and job.started_at is not None
+                and time.time() - job.started_at > self._stall_timeout_seconds
         ):
             logger.warning(
                 "Conversion job %s exceeded %.0fs stall timeout; marking failed "
@@ -276,7 +276,6 @@ class JobManager:
                 f"Conversion timed out after {self._stall_timeout_seconds / 60:.0f} minutes"
             )
             job.status = JobStatus.FAILED
-        finally:
             job.finished_at = time.time()
 
     def log(self, job_id: str, message: str) -> None:
