@@ -119,20 +119,6 @@ docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=fa
 docker-down-corpora: ## Stop corpora-py platform containers.
 	$(DOCKER_COMPOSE_CORPORA) down
 
-.PHONY: docker-up-demo
-docker-up-demo: ## Start demo app dev container (Bun + ElectroBun + SSH on :2222).
-	$(DOCKER_COMPOSE_DEMO) up --build -d
-
-.PHONY: docker-down-demo
-docker-down-demo: ## Stop demo app dev container.
-	$(DOCKER_COMPOSE_DEMO) down
-
-.PHONY: docker-up
-docker-up: docker-up-corpora docker-up-demo ## Start all Docker services (corpora + demo).
-
-.PHONY: docker-down
-docker-down: docker-down-corpora docker-down-demo ## Stop all Docker services.
-
 # Backward-compatible aliases
 .PHONY: run-container
 run-container: docker-up-corpora ## Alias for docker-up-corpora.
@@ -160,17 +146,9 @@ docker-login-ghcr: ## Authenticate Docker with GHCR (uses GITHUB_TOKEN or gh CLI
 docker-build-corpora: ## Build corpora-py Docker image locally.
 	docker build -f dockerfiles/Dockerfile -t $(CORPORA_IMAGE):$(IMAGE_TAG) .
 
-.PHONY: docker-build-demo
-docker-build-demo: ## Build demo dev Docker image locally.
-	docker build -f demo/docker/Dockerfile -t $(DEMO_IMAGE):$(IMAGE_TAG) .
-
 .PHONY: docker-publish-corpora
 docker-publish-corpora: docker-login-ghcr docker-build-corpora ## Build and push corpora-py image to GHCR.
 	docker push $(CORPORA_IMAGE):$(IMAGE_TAG)
-
-.PHONY: docker-publish-demo
-docker-publish-demo: docker-login-ghcr docker-build-demo ## Build and push demo dev image to GHCR.
-	docker push $(DEMO_IMAGE):$(IMAGE_TAG)
 
 .PHONY: docker-publish
 docker-publish: docker-publish-corpora docker-publish-demo ## Build and push all images to GHCR.
