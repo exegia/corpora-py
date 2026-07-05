@@ -209,3 +209,41 @@ dev-stop: ## Stop dev processes.
 .PHONY: help
 help: ## Show this help message.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: clean-all
+clean-all: ## Delete all caches, generated files, build artifacts, venv, node_modules, and lock files.
+	@echo "Cleaning all caches, generated files, and build artifacts..."
+	@for path in \
+		.venv \
+		.cache \
+		.pytest_cache \
+		.mypy_cache \
+		.ruff_cache \
+		__pycache__ \
+		$(DIST_DIR) \
+		dist \
+		build \
+		*.egg-info \
+		demo/node_modules \
+		demo/.vite \
+		demo/.react-router \
+		demo/dist \
+		demo/build \
+		node_modules \
+		uv.lock \
+		.dotenvx; do \
+		for match in $$path; do \
+			if [ -e "$$match" ]; then \
+				echo "  removing $$match"; \
+				rm -rf "$$match"; \
+			fi; \
+		done; \
+	done
+	@echo "Searching for nested cache directories and compiled Python files..."
+	@find . -type d \( -name "__pycache__" -o -name ".pytest_cache" -o -name ".mypy_cache" -o -name ".ruff_cache" \) \
+		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./demo/node_modules/*" \
+		-print -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f \( -name "*.pyc" -o -name "*.pyo" \) \
+		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./demo/node_modules/*" \
+		-print -delete 2>/dev/null || true
+	@echo "All caches and generated files have been removed."
