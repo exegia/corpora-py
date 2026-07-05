@@ -370,14 +370,16 @@ dependencies = [
     { name = "fastapi" },
     { name = "platformdirs" },
     { name = "pydantic-settings" },
+    { name = "pyjwt" },
     { name = "pyopenssl" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", specifier = ">=0.138.2" },
+    { name = "fastapi", specifier = ">=0.139.0" },
     { name = "platformdirs", specifier = ">=4.10.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
+    { name = "pyjwt", specifier = ">=2.13.0" },
     { name = "pyopenssl", specifier = ">=24.3.0" },
 ]
 
@@ -401,7 +403,7 @@ requires-dist = [
     { name = "corpora-common", editable = "packages/common" },
     { name = "fastmcp", specifier = ">=3.4.2" },
     { name = "python-multipart", specifier = ">=0.0.32" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'sse'", specifier = ">=0.49.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'sse'", specifier = ">=0.50.0" },
 ]
 provides-extras = ["sse"]
 
@@ -1420,7 +1422,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "python_full_version >= '3.15' or sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [

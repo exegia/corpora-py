@@ -10,6 +10,14 @@ export default defineConfig({
   // so we no longer use @vitejs/plugin-react or a `root`/`build.outDir` override
   // (that was the old src/mainview SPA setup).
   plugins: [tailwindcss(), reactRouter()],
+  resolve: {
+    // Vite 8 dev resolves bare `@/…` imports via tryNodeResolve with
+    // tsconfigPaths off by default; enable it so demo/tsconfig.json paths work.
+    tsconfigPaths: true,
+    alias: {
+      "@": resolve(import.meta.dirname, "app")
+    }
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true

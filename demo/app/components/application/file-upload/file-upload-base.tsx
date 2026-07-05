@@ -202,7 +202,9 @@ export const FileUploadDropZone = ({
       onDragEnd={handleDragOut}
       onDrop={handleDrop}
       className={cx(
-        "relative flex flex-col items-center gap-3 rounded-xl bg-background-tertiary px-6 py-10 placeholder-text-placeholder border-2 border-dashed border-neutral-300 overflow-clip",
+        "relative flex flex-col items-center gap-3 rounded-xl bg-neutral-100 dark:bg-neutral-900 px-6 py-10" +
+        " placeholder-text-placeholder border border-neutral-300 dark:border-white border-dashed" +
+        "  overflow-clip",
         isDisabled && "cursor-not-allowed bg-secondary",
         className
       )}
@@ -228,7 +230,7 @@ export const FileUploadDropZone = ({
           />
           <label htmlFor={id} className="flex cursor-pointer text-sm items-center">
             <Button color="link-color" size="md" isDisabled={isDisabled} onClick={() => inputRef.current?.click()}>
-              Click to upload <span className="md:hidden">and attach files</span>
+              Drag file to upload <span className="md:hidden">and attach files</span>
             </Button>
           </label>
           <span className="text-sm max-md:hidden">or drag and drop</span>

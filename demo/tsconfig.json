@@ -26,11 +26,11 @@
       ".",
       "./.react-router/types"
     ],
+    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "src/*",
         "app/*",
-        "app/*/index.ts"
+        "src/*"
       ],
       "@/types": [
         "app/types/index.ts",

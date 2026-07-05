@@ -1,4 +1,4 @@
-import { useWebSocket } from "@/hooks"
+import { useWebSocket } from "@/hooks/use-socket"
 import type { BridgeStatus } from "@/types/socket"
 import { Chip, ChipRootProps } from "@heroui/react"
 import { Check, Clock, CloudOff, Stop } from "@untitledui/icons"
@@ -18,7 +18,6 @@ const chipStatus: ChipStatusMap = {
   "connecting": { color: "warning", icon: Clock, label: "connecting" },
   "error": { color: "danger", icon: Stop, label: "error" },
   "idle": { color: "default", icon: CloudOff, label: "idle" }
-
 }
 
 export const StatusBar = () => {
