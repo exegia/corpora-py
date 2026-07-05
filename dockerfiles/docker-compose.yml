@@ -28,7 +28,7 @@ services:
       - "443:443"
     volumes:
       - type: bind
-        source: ./Caddyfile
+        source: ./dockerfiles/Caddyfile
         target: /etc/caddy/Caddyfile
       - type: volume
         source: caddy_data
