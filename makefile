@@ -6,11 +6,9 @@ DIST_DIR           ?= dist
 GHCR_REGISTRY      ?= ghcr.io
 GHCR_OWNER         ?= exegia
 CORPORA_IMAGE      ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py
-DEMO_IMAGE         ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py-demo-dev
 PYTHON_VERSION     ?= 3.13
 DOCKER_PROJECT     := docker compose --project-directory .
 DOCKER_COMPOSE_CORPORA := $(DOCKER_PROJECT) -f dockerfiles/docker-compose.yml
-DOCKER_COMPOSE_DEMO    := $(DOCKER_PROJECT) -f demo/docker/docker-compose.yml
 
 # Optional args forwarded to bin scripts (e.g. make publish PUBLISH_ARGS=minor)
 PUBLISH_ARGS       ?=
@@ -65,11 +63,6 @@ build-bundle: ## Build sidecar / Tauri resource bundle (wheels + standalone Pyth
 	@chmod +x $(BIN)/build/*.sh
 	@$(BIN)/build/build.sh $(BUILD_ARGS)
 
-.PHONY: build-embedded
-build-embedded: ## Build embedded Python runtime for the demo app.
-	@chmod +x $(BIN)/build/embedded.sh $(BIN)/build/common.sh
-	@$(BIN)/build/embedded.sh $(EMBEDDED_ARGS)
-
 .PHONY: generate-dockerfiles
 generate-dockerfiles: ## Regenerate versioned Python Dockerfiles from template.
 	@chmod +x $(BIN)/generate_dockerfile.sh
@@ -119,13 +112,6 @@ docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=fa
 docker-down-corpora: ## Stop corpora-py platform containers.
 	$(DOCKER_COMPOSE_CORPORA) down
 
-# Backward-compatible aliases
-.PHONY: run-container
-run-container: docker-up-corpora ## Alias for docker-up-corpora.
-
-.PHONY: kill-container
-kill-container: docker-down-corpora ## Alias for docker-down-corpora.
-
 # ── Docker — build & publish to GHCR ─────────────────────────────────────────
 
 .PHONY: docker-login-ghcr
@@ -151,7 +137,7 @@ docker-publish-corpora: docker-login-ghcr docker-build-corpora ## Build and push
 	docker push $(CORPORA_IMAGE):$(IMAGE_TAG)
 
 .PHONY: docker-publish
-docker-publish: docker-publish-corpora docker-publish-demo ## Build and push all images to GHCR.
+docker-publish: docker-publish-corpora ## Build and push all images to GHCR.
 
 # ── Publish (PyPI via GitHub Actions) ─────────────────────────────────────────
 

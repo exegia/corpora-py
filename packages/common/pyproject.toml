@@ -4,9 +4,10 @@ version = "0.1.2"
 requires-python = ">=3.13"
 dependencies = [
     "pydantic-settings>=2.14.2",
-    "fastapi>=0.138.2",
+    "fastapi>=0.139.0",
     "pyOpenSSL>=24.3.0",
     "platformdirs>=4.10.0",
+    "pyjwt>=2.13.0",
 ]
 
 [build-system]
