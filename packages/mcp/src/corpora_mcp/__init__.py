@@ -7,4 +7,3 @@ powers AI clients (Claude etc.) and desktop app corpus browsing.
 from .server import main, mcp
 
 __all__ = ["mcp", "main"]
->>>>>>>> 380d80b (update):packages/mcp/src/corpora_mcp/__init__.py
