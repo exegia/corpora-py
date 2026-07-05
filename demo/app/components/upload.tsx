@@ -45,7 +45,7 @@ export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
             pending={upload.status === "queued" || upload.status === "converting"}
             statusText={upload.lastLog ?? undefined}
             fileIconVariant="gray"
-            className="bg-surface border border-utility-neutral-300 dark:border-utility-neutral-800"
+
             onDelete={() => deleteUpload(upload.id)}
             onRetry={() => retryUpload(upload.id)}
           />

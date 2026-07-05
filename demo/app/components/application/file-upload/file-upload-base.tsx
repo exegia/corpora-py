@@ -1,289 +1,156 @@
-import type { ComponentProps, ComponentPropsWithRef } from "react"
-import { useId, useMemo, useRef, useState } from "react"
-import type { FileIcon } from "@untitledui/file-icons"
-import { FileIcon as FileTypeIcon } from "@untitledui/file-icons"
-import { CheckCircle, DownloadCloud02, Loading02, Trash01, UploadCloud02, XCircle } from "@untitledui/icons"
-import { AnimatePresence, motion } from "motion/react"
-import { Button } from "@/components/base/buttons/button"
-import { ButtonUtility } from "@/components/base/buttons/button-utility"
-import { ProgressBar } from "@/components/base/progress-indicators/progress-indicators"
-import { cx } from "@/utils/cx"
-import { Illustration } from "@/components/shared-assets/illustrations"
-import { useTheme } from "@heroui/react"
-
+import type { ComponentProps } from "react"
+import { Archive, CloudDownload, CloudUpload } from "lucide-react"
+import { Button } from "@astryxdesign/core/Button"
+import { Card } from "@astryxdesign/core/Card"
+import { FileInput, type FileInputStatus } from "@astryxdesign/core/FileInput"
+import { HStack } from "@astryxdesign/core/HStack"
+import { Icon } from "@astryxdesign/core/Icon"
+import { IconButton } from "@astryxdesign/core/IconButton"
+import { List } from "@astryxdesign/core/List"
+import { ProgressBar } from "@astryxdesign/core/ProgressBar"
+import { Spinner } from "@astryxdesign/core/Spinner"
+import { Text } from "@astryxdesign/core/Text"
+import { VStack } from "@astryxdesign/core/VStack"
 
 /**
  * Returns a human-readable file size.
- * @param bytes - The size of the file in bytes.
- * @returns A string representing the file size in a human-readable format.
  */
 export const getReadableFileSize = (bytes: number) => {
   if (bytes === 0) return "0 KB"
 
   const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
-
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
 
   return Math.floor(bytes / Math.pow(1024, i)) + " " + suffixes[i]
 }
 
 interface FileUploadDropZoneProps {
-  /** The class name of the drop zone. */
-  className?: string;
-  /**
-   * A hint text explaining what files can be dropped.
-   */
-  hint?: string;
-  /**
-   * Disables dropping or uploading files.
-   */
-  isDisabled?: boolean;
-  /**
-   * Specifies the types of files that the server accepts.
-   * Examples: "image/*", ".pdf,image/*", "image/*,video/mpeg,application/pdf"
-   */
-  accept?: string;
-  /**
-   * Allows multiple file uploads.
-   */
-  allowsMultiple?: boolean;
-  /**
-   * Maximum file size in bytes.
-   */
-  maxSize?: number;
-  /**
-   * Callback function that is called with the list of dropped files
-   * when files are dropped on the drop zone.
-   */
-  onDropFiles?: (files: FileList) => void;
-  /**
-   * Callback function that is called with the list of unaccepted files
-   * when files are dropped on the drop zone.
-   */
-  onDropUnacceptedFiles?: (files: FileList) => void;
-  /**
-   * Callback function that is called with the list of files that exceed
-   * the size limit when files are dropped on the drop zone.
-   */
-  onSizeLimitExceed?: (files: FileList) => void;
+  className?: string
+  status?: FileInputStatus
+  hint?: string
+  isDisabled?: boolean
+  accept?: string
+  allowsMultiple?: boolean
+  maxSize?: number
+  onDropFiles?: (files: FileList) => void
+  /** @deprecated FileInput validates rejected types internally and surfaces an error status. */
+  onDropUnacceptedFiles?: (files: FileList) => void
+  /** @deprecated FileInput validates size limits via `maxSize` and surfaces an error status. */
+  onSizeLimitExceed?: (files: FileList) => void
+}
+
+const toFileList = (files: File | File[]): FileList => {
+  const dataTransfer = new DataTransfer()
+  for (const file of Array.isArray(files) ? files : [files]) {
+    dataTransfer.items.add(file)
+  }
+  return dataTransfer.files
 }
 
 export const FileUploadDropZone = ({
-                                     className,
                                      hint,
                                      isDisabled,
                                      accept,
+                                     status,
                                      allowsMultiple = true,
                                      maxSize,
-                                     onDropFiles,
-                                     onDropUnacceptedFiles,
-                                     onSizeLimitExceed
+                                     onDropFiles
                                    }: FileUploadDropZoneProps) => {
-  const id = useId()
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [isInvalid, setIsInvalid] = useState(false)
-  const [isDraggingOver, setIsDraggingOver] = useState(false)
-  // const { theme } = useTheme()
-  // const isDark = useMemo(() => theme === "dark", [theme])
+  const handleChange = (files: File | File[] | null) => {
+    if (!files) return
 
-  const isFileTypeAccepted = (file: File): boolean => {
-    if (!accept) return true
-
-    // Split the accept string into individual types
-    const acceptedTypes = accept.split(",").map((type) => type.trim())
-
-    return acceptedTypes.some((acceptedType) => {
-      // Handle file extensions (e.g., .pdf, .doc)
-      if (acceptedType.startsWith(".")) {
-        const extension = `.${file.name.split(".").pop()?.toLowerCase()}`
-        return extension === acceptedType.toLowerCase()
-      }
-
-      // Handle wildcards (e.g., image/*)
-      if (acceptedType.endsWith("/*")) {
-        const typePrefix = acceptedType.split("/")[0]
-        return file.type.startsWith(`${typePrefix}/`)
-      }
-
-      // Handle exact MIME types (e.g., application/pdf)
-      return file.type === acceptedType
-    })
-  }
-
-  const handleDragIn = (event: React.DragEvent<HTMLDivElement>) => {
-    if (isDisabled) return
-
-    event.preventDefault()
-    event.stopPropagation()
-    setIsDraggingOver(true)
-  }
-
-  const handleDragOut = (event: React.DragEvent<HTMLDivElement>) => {
-    if (isDisabled) return
-
-    event.preventDefault()
-    event.stopPropagation()
-    setIsDraggingOver(false)
-  }
-
-  const processFiles = (files: File[]): void => {
-    // Reset the invalid state when processing files.
-    setIsInvalid(false)
-
-    const acceptedFiles: File[] = []
-    const unacceptedFiles: File[] = []
-    const oversizedFiles: File[] = []
-
-    // If multiple files are not allowed, only process the first file
-    const filesToProcess = allowsMultiple ? files : files.slice(0, 1)
-
-    filesToProcess.forEach((file) => {
-      // Check file size first
-      if (maxSize && file.size > maxSize) {
-        oversizedFiles.push(file)
-        return
-      }
-
-      // Then check file type
-      if (isFileTypeAccepted(file)) {
-        acceptedFiles.push(file)
-      } else {
-        unacceptedFiles.push(file)
-      }
-    })
-
-    // Handle oversized files
-    if (oversizedFiles.length > 0 && typeof onSizeLimitExceed === "function") {
-      const dataTransfer = new DataTransfer()
-      oversizedFiles.forEach((file) => dataTransfer.items.add(file))
-
-      setIsInvalid(true)
-      onSizeLimitExceed(dataTransfer.files)
+    if (typeof onDropFiles !== "function") {
+      console.error("onDropFiles handler is missing")
+      return
     }
 
-    // Handle accepted files
-    if (acceptedFiles.length > 0 && typeof onDropFiles === "function") {
-      const dataTransfer = new DataTransfer()
-      acceptedFiles.forEach((file) => dataTransfer.items.add(file))
-      onDropFiles(dataTransfer.files)
-    }
-
-    // Handle unaccepted files
-    if (unacceptedFiles.length > 0 && typeof onDropUnacceptedFiles === "function") {
-      const unacceptedDataTransfer = new DataTransfer()
-      unacceptedFiles.forEach((file) => unacceptedDataTransfer.items.add(file))
-
-      setIsInvalid(true)
-      onDropUnacceptedFiles(unacceptedDataTransfer.files)
-    }
-
-    // Clear the input value to ensure the same file can be selected again
-    if (inputRef.current) {
-      inputRef.current.value = ""
-    }
-  }
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    if (isDisabled) return
-    handleDragOut(event)
-    processFiles(Array.from(event.dataTransfer.files))
-  }
-
-  const handleInputFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    processFiles(Array.from(event.target.files || []))
+    onDropFiles(toFileList(files))
   }
 
   return (
-    <div
-      data-dropzone
-      onDragOver={handleDragIn}
-      onDragEnter={handleDragIn}
-      onDragLeave={handleDragOut}
-      onDragEnd={handleDragOut}
-      onDrop={handleDrop}
-      className={cx(
-        "relative flex flex-col items-center gap-3 rounded-xl bg-neutral-100 dark:bg-neutral-900 px-6 py-10" +
-        " placeholder-text-placeholder border border-neutral-300 dark:border-white border-dashed" +
-        "  overflow-clip",
-        isDisabled && "cursor-not-allowed bg-secondary",
-        className
-      )}
-    >
-
-      <div
-        className={cx("transition duration-100 ease-linear bg-brand-500 opacity-0 w-full h-full absolute top-0 left-0 z-10", isDraggingOver && "opacity-20")}></div>
-
-      <Illustration type="box" size="md" />
-
-
-      <div className="flex flex-col gap-1 text-center">
-        <div className="flex justify-center gap-1 text-center">
-          <input
-            ref={inputRef}
-            id={id}
-            type="file"
-            className="peer sr-only"
-            disabled={isDisabled}
-            accept={accept}
-            multiple={allowsMultiple}
-            onChange={handleInputFileChange}
-          />
-          <label htmlFor={id} className="flex cursor-pointer text-sm items-center">
-            <Button color="link-color" size="md" isDisabled={isDisabled} onClick={() => inputRef.current?.click()}>
-              Drag file to upload <span className="md:hidden">and attach files</span>
-            </Button>
-          </label>
-          <span className="text-sm max-md:hidden">or drag and drop</span>
-        </div>
-        <p className={cx("text-xs transition duration-100 ease-linear", isInvalid && "text-error-primary")}>
-          {hint || "SVG, PNG, JPG or GIF (max. 800x400px)"}
-        </p>
-      </div>
-    </div>
+    <FileInput
+      label="Upload file"
+      isLabelHidden
+      mode="dropzone"
+      accept={accept}
+      isMultiple={allowsMultiple}
+      maxSize={maxSize}
+      isDisabled={isDisabled}
+      status={status}
+      value={null}
+      onChange={handleChange}
+      placeholder="Drag your file over to start the conversion"
+      description={hint ?? "SVG, PNG, JPG or GIF (max. 800x400px)"}
+    />
   )
 }
 
 export interface FileListItemProps {
-  /** The name of the file. */
-  name: string;
-  /** The size of the file. */
-  size: number;
-  /** The upload progress of the file. */
-  progress: number;
-  /** Whether the file failed to upload. */
-  failed?: boolean;
-  /**
-   * True, once the server-side step finished, but a client-side follow-up
-   * (e.g. writing the result to disk) still needs the user's input.
-   * Renders a distinct "needs action" state -- separate from `failed` --
-   * so a step that can be retried on its own doesn't push the user toward
-   * "Try again", which would redo the whole (already-successful) upload.
-   */
-  needsAction?: boolean;
-  /** Label for the `needsAction` button. @default "Save" */
-  actionLabel?: string;
-  /** Called when the `needsAction` button is clicked. */
-  onAction?: () => void;
-  /**
-   * True while `progress` is a coarse in-flight estimate rather than real
-   * completion (the server has no per-unit progress hook -- see
-   * `packages/admin/CLAUDE.md`). Renders an animated, indeterminate fill
-   * instead of trusting the number at face value, since a bar frozen at a
-   * fixed percentage for minutes reads as stalled.
-   */
-  pending?: boolean;
-  /** Status line shown instead of the file size, e.g. a server-reported stage. */
-  statusText?: string;
-  /** The type of the file. */
-  type?: ComponentProps<typeof FileIcon>["type"];
-  /** The class name of the file list item. */
-  className?: string;
-  /** The variant of the file icon. */
-  fileIconVariant?: ComponentProps<typeof FileTypeIcon>["variant"];
-  /** The function to call when the file is deleted. */
-  onDelete?: () => void;
-  /** The function to call when the file upload is retried. */
-  onRetry?: () => void;
+  name: string
+  size: number
+  progress: number
+  failed?: boolean
+  needsAction?: boolean
+  actionLabel?: string
+  onAction?: () => void
+  pending?: boolean
+  statusText?: string
+  type?: string
+  className?: string
+  fileIconVariant?: string
+  onDelete?: () => void
+  onRetry?: () => void
+}
+
+const fileIcon = <Icon icon={Archive} size="lg" color="secondary" />
+
+const UploadStatus = ({
+                        failed,
+                        needsAction,
+                        pending,
+                        progress
+                      }: Pick<FileListItemProps, "failed" | "needsAction" | "pending" | "progress">) => {
+  const isComplete = progress === 100 && !needsAction
+
+  if (failed) {
+    return (
+      <HStack gap={1} vAlign="center">
+        <Icon icon="error" size="sm" color="error" />
+        <Text type="supporting" color="error">Failed</Text>
+      </HStack>
+    )
+  }
+
+  if (isComplete) {
+    return (
+      <HStack gap={1} vAlign="center">
+        <Icon icon="success" size="sm" color="success" />
+        <Text type="supporting" color="success">Complete</Text>
+      </HStack>
+    )
+  }
+
+  if (needsAction) {
+    return (
+      <HStack gap={1} vAlign="center">
+        <Icon icon={CloudDownload} size="sm" color="warning" />
+        <Text type="supporting" color="warning">Ready</Text>
+      </HStack>
+    )
+  }
+
+  return (
+    <HStack gap={1} vAlign="center">
+      {pending
+        ? <Spinner size="sm" aria-label="Converting" />
+        : <Icon icon={CloudUpload} size="sm" color="tertiary" />}
+      {!needsAction && (
+        <Text type="supporting" color="secondary">
+          {pending ? "Converting…" : `${progress}%`}
+        </Text>
+      )}
+    </HStack>
+  )
 }
 
 export const FileListItemProgressBar = ({
@@ -291,67 +158,53 @@ export const FileListItemProgressBar = ({
                                           size,
                                           progress,
                                           failed,
-                                          fileIconVariant,
                                           onDelete,
-                                          onRetry,
-                                          className
+                                          onRetry
                                         }: FileListItemProps) => {
   const isComplete = progress === 100
-  const { theme } = useTheme()
-  const isDark = useMemo(() => theme === "dark", [theme])
 
   return (
-    <motion.li
-      layout="position"
-      className={cx(
-        "relative flex gap-3 rounded-xl bg-background p-4 ring-1 ring-secondary transition-shadow duration-100 ease-linear ring-inset",
-        failed && "ring-2 ring-error",
-        className
-      )}
-    >
-      <FileTypeIcon className="size-10 shrink-0" type={"zip"} variant={fileIconVariant ?? "default"}
-                    theme={isDark ? "light" : "dark"} />
-
-      <div className="flex min-w-0 flex-1 flex-col items-start">
-        <div className="flex w-full max-w-full min-w-0 flex-1">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-secondary">{name}</p>
-
-            <div className="mt-0.5 flex items-center gap-2">
-              <p className="truncate text-sm whitespace-nowrap text-tertiary">{getReadableFileSize(size)}</p>
-
-              <hr className="h-3 w-px rounded-t-full rounded-b-full border-none bg-border-primary" />
-
-              <div className="flex items-center gap-1">
-                {isComplete && <CheckCircle className="size-4 stroke-[2.5px] text-fg-success-primary" />}
-                {isComplete && <p className="text-sm font-medium text-success-primary">Complete</p>}
-
-                {!isComplete && !failed && <UploadCloud02 className="size-4 stroke-[2.5px] text-fg-quaternary" />}
-                {!isComplete && !failed && <p className="text-sm font-medium text-secondary">Uploading...</p>}
-
-                {failed && <XCircle className="size-4 text-fg-error-primary" />}
-                {failed && <p className="text-sm font-medium text-error-primary">Failed</p>}
-              </div>
-            </div>
-          </div>
-
-          <ButtonUtility color="tertiary" tooltip="Delete" icon={Trash01} size="xs" className="-mt-2 -mr-2 self-start"
-                         onClick={onDelete} />
-        </div>
+    <Card padding={4}>
+      <VStack gap={2}>
+        <HStack gap={3} vAlign="start">
+          {fileIcon}
+          <VStack gap={1} hAlign="stretch">
+            <HStack gap={2} vAlign="center" hAlign="between">
+              <Text type="label" maxLines={1}>{name}</Text>
+              {onDelete && (
+                <IconButton
+                  label="Delete"
+                  tooltip="Delete"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Icon icon="close" size="sm" />}
+                  onClick={onDelete}
+                />
+              )}
+            </HStack>
+            <HStack gap={2} vAlign="center">
+              <Text type="supporting" color="secondary">{getReadableFileSize(size)}</Text>
+              <DividerDot />
+              <UploadStatus failed={failed} progress={progress} />
+            </HStack>
+          </VStack>
+        </HStack>
 
         {!failed && (
-          <div className="mt-1 w-full">
-            <ProgressBar labelPosition="right" max={100} min={0} value={progress} />
-          </div>
+          <ProgressBar
+            label={`Upload progress for ${name}`}
+            isLabelHidden
+            value={progress}
+            variant={isComplete ? "success" : "accent"}
+            hasValueLabel
+          />
         )}
 
-        {failed && (
-          <Button color="link-destructive" size="sm" onClick={onRetry} className="mt-1.5">
-            Try again
-          </Button>
+        {failed && onRetry && (
+          <Button label="Try again" variant="destructive" size="sm" onClick={onRetry} />
         )}
-      </div>
-    </motion.li>
+      </VStack>
+    </Card>
   )
 }
 
@@ -365,115 +218,90 @@ export const FileListItemProgressFill = ({
                                            onAction,
                                            pending,
                                            statusText,
-                                           fileIconVariant,
                                            onDelete,
-                                           onRetry,
-                                           className
+                                           onRetry
                                          }: FileListItemProps) => {
   const isComplete = progress === 100 && !needsAction
-  const { theme } = useTheme()
-  const isDark = useMemo(() => theme === "dark", [theme])
+  const statusLine = failed
+    ? "Conversion failed, please try again"
+    : needsAction
+      ? "Ready — couldn't save automatically"
+      : (statusText ?? getReadableFileSize(size))
 
   return (
-    <motion.li layout="position"
-               className={cx("relative flex gap-3 overflow-hidden rounded-xl bg-primary p-4", className)}>
-      {/* Progress fill -- while `pending`, the server only reports coarse
-                stage transitions, not a real percentage, so an animated sweep
-                communicates "still working" honestly instead of a bar frozen
-                at a fixed number that reads as stalled. */}
-      {pending ? (
-        <motion.div
-          className="absolute inset-y-0 left-0 w-1/3 rounded-[inherit] bg-black/10 dark:bg-neutral-700/50"
-          animate={{ x: ["-100%", "300%"] }}
-          transition={{ repeat: Infinity, duration: 1.1, ease: "easeInOut" }}
-          role="progressbar"
-          aria-valuetext="In progress"
-        />
-      ) : (
-        <div
-          style={{ transform: `translateX(-${100 - progress}%)` }}
-          className={cx("absolute inset-0 size-full bg-black/10 dark:bg-neutral-700/50 transition duration-75 ease-linear", isComplete && "opacity-0")}
-          role="progressbar"
-          aria-valuenow={progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        />
-      )}
-      {/* Inner ring. */}
-      <div
-        className={cx(
-          "absolute inset-0 size-full rounded-[inherit] ring-1 ring-secondary/40 transition duration-100 ease-linear ring-inset",
-          failed && "ring-2 ring-error",
-          needsAction && "ring-2 ring-(--color-fg-warning-primary)"
+    <Card padding={4}>
+      <VStack gap={2}>
+        {!failed && (
+          <ProgressBar
+            label={`Conversion progress for ${name}`}
+            isLabelHidden
+            value={pending ? 0 : progress}
+            isIndeterminate={pending}
+            variant={
+              failed ? "error"
+                : needsAction ? "warning"
+                  : isComplete ? "success"
+                    : "accent"
+            }
+            hasValueLabel={!pending && !needsAction}
+          />
         )}
-      />
-      <FileTypeIcon className="size-10 shrink-0" type={"zip"} variant={fileIconVariant ?? "default"}
-                    theme={isDark ? "light" : "dark"} />
 
-      <div className="relative flex min-w-0 flex-1">
-        <div className="relative flex min-w-0 flex-1 flex-col items-start">
-          <div className="w-full min-w-0 flex-1">
-            <p
-              className={cx("truncate text-sm font-medium text-pretty", (progress == 0 || progress != 100) && "font-bold")}>{name}</p>
-
-            <div className="mt-0.5 flex items-center gap-2">
-              <p
-                className={cx("truncate text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>
-                {failed ? "Conversion failed, please try again" : needsAction ? "Ready -- couldn't save automatically" : (statusText ?? getReadableFileSize(size))}
-              </p>
-
+        <HStack gap={3} vAlign="start">
+          {fileIcon}
+          <VStack gap={1} hAlign="stretch">
+            <HStack gap={2} vAlign="center" hAlign="between">
+              <Text type="label" maxLines={1}>{name}</Text>
+              {onDelete && (
+                <IconButton
+                  label="Delete"
+                  tooltip="Delete"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Icon icon="close" size="sm" />}
+                  onClick={onDelete}
+                />
+              )}
+            </HStack>
+            <HStack gap={2} vAlign="center">
+              <Text type="supporting" color="secondary">{statusLine}</Text>
               {!failed && (
                 <>
-                  <hr className="h-3 w-px shrink-0 rounded-t-full rounded-b-full border-none bg-border-primary" />
-                  <div className="flex shrink-0 items-center gap-1">
-                    {isComplete && <CheckCircle className="size-4 stroke-[2.5px] text-fg-success-primary" />}
-                    {needsAction && <DownloadCloud02 className="size-4 stroke-[2.5px] text-fg-warning-primary" />}
-                    {!isComplete && !needsAction && (
-                      pending
-                        ? <Loading02 className="size-4 animate-spin stroke-[2.5px] text-fg-tertiary" />
-                        : <UploadCloud02 className="size-4 stroke-[2.5px] text-fg-tertiary" />
-                    )}
-
-                    {!needsAction && (
-                      <p
-                        className={cx("text-sm text-neutral-400", progress > 0 && "text-neutral-700 dark:text-neutral-200")}>{progress}%</p>
-                    )}
-                  </div>
+                  <DividerDot />
+                  <UploadStatus
+                    failed={failed}
+                    needsAction={needsAction}
+                    pending={pending}
+                    progress={progress}
+                  />
                 </>
               )}
-            </div>
-          </div>
+            </HStack>
+          </VStack>
+        </HStack>
 
-          {failed && (
-            <Button color="link-destructive" size="sm" onClick={onRetry} className="mt-1.5">
-              Try again
-            </Button>
-          )}
+        {failed && onRetry && (
+          <Button label="Try again" variant="destructive" size="sm" onClick={onRetry} />
+        )}
 
-          {!failed && needsAction && (
-            <Button color="link-color" size="sm" onClick={onAction} className="mt-1.5">
-              {actionLabel}
-            </Button>
-          )}
-        </div>
-
-        <ButtonUtility color="tertiary" tooltip="Delete" icon={Trash01} size="xs" className="-mt-2 -mr-2 self-start"
-                       onClick={onDelete} />
-      </div>
-    </motion.li>
+        {!failed && needsAction && onAction && (
+          <Button label={actionLabel} variant="primary" size="sm" onClick={onAction} />
+        )}
+      </VStack>
+    </Card>
   )
 }
 
-const FileUploadRoot = (props: ComponentPropsWithRef<"div">) => (
-  <div {...props} className={cx("flex flex-col gap-4", props.className)}>
-    {props.children}
-  </div>
+const DividerDot = () => (
+  <Text type="supporting" color="disabled" aria-hidden="true">·</Text>
 )
 
-const FileUploadList = (props: ComponentPropsWithRef<"ul">) => (
-  <ul {...props} className={cx("flex flex-col gap-3", props.className)}>
-    <AnimatePresence initial={false}>{props.children}</AnimatePresence>
-  </ul>
+const FileUploadRoot = (props: ComponentProps<typeof VStack>) => (
+  <VStack gap={4} {...props} />
+)
+
+const FileUploadList = (props: ComponentProps<typeof List>) => (
+  <List density="balanced" {...props} />
 )
 
 export const FileUpload = {
