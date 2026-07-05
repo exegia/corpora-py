@@ -5,7 +5,7 @@ import { atomWithImmer } from "jotai-immer"
 // "queued" covers the gap between the POST /convert response and the first
 // WebSocket push. "ready" means the server finished and the `.corpus` bytes
 // are already downloaded into memory, but the local save-to-disk step
-// hasn't completed yet (either still in flight, or failed and awaiting a
+// hasn't completed yet (either still in flight or failed and awaiting a
 // manual retry via `useUpload().saveUpload`) -- deliberately distinct from
 // "error", since a save-dialog failure doesn't mean the conversion itself
 // needs to be redone.

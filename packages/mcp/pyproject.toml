@@ -20,7 +20,7 @@ cf-mcp = "corpora_mcp.server:main"
 [project.optional-dependencies]
 # Enable SSE / HTTP transport (needed for remote MCP deployments)
 sse = [
-    "uvicorn[standard]>=0.49.0",
+    "uvicorn[standard]>=0.50.0",
 ]
 
 
