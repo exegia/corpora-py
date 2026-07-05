@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -60,7 +61,9 @@ def _feat(api: Any, name: str) -> Any:
 
 
 @mcp.tool()
-async def download_corpus(git_url: str, name: str | None = None, ctx: Context = None) -> str:
+async def download_corpus(
+    git_url: str, name: str | None = None, ctx: Context | None = None
+) -> str:
     """
     Download Text-Fabric corpora from a git repository and load them.
 
@@ -71,7 +74,7 @@ async def download_corpus(git_url: str, name: str | None = None, ctx: Context = 
         git_url: URL of the git repository containing Text-Fabric dataset(s).
         name:    Name for the corpus (only applied when exactly one dataset is found).
     """
-    from shared.corpus import fetch_datasets_from_git
+    from .corpus import fetch_datasets_from_git
 
     try:
         datasets = await asyncio.to_thread(fetch_datasets_from_git, git_url)
@@ -97,9 +100,9 @@ async def download_corpus(git_url: str, name: str | None = None, ctx: Context = 
 
 @mcp.tool()
 async def validate_corpus(
-        corpus: str | None = None,
-        path: str | None = None,
-        ctx: Context = None,
+    corpus: str | None = None,
+    path: str | None = None,
+    ctx: Context | None = None,
 ) -> str:
     """
     Validate that a corpus is a valid Context-Fabric (.cfm) corpus.
@@ -114,7 +117,7 @@ async def validate_corpus(
         corpus: Name of a loaded corpus to validate. Defaults to the current corpus.
         path:   Validate a dataset directory on disk instead (overrides corpus).
     """
-    from shared.corpus import validate_corpus as run_validation
+    from corpora_mcp.corpus import validate_corpus as run_validation
 
     if path is not None:
         target_path = Path(path).expanduser()
@@ -188,6 +191,7 @@ def describe_corpus(corpus: str | None = None) -> str:
     except Exception:
         section_line = "(unavailable)"
 
+    feature_count: int | str
     try:
         feature_count = len(api.TF.features)
     except Exception:
@@ -202,10 +206,10 @@ def describe_corpus(corpus: str | None = None) -> str:
 
 @mcp.tool()
 def list_features(
-        node_type: str | None = None,
-        kind: str | None = None,
-        limit: int = 50,
-        corpus: str | None = None,
+    node_type: str | None = None,
+    kind: str | None = None,
+    limit: int = 50,
+    corpus: str | None = None,
 ) -> str:
     """
     Browse available features, with optional filtering.
@@ -250,9 +254,9 @@ def list_features(
 
 @mcp.tool()
 def describe_feature(
-        feature: str,
-        sample_size: int = 20,
-        corpus: str | None = None,
+    feature: str,
+    sample_size: int = 20,
+    corpus: str | None = None,
 ) -> str:
     """
     Detailed information about a feature: metadata, node types, and top values.
@@ -326,11 +330,11 @@ def get_text_formats(corpus: str | None = None) -> str:
 
 @mcp.tool()
 def search(
-        template: str,
-        return_type: str = "results",
-        limit: int = 20,
-        fmt: str | None = None,
-        corpus: str | None = None,
+    template: str,
+    return_type: str = "results",
+    limit: int = 20,
+    fmt: str | None = None,
+    corpus: str | None = None,
 ) -> str:
     """
     Search the corpus using a Context-Fabric query template.
@@ -373,8 +377,10 @@ def search(
         for tup in raw:
             for node in tup:
                 type_counter[api.F.otype.v(node)] += 1
-        lines = "\n".join(f"  {t:<20} {c:>8,}" for t, c in type_counter.most_common())
-        return f"Result statistics (total={total:,}):\n{lines}"
+        stat_lines = "\n".join(
+            f"  {t:<20} {c:>8,}" for t, c in type_counter.most_common()
+        )
+        return f"Result statistics (total={total:,}):\n{stat_lines}"
 
     if return_type == "passages":
         lines = []
@@ -428,7 +434,7 @@ def search_continue(cursor_id: str, limit: int = 20) -> str:
         return "No more results."
 
     api = corpus_manager.get_api()
-    page = results[offset: offset + limit]
+    page = results[offset : offset + limit]
     entry["offset"] = offset + len(page)
     entry["ts"] = time.time()
 
@@ -448,10 +454,10 @@ def search_continue(cursor_id: str, limit: int = 20) -> str:
 
 @mcp.tool()
 def search_csv(
-        template: str,
-        output_path: str,
-        features: list[str] | None = None,
-        corpus: str | None = None,
+    template: str,
+    output_path: str,
+    features: list[str] | None = None,
+    corpus: str | None = None,
 ) -> str:
     """
     Run a search and export results to a CSV file.
@@ -459,7 +465,7 @@ def search_csv(
     Note: Only works when the server is running with stdio transport.
 
     Args:
-        template:    Query template string.
+        template: Query template string.
         output_path: Absolute path for the output .csv file.
         features:    Feature names to include as columns. Defaults to common features.
         corpus:      Corpus name. Defaults to current.
@@ -594,9 +600,9 @@ clause
 
 @mcp.tool()
 def get_passages(
-        references: list[str],
-        fmt: str | None = None,
-        corpus: str | None = None,
+    references: list[str],
+    fmt: str | None = None,
+    corpus: str | None = None,
 ) -> str:
     """
     Retrieve text passages by section reference.
@@ -674,15 +680,15 @@ def _parse_section_ref(ref: str, api: Any) -> tuple[Any, ...] | None:
 
 @mcp.tool()
 def get_node_features(
-        nodes: list[int],
-        features: list[str],
-        corpus: str | None = None,
+    nodes: list[int],
+    features: list[str],
+    corpus: str | None = None,
 ) -> str:
     """
     Batch lookup of feature values for a list of node IDs.
 
     Args:
-        nodes:    List of integer node IDs.
+        nodes: List of integer node IDs.
         features: Feature names to retrieve.
         corpus:   Corpus name. Defaults to current.
     """
@@ -770,7 +776,6 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.verbose:
-        import logging
 
         logging.basicConfig(level=logging.DEBUG)
 
@@ -778,7 +783,10 @@ def main() -> None:
         names = args.names or []
         for i, path in enumerate(args.corpora):
             name = names[i] if i < len(names) else None
-            corpus_manager.load(path, name=name, features=args.features)
+            try:
+                corpus_manager.load(path, name=name, features=args.features)
+            except FileNotFoundError as exc:
+                logging.warning("Corpus not loaded: %s", exc)
 
     if args.sse:
         mcp.run(transport="sse", host=args.host, port=args.sse)

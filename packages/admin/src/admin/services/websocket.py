@@ -5,7 +5,7 @@ fine-grained progress: the conversion pipeline (`admin.converters`,
 `admin.converters._walker.convert_document`) has no progress hook, and
 `Parser.iter_units()` is an unbounded generator with no known total unit
 count up front. So the server can only report coarse status transitions
-(queued -> running -> succeeded/failed), never "record 4213 of 31000" or a
+(queued -> running -> succeeded/failed), never "record 4213 of 31,000" or a
 percentage. See `packages/admin/CLAUDE.md` before wiring in real progress --
 that requires threading a callback through every `_{format}_to_tf.py`
 converter and `_walker.convert_document()`, not just this endpoint.
