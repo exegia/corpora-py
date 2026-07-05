@@ -78,6 +78,8 @@ export const FileUploadDropZone = ({
       isDisabled={isDisabled}
       status={status}
       value={null}
+      width={"100%"}
+      className="h-1/2 w-full"
       onChange={handleChange}
       placeholder="Drag your file over to start the conversion"
       description={hint ?? "SVG, PNG, JPG or GIF (max. 800x400px)"}
@@ -116,7 +118,7 @@ const UploadStatus = ({
     return (
       <HStack gap={1} vAlign="center">
         <Icon icon="error" size="sm" color="error" />
-        <Text type="supporting" color="error">Failed</Text>
+        <Text type="supporting" className="text-red-700 dark:text-red-300">Failed</Text>
       </HStack>
     )
   }
@@ -125,7 +127,7 @@ const UploadStatus = ({
     return (
       <HStack gap={1} vAlign="center">
         <Icon icon="success" size="sm" color="success" />
-        <Text type="supporting" color="success">Complete</Text>
+        <Text type="supporting" className="text-green-700 dark:text-green-200">Complete</Text>
       </HStack>
     )
   }
@@ -134,7 +136,7 @@ const UploadStatus = ({
     return (
       <HStack gap={1} vAlign="center">
         <Icon icon={CloudDownload} size="sm" color="warning" />
-        <Text type="supporting" color="warning">Ready</Text>
+        <Text type="supporting" color="accent">Ready</Text>
       </HStack>
     )
   }

@@ -15,7 +15,7 @@ export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
   }
 
   return (
-    <FileUpload.Root>
+    <FileUpload.Root width={"100%"} height={"100%"}>
       <FileUpload.DropZone
         isDisabled={props.isDisabled}
         accept={ACCEPTED_EXTENSIONS}
@@ -31,7 +31,7 @@ export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
             size={upload.size}
             progress={upload.progress}
             failed={upload.status === "error"}
-            // "ready" = the server finished converting and the `.corpus`
+            // "ready" = the server finished converting, and the `.corpus`
             // bytes are already downloaded, but the local save-to-disk step
             // hasn't completed yet -- see use-upload.ts's `trySave`.
             needsAction={upload.status === "ready"}
@@ -45,7 +45,6 @@ export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
             pending={upload.status === "queued" || upload.status === "converting"}
             statusText={upload.lastLog ?? undefined}
             fileIconVariant="gray"
-
             onDelete={() => deleteUpload(upload.id)}
             onRetry={() => retryUpload(upload.id)}
           />

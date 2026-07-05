@@ -7,11 +7,16 @@ import {
 } from "react-router"
 import { useTheme } from "@heroui/react"
 import { TopNav, TopNavHeading, TopNavItem } from "@astryxdesign/core/TopNav"
+import { LayerProvider } from "@astryxdesign/core/Layer"
 
 import "./app.css"
 
 import { StatusBar } from "./components"
-import { useEffect } from "react"
+import React, { useEffect } from "react"
+import { AppShell } from "@astryxdesign/core/AppShell"
+import { NavIcon, SideNav, SideNavItem, SideNavSection } from "@astryxdesign/core"
+import { ChartBarIcon, FolderIcon, HomeIcon, SettingsIcon, UsersIcon } from "lucide-react"
+import { VStack } from "@astryxdesign/core/VStack"
 
 const NAV = [
   { to: "/", label: "Home", end: true },
@@ -49,13 +54,66 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <link rel="icon" href="data:image/x-icon;base64,AA" />
       <Meta />
       <Links />
+      <title>Corpora | Admin</title>
     </head>
     <body className="min-h-screen bg-neutral-100 dark:bg-taupe-950">
-    {children}
-    <ScrollRestoration />
+    <LayerProvider>
+      {children}
+      <ScrollRestoration />
+    </LayerProvider>
     <Scripts />
     </body>
     </html>
+  )
+}
+
+export const AppShellWrapper = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <AppShell
+      contentPadding={6}
+      style={{ height: "100%", minHeight: 0 }}
+      topNav={
+        <TopNav
+          label="Main navigation"
+          heading={
+            <TopNavHeading
+              heading="App Shell"
+              logo={
+                <NavIcon icon={"s"} />
+              }
+            />
+          }
+          startContent={
+            <>
+              <TopNavItem label="Home" href="#" isSelected />
+              <TopNavItem label="Products" href="#" />
+              <TopNavItem label="Docs" href="#" />
+            </>
+          }
+        />
+      }
+      sideNav={
+        <SideNav>
+          <SideNavSection title="Main" isHeaderHidden>
+            <SideNavItem
+              label="Dashboard"
+              icon={HomeIcon}
+              isSelected
+              href="#"
+            />
+            <SideNavItem label="Analytics" icon={ChartBarIcon} href="#" />
+            <SideNavItem label="Projects" icon={FolderIcon} href="#" />
+          </SideNavSection>
+          <SideNavSection title="Organization">
+            <SideNavItem label="Team" icon={UsersIcon} href="#" />
+            <SideNavItem label="Settings" icon={SettingsIcon} href="#" />
+          </SideNavSection>
+        </SideNav>
+      }>
+      <VStack gap={4}>
+        {children}
+      </VStack>
+    </AppShell>
   )
 }
 
@@ -65,11 +123,9 @@ export default function App() {
   const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
   const { setTheme } = useTheme(mediaQuery.matches ? "dark" : "light")
 
-
   useEffect(() => {
     setTheme(mediaQuery.matches ? "dark" : "light")
   }, [])
-
   useEffect(() => {
     mediaQuery.addEventListener("change", event => setTheme(event.matches ? "dark" : "light"))
   }, [mediaQuery.matches])

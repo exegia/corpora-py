@@ -1,4 +1,5 @@
 import { FileUploadProgressFill as FileUploadProgress } from "@/components/upload"
+import { HStack } from "@astryxdesign/core/HStack"
 
 export function meta() {
   return [{ title: "Corpora" }]
@@ -6,8 +7,8 @@ export function meta() {
 
 export default function Home() {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+    <HStack gap={6} width={"100%"} height={"100%"} hAlign={"center"} vAlign="stretch">
       <FileUploadProgress />
-    </div>
+    </HStack>
   )
 }
