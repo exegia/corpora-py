@@ -163,6 +163,10 @@ dev: dist
 dist:
 	@bun --cwd=demo run vite:build
 
+.PHONY: dev-web
+dev-web: ## Start web-only (vite) server
+	@bun --cwd=demo vite dev
+
 .PHONY: dev-stop
 dev-stop: ## Stop dev processes.
 	@chmod +x $(BIN)/stop.sh
