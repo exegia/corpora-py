@@ -82,7 +82,7 @@ export const CorporaTheme = defineTheme({
     "--color-text-yellow": "light-dark(#584400, #fdcf4f)",
     "--font-family-body": "\"Poppins\", -apple-system, sans-serif",
     "--font-family-code": "ui-monospace, \"SF Mono\", Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
-    "--font-family-heading": "Georgia, \"Times New Roman\", serif",
+    "--font-family-heading": "Figtree, -apple-system, sans-serif",
     "--font-size-4xs": "0.3125rem",
     "--font-size-3xs": "0.375rem",
     "--font-size-2xs": "0.4375rem",

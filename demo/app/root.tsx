@@ -5,7 +5,7 @@ import {
   Meta,
   Outlet,
   Scripts,
-  ScrollRestoration
+  ScrollRestoration, useNavigate
 } from "react-router"
 import { TopNav, TopNavHeading, TopNavItem } from "@astryxdesign/core/TopNav"
 import { LayerProvider } from "@astryxdesign/core/Layer"
@@ -16,13 +16,7 @@ import NavHeaderIcon from "@/components/logo/app-logo"
 import { AppShell } from "@astryxdesign/core/AppShell"
 import { NavIcon } from "@astryxdesign/core"
 import { CorporaTheme } from "@/utils/theme.ts"
-
-const NAV = [
-  { to: "/", label: "Home", end: true },
-  { to: "/corpus/upload", label: "Upload", end: false },
-  { to: "/corpus/convert", label: "Convert", end: false },
-  { to: "./logs", label: "Logs", end: true }
-]
+import { NAV } from "@/utils/constant.ts"
 
 // Global document shell — everything renders inside this.
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -49,6 +43,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 const AppShellWrapper = ({ children }: { children: React.ReactNode }) => {
+
+  const navigate = useNavigate()
   return (
     <AppShell
       height="fill"
@@ -67,7 +63,8 @@ const AppShellWrapper = ({ children }: { children: React.ReactNode }) => {
           }
           startContent={
             NAV.map((navItem) => (
-              <TopNavItem key={navItem.label} label={navItem.label} href={navItem.to} />
+              <TopNavItem key={navItem.label} label={navItem.label}
+                          onClick={() => navigate(navItem.to)} />
             ))
           }
         />
