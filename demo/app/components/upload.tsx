@@ -15,9 +15,10 @@ export const FileUploadProgressFill = (props: { isDisabled?: boolean }) => {
   }
 
   return (
-    <FileUpload.Root width={"100%"} height={"100%"}>
+    <FileUpload.Root width={"100%"} height={"100%"} className="relative">
       <FileUpload.DropZone
         isDisabled={props.isDisabled}
+        className="h-full absolute inset-0"
         accept={ACCEPTED_EXTENSIONS}
         hint="EPUB, HTML, TEI/XML, PDF, or plain text"
         onDropFiles={handleDropFiles}
