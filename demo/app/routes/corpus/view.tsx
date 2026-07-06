@@ -32,7 +32,7 @@ export default function CorpusView() {
       </Form>
 
       <Card>
-        <VStack gap={3} padding={1} isScrollable height="60vh">
+        <VStack gap={3} height="60vh">
           {/* TODO: render passages/results from a loader. */}
           <Text type="body" color="secondary">
             Viewer for corpus “{id}”. Text content will render here once data

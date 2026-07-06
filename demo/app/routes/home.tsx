@@ -7,7 +7,7 @@ export function meta() {
 
 export default function Home() {
   return (
-    <HStack gap={6} width={"100%"} height={"100%"} hAlign={"center"} vAlign="stretch">
+    <HStack gap={6} width={"100%"} hAlign={"center"}>
       <FileUploadProgress />
     </HStack>
   )
