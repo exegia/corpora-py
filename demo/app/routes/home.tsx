@@ -2,44 +2,14 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard"
 import { Grid, GridSpan } from "@astryxdesign/core/Grid"
 import { Heading, Text } from "@astryxdesign/core/Text"
 import { VStack } from "@astryxdesign/core/VStack"
-import {
-  FilesUploadingIllustration,
-  KeyPointsIllustration,
-  OpenBookIllustration
-} from "@/assets"
-import type { ComponentType, SVGProps } from "react"
+import { useNavigate } from "react-router"
+import { MENU_ITEMS } from "@/utils/constant.ts"
+import { DocumentsIllustration } from "@/assets"
 
 export function meta() {
   return [{ title: "Corpora" }]
 }
 
-interface MenuItem {
-  label: string
-  description: string
-  href: string
-  illustration: ComponentType<SVGProps<SVGSVGElement>>
-}
-
-const MENU_ITEMS: MenuItem[] = [
-  {
-    label: "Convert a corpus",
-    description: "Turn a source document into a Text-Fabric dataset.",
-    href: "/convert",
-    illustration: FilesUploadingIllustration
-  },
-  {
-    label: "Browse files",
-    description: "View and download corpora that are ready to go.",
-    href: "/files",
-    illustration: OpenBookIllustration
-  },
-  {
-    label: "Chat",
-    description: "Ask questions and explore your corpora conversationally.",
-    href: "/chat",
-    illustration: KeyPointsIllustration
-  }
-]
 
 export default function Home() {
   const [primary, ...rest] = MENU_ITEMS
@@ -57,23 +27,24 @@ export default function Home() {
           <MenuCard item={primary} size="primary" />
         </GridSpan>
         {rest.map((item) => (
-          <MenuCard key={item.href} item={item} size="secondary" />
+          <MenuCard key={item.to} item={item} size="secondary" />
         ))}
       </Grid>
     </VStack>
   )
 }
 
-function MenuCard({ item, size }: { item: MenuItem; size: "primary" | "secondary" }) {
-  const Illustration = item.illustration
+function MenuCard({ item, size }: { item: typeof MENU_ITEMS[number]; size: "primary" | "secondary" }) {
+  const Illustration = item.illustration ?? DocumentsIllustration
   const isPrimary = size === "primary"
+  const navigate = useNavigate()
 
   return (
-    <ClickableCard label={item.label} height="100%" padding={10}>
+    <ClickableCard label={item.label} height="100%" padding={10} onClick={() => navigate(item.to)}>
       <VStack hAlign={isPrimary ? "start" : "stretch"} height="100%">
         <VStack gap={isPrimary ? 6 : 4} hAlign="stretch">
           <VStack height={isPrimary ? 268 : 96} hAlign={isPrimary ? "start" : "stretch"} vAlign="center">
-            <Illustration className="h-full w-auto fill-neutral-800" />
+            {item.illustration && <Illustration className="h-full w-auto fill-neutral-800" />}
           </VStack>
           <VStack gap={isPrimary ? 2 : 1}>
             <Heading level={2}>{item.label}</Heading>
