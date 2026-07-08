@@ -1,6 +1,0 @@
-export { default as DocumentsIllustration } from "./documents-illustration"
-export { default as FilesUploadingIllustration } from "./files-uploading-illustration"
-export { default as HiringIllustration } from "./hiring-illustration"
-export { default as KeyPointsIllustration } from "./key-points-illustration"
-export { default as MarkdownFileIllustration } from "./markdown-file-illustration"
-export { default as OpenBookIllustration } from "./open-book-illustration"
