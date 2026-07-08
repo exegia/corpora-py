@@ -66,14 +66,14 @@ docker compose -f dockerfiles/docker-compose.yml up corpora
 
 This is a **uv workspace** of three published Python packages plus an umbrella meta-package:
 
-| Package  | PyPI name        | Source                          | Purpose                                                                              |
-|----------|------------------|---------------------------------|--------------------------------------------------------------------------------------|
-| Common   | `corpora-common` | `packages/common/src/common/`   | Settings, logging, shared utilities                                                  |
-| MCP      | `corpora-mcp`    | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI                                                        |
-| Admin    | `corpora-admin`  | `packages/admin/src/admin/`     | EPUB/HTML/PDF/TEI → Text-Fabric converters + conversion HTTP API                     |
-| Umbrella | `corpora-py`     | `src/corpora_py/`               | Depends on all three; combined FastAPI app (`corpora-api` CLI); used by sidecar/demo |
+| Package  | PyPI name        | Source                          | Purpose                                                                                 |
+|----------|------------------|---------------------------------|-----------------------------------------------------------------------------------------|
+| Common   | `corpora-common` | `packages/common/src/common/`   | Settings, logging, shared utilities                                                     |
+| MCP      | `corpora-mcp`    | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI                                                           |
+| Admin    | `corpora-admin`  | `packages/admin/src/admin/`     | EPUB/HTML/PDF/TEI → Text-Fabric converters + conversion HTTP API                        |
+| Umbrella | `corpora-py`     | `src/corpora_py/`               | Depends on all three; combined FastAPI app (`corpora-api` CLI); used by sidecar/example |
 
-- **Install everything** (dev / demo / sidecar): `uv sync` or install `corpora-py`
+- **Install everything** (dev / example / sidecar): `uv sync` or install `corpora-py`
 - **Deploy only MCP server**: install `corpora-mcp` (pulls `corpora-common`)
 - **Run conversion tools**: install `corpora-admin` (pulls `corpora-common` + text-fabric)
 - **Deploy MCP + conversion API together**: install `corpora-py` and run `corpora-api`

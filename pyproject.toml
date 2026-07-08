@@ -15,7 +15,7 @@ classifiers = [
 license = "MIT"
 license-files = ["LICENSE"]
 # Umbrella: pulling this installs all three workspace packages.
-# Used by the sidecar/demo build to get everything in one install.
+# Used by the sidecar/example build to get everything in one install.
 dependencies = [
     "corpora-admin>=0.1.1",
     "corpora-common>=0.1.1",

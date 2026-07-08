@@ -281,10 +281,10 @@ corpora-py/
 ├── src/
 │   └── corpora_py/         # Umbrella module — combined FastAPI app (app.py) + corpora-api entrypoint
 ├── scripts/
-│   ├── setup.py            # Install deps + dotenvx + demo runtime
+│   ├── setup.py            # Install deps + dotenvx + example runtime
 │   ├── clean.py            # Remove caches and build artifacts
 │   ├── publish.py          # Bump version + build + publish helper
-│   └── build/              # Sidecar/demo Python bundling scripts
+│   └── build/              # Sidecar/example Python bundling scripts
 ├── dockerfiles/
 │   ├── Dockerfile          # Combined app image (MCP + conversion API), corpora-py
 │   ├── Dockerfile.client   # MCP-only image, corpora-mcp

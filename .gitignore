@@ -56,4 +56,4 @@ supabase/
 !src/shared/supabase/
 **/resources/
 resources/python/
-!/demo/build/
+/example/build/

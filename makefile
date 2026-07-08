@@ -29,7 +29,7 @@ endef
 # ── Setup & dependencies ──────────────────────────────────────────────────────
 
 .PHONY: setup
-setup: ## Install all dependencies (uv sync, dotenvx, demo deps, embedded Python).
+setup: ## Install all dependencies (uv sync, dotenvx, example deps, embedded Python).
 	@chmod +x $(BIN)/setup.sh $(BIN)/utils.sh
 	@$(BIN)/setup.sh
 
@@ -105,7 +105,7 @@ test: ## Run pytest.
 # ── Docker — local containers ───────────────────────────────────────────────
 
 .PHONY: docker-up-corpora
-docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=false (local/demo use).
+docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=false (local/example use).
 	AUTH_REQUIRED=false PYTHON_VERSION=$(PYTHON_VERSION) $(DOCKER_COMPOSE_CORPORA) up --build -d
 
 .PHONY: docker-down-corpora
@@ -157,15 +157,15 @@ publish-dispatch: ## Dispatch publish workflow without a version bump.
 
 # Run dev servers, but only after ensuring dist/ exists
 dev: dist
-	@bun --cwd=demo concurrently -n vite,electron -c cyan,magenta -k "vite dev" "electrobun dev"
+	@bun --cwd=example concurrently -n vite,electron -c cyan,magenta -k "vite dev" "electrobun dev"
 
 # Build dist/ only if it's missing (real target = file-existence check)
 dist:
-	@bun --cwd=demo run vite:build
+	@bun --cwd=example run vite:build
 
 .PHONY: dev-web
 dev-web: ## Start web-only (vite) server
-	@bun --cwd=demo vite dev
+	@bun --cwd=example vite dev
 
 .PHONY: dev-stop
 dev-stop: ## Stop dev processes.
@@ -192,11 +192,11 @@ clean-all: ## Delete all caches, generated files, build artifacts, venv, node_mo
 		dist \
 		build \
 		*.egg-info \
-		demo/node_modules \
-		demo/.vite \
-		demo/.react-router \
-		demo/dist \
-		demo/build \
+		example/node_modules \
+		example/.vite \
+		example/.react-router \
+		example/dist \
+		example/build \
 		node_modules \
 		uv.lock \
 		.dotenvx; do \
@@ -209,9 +209,9 @@ clean-all: ## Delete all caches, generated files, build artifacts, venv, node_mo
 	done
 	@echo "Searching for nested cache directories and compiled Python files..."
 	@find . -type d \( -name "__pycache__" -o -name ".pytest_cache" -o -name ".mypy_cache" -o -name ".ruff_cache" \) \
-		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./demo/node_modules/*" \
+		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./example/node_modules/*" \
 		-print -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f \( -name "*.pyc" -o -name "*.pyo" \) \
-		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./demo/node_modules/*" \
+		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./example/node_modules/*" \
 		-print -delete 2>/dev/null || true
 	@echo "All caches and generated files have been removed."

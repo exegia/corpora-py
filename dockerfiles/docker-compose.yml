@@ -59,7 +59,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       # Defaults to secure (matches common.utils.config.Settings.auth_required's
       # own default). `make docker-up-corpora` sets this to `false` at
-      # invocation time for local/demo use -- without this line, that shell
+      # invocation time for local/example use -- without this line, that shell
       # var never reached the container and auth stayed enforced regardless.
       AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
     restart: unless-stopped
