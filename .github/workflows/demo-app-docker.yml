@@ -1,12 +1,12 @@
 name: Demo App - Docker Image
 
-# Builds and (optionally) publishes a dev container image for the ElectroBun demo.
+# Builds and (optionally) publishes a dev container image for the ElectroBun "example.
 # The image contains Bun + the local Python library (editable venv inside container).
 # Bundling of the "frozen" embedded Python (wheel + standalone) is driven from
 # root scripts/ (see scripts/build_embedded_python.py and scripts/setup.py).
 # The dev container sets up a venv shim + DEV_PYTHON_BIN override on start.
 #
-# - Builds on changes under demo/app/ or the Python source
+# - Builds on changes under example/app/ or the Python source
 # - Uses cache for fast rebuilds
 # - Pushes to GHCR when on dev / main (or manually via workflow_dispatch)
 
@@ -14,14 +14,14 @@ on:
   push:
     branches: [ dev, next, main ]
     paths:
-      - "demo/app/**"
+      - "example/app/**"
       - "src/corpora-py/**"
       - "pyproject.toml"
       - "uv.lock"
-      - ".github/workflows/demo-app-docker.yml"
+      - ".github/workflows/example-app-docker.yml"
   pull_request:
     paths:
-      - "demo/app/**"
+      - "example/app/**"
       - "src/corpora-py/**"
       - "pyproject.toml"
   workflow_dispatch:
@@ -34,7 +34,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-demo-dev
+  IMAGE_NAME: ${{ github.repository }}-example-dev
 
 jobs:
   build:
@@ -74,7 +74,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: demo/docker/Dockerfile
+          file: example/docker/Dockerfile
           push: |
             ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.push == 'true') }}
           tags: ${{ steps.meta.outputs.tags }}

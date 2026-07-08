@@ -11,8 +11,8 @@
 #   ./scripts/build/archive.sh create  <python_dir> <out_dir> <platform_key>
 #
 # Examples:
-#   ./scripts/build/archive.sh extract .cache/python-standalone/cpython-...tar.gz demo/build/lib/python
-#   ./scripts/build/archive.sh create demo/build/lib/python dist macos-arm64
+#   ./scripts/build/archive.sh extract .cache/python-standalone/cpython-...tar.gz example/build/lib/python
+#   ./scripts/build/archive.sh create example/build/lib/python dist macos-arm64
 #
 # On macOS this uses `ditto` (best symlink preservation for Python runtimes).
 # Elsewhere it falls back to `zip -9 -yr`.
