@@ -7,16 +7,15 @@ import {
   EmptyMedia,
   EmptyTitle
 } from "~/components/ui/empty"
+import type { SVGProps } from "react"
 
-function NodesIllustration() {
+export function NodesIllustration(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width="200"
-      height="120"
-      viewBox="0 0 200 120"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
+      {...props}
     >
       {/* Connection lines */}
       <line

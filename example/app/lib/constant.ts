@@ -2,6 +2,9 @@ import type { ComponentType, FC, SVGProps } from "react"
 import { Uploading, MessagingApp, OnlineChat, SyncFiles, Searching } from "undraw-react"
 import { BubblesIcon, ListIcon, LucideHome, FileSpreadsheet, LucideUploadCloud } from "lucide-react"
 import type { UndrawSVGProps } from "undraw-react/dist/esm/types"
+import { BoardIllustration } from "~/components/examples/c-empty-14"
+import { NodesIllustration } from "~/components/examples/c-empty-19"
+import { ChatIllustration } from "~/components/examples/c-empty-17"
 
 export const NAV = [
   { to: "/", label: "Home", icon: LucideHome },
@@ -12,9 +15,9 @@ export const NAV = [
 
 type MenuItem = {
   description: string
-  illustration?: ComponentType<UndrawSVGProps>
+  illustration?: ComponentType<SVGProps<SVGSVGElement>>
   label: string
-  icon?: FC<UndrawSVGProps>
+  icon?: FC<SVGProps<SVGSVGElement>>
   to: string
 }
 
@@ -28,14 +31,14 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     label: "Convert",
     description: "Turn a source document into a Text-Fabric dataset.",
-    illustration: SyncFiles,
+    illustration: BoardIllustration,
     icon: LucideUploadCloud,
     to: "/corpus/convert"
   },
   {
     label: "Explore",
     description: "View and download corpora that are ready to go.",
-    illustration: Searching,
+    illustration: NodesIllustration,
     to: "/corpus/browse",
     icon: ListIcon
   },
@@ -44,6 +47,6 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Ask questions and explore your corpora conversationally.",
     to: "/chat",
     icon: BubblesIcon,
-    illustration: MessagingApp
+    illustration: ChatIllustration
   }
 ]

@@ -5,25 +5,16 @@ import {
   EmptyMedia,
   EmptyTitle
 } from "~/components/ui/empty"
+import type { SVGProps } from "react"
 
-function BoardIllustration() {
+export function BoardIllustration(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width="180"
-      height="160"
-      viewBox="0 0 180 160"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
+      {...props}
     >
-      {/* Shadow */}
-      <ellipse
-        cx="90"
-        cy="148"
-        rx="60"
-        ry="8"
-        className="fill-muted-foreground/8 dark:fill-muted-foreground/5"
-      />
 
       {/* Isometric board - back face */}
       <path
