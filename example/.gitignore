@@ -1,0 +1,10 @@
+.DS_Store
+.env*
+corpora/node_modules
+
+# React Router
+.react-router
+build
+
+# typescript
+*.tsbuildinfo
