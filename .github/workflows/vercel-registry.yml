@@ -1,0 +1,137 @@
+name: Vercel Container Registry
+
+# Builds the combined corpora-py image (MCP server + admin/conversion API) for
+# both linux/amd64 and linux/arm64 and pushes it to Vercel Container Registry
+# (VCR) with zstd compression.
+#
+# Image ref: vcr.vercel.com/<team-slug>/<project-slug>/<repository>:<tag>
+#            → vcr.vercel.com/corpora-apps/corpora-py/corpora-py
+#
+# Auth: token-based (GitHub Actions has no VERCEL_OIDC_TOKEN — that is only
+# injected inside Vercel's own build env). The Docker username is the Vercel
+# team ID; the password is a Vercel account token. Configure two repo secrets:
+#   VERCEL_TOKEN    — https://vercel.com/account/tokens
+#   VERCEL_TEAM_ID  — the team that owns the project
+# If either secret is missing the workflow still builds both arches (to validate
+# the Dockerfile) but skips the push, with a warning.
+#
+# Triggers:
+#   - Push of a vX.Y.Z tag → tags: latest, vX.Y.Z, X.Y, X → push
+#   - Pull request         → build only (no push), for CI validation
+#   - workflow_dispatch    → manual run with optional push toggle
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  pull_request:
+    branches: [ main, dev, fix/dev-branch ]
+    paths:
+      - "dockerfiles/**"
+      - "packages/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/vercel-registry.yml"
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Push image to VCR (default: true)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  VCR_REGISTRY: vcr.vercel.com
+  VCR_TEAM: corpora-apps
+  VCR_PROJECT: corpora-py
+  VCR_REPOSITORY: corpora-py
+
+jobs:
+  build-push:
+    name: Build & push to VCR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── QEMU + Buildx for multi-platform builds ──────────────────────────
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Decide whether we can push ────────────────────────────────────────
+      # Never push on pull_request; honour the workflow_dispatch toggle; and
+      # require both secrets to be present so the run degrades to build-only
+      # instead of failing when VCR credentials aren't configured yet.
+      - name: Determine push
+        id: gate
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+        run: |
+          push=true
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            push=false
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.push }}" != "true" ]; then
+            push=false
+          fi
+          if [ "$push" = "true" ] && { [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_TEAM_ID" ]; }; then
+            echo "::warning::VERCEL_TOKEN / VERCEL_TEAM_ID secrets not set — building both arches without pushing to VCR."
+            push=false
+          fi
+          echo "push=$push" >> "$GITHUB_OUTPUT"
+
+      # ── Login to VCR (token auth: username = team ID) ─────────────────────
+      - name: Log in to Vercel Container Registry
+        if: steps.gate.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.VCR_REGISTRY }}
+          username: ${{ secrets.VERCEL_TEAM_ID }}
+          password: ${{ secrets.VERCEL_TOKEN }}
+
+      # ── Compute tags and labels ───────────────────────────────────────────
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.VCR_REGISTRY }}/${{ env.VCR_TEAM }}/${{ env.VCR_PROJECT }}/${{ env.VCR_REPOSITORY }}
+          flavor: |
+            latest=auto
+          tags: |
+            # vX.Y.Z tag → vX.Y.Z, X.Y, X, latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # PR → pr-<number> (push disabled by the gate above)
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=${{ env.VCR_REPOSITORY }}
+            org.opencontainers.image.description=Corpora platform — MCP server + admin/conversion API (full umbrella)
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      # ── Build both arches, push with zstd when enabled ────────────────────
+      # Vercel recommends zstd; oci-mediatypes is required for it. `outputs`
+      # carries the compression attrs and the push toggle together (so we don't
+      # also set `push:`). On PRs push=false → both arches build but nothing is
+      # pushed, which still validates the multi-arch Dockerfile.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dockerfiles/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true,push=${{ steps.gate.outputs.push }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
