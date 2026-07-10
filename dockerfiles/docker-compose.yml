@@ -23,9 +23,9 @@ services:
       - path: .env.development
         required: false # silently skipped if .env doesn't exist; use shell env instead
     ports:
+      # The Caddyfile only defines a :5002 site, so 80/443 were never served
+      # and only collided with any host process already bound to those ports.
       - "5002:5002"
-      - "80:80"
-      - "443:443"
     volumes:
       - type: bind
         source: ./dockerfiles/Caddyfile
@@ -44,6 +44,9 @@ services:
     build:
       context: .
       dockerfile: ./dockerfiles/Dockerfile
+      # Build on the host network so apt-get can resolve DNS in environments
+      # where the Docker daemon runs with iptables disabled (no bridge NAT).
+      network: host
     image: corpora-py:latest
     container_name: corpora-py
     ports:
