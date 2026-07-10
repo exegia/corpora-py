@@ -8,8 +8,10 @@ GHCR_OWNER         ?= exegia
 CORPORA_IMAGE      ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py
 # Vercel Container Registry (VCR). Image ref is registry/team-slug/project-slug/repository.
 # Override VCR_TEAM/VCR_PROJECT/VCR_REPOSITORY to match your Vercel project.
+# Defaults match the linked Vercel project `corpora-apps/corpora-py` (team is the
+# Vercel team slug, not the GitHub org).
 VCR_REGISTRY       ?= vcr.vercel.com
-VCR_TEAM           ?= exegia
+VCR_TEAM           ?= corpora-apps
 VCR_PROJECT        ?= corpora-py
 VCR_REPOSITORY     ?= corpora-py
 VCR_IMAGE          ?= $(VCR_REGISTRY)/$(VCR_TEAM)/$(VCR_PROJECT)/$(VCR_REPOSITORY)
