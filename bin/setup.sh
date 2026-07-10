@@ -63,8 +63,8 @@ main() {
   is_uv_install
   sync_dependencies
   install_dotenvx
-  install_demo_deps
-  build_demo_python_runtime
+  # install_demo_deps
+  # build_demo_python_runtime
 
   echo
   echo "Setup complete."
