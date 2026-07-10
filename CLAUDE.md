@@ -60,6 +60,27 @@ docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro corpora-py
 
 # Docker Compose (see dockerfiles/docker-compose.yml for exact service names)
 docker compose -f dockerfiles/docker-compose.yml up corpora
+
+# ── Publish the combined image to Vercel Container Registry (VCR) ─────────────
+# Image ref: vcr.vercel.com/<team-slug>/<project-slug>/<repository>:<tag>
+# Override VCR_TEAM / VCR_PROJECT / VCR_REPOSITORY in the makefile to match your project.
+
+# 1. Link the local dir to a Vercel project and pull env vars (provides VERCEL_OIDC_TOKEN)
+make vercel-env          # runs: vercel link && vercel env pull .env.local
+
+# 2. Authenticate Docker to VCR (auto-sources .env.local; OIDC by default)
+make docker-login-vcr    # OIDC: docker login vcr.vercel.com --username oidc
+                         # token fallback: set VERCEL_TOKEN + VERCEL_TEAM_ID instead
+
+# 3. Build a multi-arch image with zstd compression and push (needs docker buildx)
+make docker-publish-vcr
+
+# Equivalent raw commands (what the targets run):
+source .env.local
+printf '%s' "$VERCEL_OIDC_TOKEN" | docker login vcr.vercel.com --username oidc --password-stdin
+docker buildx build --platform linux/amd64,linux/arm64 \
+  --output "type=image,name=vcr.vercel.com/team-slug/project-slug/corpora-py:latest,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" .
+# Without buildx (no zstd): docker build -t vcr.vercel.com/.../corpora-py:latest . && docker push vcr.vercel.com/.../corpora-py:latest
 ```
 
 ## Architecture

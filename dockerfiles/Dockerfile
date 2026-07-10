@@ -5,6 +5,11 @@
 # Build:
 #   docker build -t corpora-py .
 #
+# Publish to Vercel Container Registry (VCR) — see the makefile `docker-publish-vcr`
+# target and CLAUDE.md; multi-arch + zstd via buildx:
+#   docker buildx build --platform linux/amd64,linux/arm64 \
+#     --output "type=image,name=vcr.vercel.com/team-slug/project-slug/corpora-py:latest,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" .
+#
 # Run the combined app (MCP at /mcp, conversion API at /convert):
 #   docker run -p 8000:8000 \
 #     -v ~/.exegia/datasets:/data/datasets:ro \

@@ -6,6 +6,14 @@ DIST_DIR           ?= dist
 GHCR_REGISTRY      ?= ghcr.io
 GHCR_OWNER         ?= exegia
 CORPORA_IMAGE      ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py
+# Vercel Container Registry (VCR). Image ref is registry/team-slug/project-slug/repository.
+# Override VCR_TEAM/VCR_PROJECT/VCR_REPOSITORY to match your Vercel project.
+VCR_REGISTRY       ?= vcr.vercel.com
+VCR_TEAM           ?= exegia
+VCR_PROJECT        ?= corpora-py
+VCR_REPOSITORY     ?= corpora-py
+VCR_IMAGE          ?= $(VCR_REGISTRY)/$(VCR_TEAM)/$(VCR_PROJECT)/$(VCR_REPOSITORY)
+VCR_PLATFORMS      ?= linux/amd64,linux/arm64
 PYTHON_VERSION     ?= 3.13
 DOCKER_PROJECT     := docker compose --project-directory .
 DOCKER_COMPOSE_CORPORA := $(DOCKER_PROJECT) -f dockerfiles/docker-compose.yml
@@ -24,6 +32,7 @@ define Comment
 	- Run `make docker-up-corpora` to start containers.
 	- Run `make publish` to bump version, tag, and trigger PyPI publish via CI.
 	- Run `make docker-publish` to build and push images to GHCR.
+	- Run `make docker-publish-vcr` to build and push the image to Vercel Container Registry.
 endef
 
 # ── Setup & dependencies ──────────────────────────────────────────────────────
@@ -138,6 +147,33 @@ docker-publish-corpora: docker-login-ghcr docker-build-corpora ## Build and push
 
 .PHONY: docker-publish
 docker-publish: docker-publish-corpora ## Build and push all images to GHCR.
+
+# ── Docker — build & publish to Vercel Container Registry (VCR) ───────────────
+
+.PHONY: vercel-env
+vercel-env: ## Link the Vercel project and pull env vars into .env.local (provides VERCEL_OIDC_TOKEN).
+	vercel link
+	vercel env pull .env.local
+
+.PHONY: docker-login-vcr
+docker-login-vcr: ## Authenticate Docker with VCR (OIDC via VERCEL_OIDC_TOKEN, or token via VERCEL_TOKEN + VERCEL_TEAM_ID).
+	@set -a; [ -f .env.local ] && . ./.env.local; set +a; \
+	if [ -n "$$VERCEL_OIDC_TOKEN" ]; then \
+		printf '%s' "$$VERCEL_OIDC_TOKEN" | docker login $(VCR_REGISTRY) --username oidc --password-stdin; \
+	elif [ -n "$$VERCEL_TOKEN" ]; then \
+		printf '%s' "$$VERCEL_TOKEN" | docker login $(VCR_REGISTRY) --username "$${VERCEL_TEAM_ID:?set VERCEL_TEAM_ID for token auth}" --password-stdin; \
+	else \
+		echo "error: set VERCEL_OIDC_TOKEN (run 'make vercel-env' then retry) or VERCEL_TOKEN" >&2; \
+		exit 1; \
+	fi
+
+.PHONY: docker-publish-vcr
+docker-publish-vcr: docker-login-vcr ## Build multi-arch image with zstd and push to VCR (requires docker buildx).
+	docker buildx build \
+		--platform $(VCR_PLATFORMS) \
+		-f dockerfiles/Dockerfile \
+		--output "type=image,name=$(VCR_IMAGE):$(IMAGE_TAG),push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" \
+		.
 
 # ── Publish (PyPI via GitHub Actions) ─────────────────────────────────────────
 
