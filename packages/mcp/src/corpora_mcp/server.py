@@ -1,15 +1,13 @@
 """FastMCP server exposing the Context-Fabric corpus tools."""
 
 import argparse
-import asyncio
 import logging
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
-from fastmcp import Context, FastMCP
-from fastmcp.exceptions import ToolError
+from fastmcp import FastMCP
 
 from .corpus import corpus_manager
 
@@ -55,107 +53,6 @@ def _feat(api: Any, name: str) -> Any:
         return api.Fs(name)
     except Exception:
         return getattr(api.F, name, None)
-
-
-# ── Corpus acquisition tools ──────────────────────────────────────────────────
-
-
-@mcp.tool()
-async def download_corpus(
-    git_url: str, name: str | None = None, ctx: Context | None = None
-) -> str:
-    """
-    Download Text-Fabric corpora from a git repository and load them.
-
-    Datasets are not validated automatically; call validate_corpus() to verify
-    a downloaded corpus when you choose to.
-
-    Args:
-        git_url: URL of the git repository containing Text-Fabric dataset(s).
-        name:    Name for the corpus (only applied when exactly one dataset is found).
-    """
-    from .corpus import fetch_datasets_from_git
-
-    try:
-        datasets = await asyncio.to_thread(fetch_datasets_from_git, git_url)
-    except Exception as exc:
-        raise ToolError(f"Download failed: {exc}") from exc
-
-    if not datasets:
-        return f"No Text-Fabric datasets (otext.tf + otype.tf) found in {git_url}."
-
-    loaded = [
-        corpus_manager.load(str(ds), name=name if len(datasets) == 1 else None)
-        for ds in datasets
-    ]
-
-    message = (
-        f"Downloaded and loaded {len(loaded)} corpus/corpora from {git_url}: "
-        f"{', '.join(loaded)}. Run validate_corpus() to verify them."
-    )
-    if ctx is not None:
-        await ctx.info(message)
-    return message
-
-
-@mcp.tool()
-async def validate_corpus(
-    corpus: str | None = None,
-    path: str | None = None,
-    ctx: Context | None = None,
-) -> str:
-    """
-    Validate that a corpus is a valid Context-Fabric (.cfm) corpus.
-
-    Runs the full validation cycle on the dataset directory: loading from .tf
-    files, compiling to the .cfm mmap format, reloading from the .cfm cache,
-    and comparing statistics and sampled feature values between both loading
-    paths. If the corpus is valid a notification is sent to the client; if not,
-    the call fails with the reasons it is invalid.
-
-    Args:
-        corpus: Name of a loaded corpus to validate. Defaults to the current corpus.
-        path:   Validate a dataset directory on disk instead (overrides corpus).
-    """
-    from corpora_mcp.corpus import validate_corpus as run_validation
-
-    if path is not None:
-        target_path = Path(path).expanduser()
-        name = corpus or target_path.name
-    else:
-        try:
-            target_path = corpus_manager.get_path(corpus)
-        except (KeyError, RuntimeError) as exc:
-            raise ToolError(str(exc)) from exc
-        name = corpus or corpus_manager.current or target_path.name
-
-    if not target_path.exists():
-        raise ToolError(f"Corpus path not found: {target_path}")
-
-    result = await asyncio.to_thread(run_validation, name, target_path)
-
-    if not result.is_valid:
-        reasons = "; ".join(result.failure_reasons())
-        message = f"Corpus '{name}' is NOT a valid Context-Fabric corpus: {reasons}"
-        if ctx is not None:
-            await ctx.error(message)
-        raise ToolError(message)
-
-    stats = result.cf_stats
-    message = f"Corpus '{name}' is a valid Context-Fabric (.cfm) corpus."
-    if ctx is not None:
-        await ctx.info(message)
-    return (
-        f"{message}\n"
-        f"  path:          {target_path}\n"
-        f"  slots:         {stats.max_slot:,}\n"
-        f"  nodes:         {stats.max_node:,}\n"
-        f"  node types:    {stats.node_types}\n"
-        f"  node features: {stats.node_features}\n"
-        f"  edge features: {stats.edge_features}\n"
-        f"Checks: .tf load OK, .cfm compile + mmap reload OK, "
-        f"stats and feature samples match."
-    )
 
 
 # ── Discovery tools ───────────────────────────────────────────────────────────
@@ -471,7 +368,6 @@ def search_csv(
         corpus:      Corpus name. Defaults to current.
     """
     import csv
-    from pathlib import Path
 
     api = corpus_manager.get_api(corpus)
 
