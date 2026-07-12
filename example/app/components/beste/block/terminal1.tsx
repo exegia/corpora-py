@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, Copy, RotateCcw } from "lucide-react"
+import { Check, Copy, LoaderCircle, RotateCcw } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { Badge } from "~/components/ui/badge"
@@ -35,6 +35,8 @@ interface Terminal1Props {
   className?: string
   logs?: string[]
   status?: string
+  progress?: number
+  isRunning?: boolean
 }
 
 export const terminal1Demo: Terminal1Props = {
@@ -297,7 +299,9 @@ export function Terminal1({
                             glowEffect = true,
                             className,
                             logs,
-                            status
+                            status,
+                            progress,
+                            isRunning = false
                           }: Terminal1Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(containerRef, { amount: 0.3 })
@@ -433,7 +437,7 @@ export function Terminal1({
                   logs.map((line, index) => (
                     <div
                       key={`${index}-${line}`}
-                      className="mb-2 flex items-start gap-2 last:mb-0"
+                      className="mb-2 flex animate-in items-start gap-2 duration-300 fade-in slide-in-from-bottom-1 last:mb-0 motion-reduce:animate-none"
                     >
                       <span
                         className="font-semibold"
@@ -449,7 +453,49 @@ export function Terminal1({
                       </span>
                     </div>
                   ))}
-                {logs !== undefined && logs.length === 0 && (
+                {logs !== undefined && isRunning && (
+                  <section
+                    className="mt-3 grid animate-in gap-2 border-t border-white/10 pt-3 duration-300 fade-in motion-reduce:animate-none"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <p className="flex items-center gap-2">
+                      <LoaderCircle
+                        className="size-4 animate-spin motion-reduce:animate-none"
+                        style={{ color: terminalTheme.prompt }}
+                        aria-hidden="true"
+                      />
+                      <span style={{ color: terminalTheme.text }}>
+                        {status || "Conversion in progress"}
+                      </span>
+                      <span className="flex gap-1" aria-hidden="true">
+                        {[0, 1, 2].map((dot) => (
+                          <span
+                            key={dot}
+                            className="size-1 animate-bounce rounded-full bg-emerald-400 motion-reduce:animate-none"
+                            style={{ animationDelay: `${dot * 150}ms` }}
+                          />
+                        ))}
+                      </span>
+                    </p>
+                    <span
+                      className="block h-1 overflow-hidden rounded-full bg-white/10"
+                      role="progressbar"
+                      aria-label="Conversion progress"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progress}
+                    >
+                      <span
+                        className="block h-full rounded-full bg-emerald-400 transition-[width] duration-700 ease-out"
+                        style={{
+                          width: `${Math.min(100, Math.max(6, progress ?? 6))}%`
+                        }}
+                      />
+                    </span>
+                  </section>
+                )}
+                {logs !== undefined && logs.length === 0 && !isRunning && (
                   <div className="flex items-center gap-2">
                     <span
                       className="font-semibold"

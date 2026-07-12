@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { type MetaDescriptor } from "react-router"
 import { Card, CardContent } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
 import { Terminal1 } from "~/components/beste/block/terminal1"
 import { Upload8 } from "~/components/beste/piece/upload8"
 import { useUpload } from "~/lib/hooks/use-upload"
+import { cn } from "~/lib/utils"
 
 export function meta(): MetaDescriptor[] {
   return [
@@ -15,13 +16,8 @@ export function meta(): MetaDescriptor[] {
 
 export default function CorpusConvert() {
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
+  const [showTerminal, setShowTerminal] = useState(false)
   const { uploads, uploadFile, saveUpload } = useUpload()
-
-  useEffect(() => {
-    if (currentUploadId || Object.keys(uploads).length === 0) return
-    const latest = Object.values(uploads).at(-1)
-    if (latest) setCurrentUploadId(latest.id)
-  }, [currentUploadId, uploads])
 
   const currentUpload = currentUploadId ? uploads[currentUploadId] : undefined
   const isBusy =
@@ -30,6 +26,8 @@ export default function CorpusConvert() {
     currentUpload?.status === "converting"
 
   const handleUpload = async (file: File) => {
+    setCurrentUploadId(null)
+    setShowTerminal(true)
     const id = await uploadFile(file, {
       name: file.name === "SBLGNT.zip" ? "SBLGNT" : undefined,
       description:
@@ -73,7 +71,12 @@ export default function CorpusConvert() {
       </div>
 
       <Card>
-        <CardContent className="grid grid-cols-2 items-stretch gap-6">
+        <CardContent
+          className={cn(
+            "grid grid-cols-1 items-stretch gap-6",
+            showTerminal && "lg:grid-cols-2"
+          )}
+        >
           <Upload8
             title="SBLGNT Text-Fabric dataset"
             formats={["ZIP", "TF"]}
@@ -94,14 +97,20 @@ export default function CorpusConvert() {
                 : undefined
             }
           />
-          <Terminal1
-            glowEffect={false}
-            showCopyButton
-            className="py-0"
-            logs={terminalLogs}
-            status={isBusy ? "Conversion in progress" : undefined}
-            terminal={{ title: "Conversion API", commands: [] }}
-          />
+          {showTerminal && (
+            <section className="animate-in duration-500 fade-in slide-in-from-bottom-3 motion-reduce:animate-none">
+              <Terminal1
+                glowEffect={false}
+                showCopyButton
+                className="py-0"
+                logs={terminalLogs}
+                progress={currentUpload?.progress}
+                status={isBusy ? "Conversion in progress" : "Preparing upload"}
+                isRunning={!currentUpload || isBusy}
+                terminal={{ title: "Conversion API", commands: [] }}
+              />
+            </section>
+          )}
         </CardContent>
       </Card>
     </div>
