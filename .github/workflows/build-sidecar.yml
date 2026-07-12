@@ -104,7 +104,7 @@ jobs:
 
       # Cache the standalone-Python tarball — it's ~70 MB and rarely changes.
       - name: Cache standalone Python
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .cache/python-standalone
           key: python-standalone-${{ matrix.platform }}-3.13.14-20260623
