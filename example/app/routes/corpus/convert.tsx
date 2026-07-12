@@ -78,16 +78,14 @@ export default function CorpusConvert() {
           )}
         >
           <Upload8
-            title="SBLGNT Text-Fabric dataset"
-            formats={["ZIP", "TF"]}
+            formats={[".zip", ".tf", ".pdf", ".txt", ".xml", ".tei"]}
             limit="Sample included with the app"
-            action="Upload SBLGNT.zip"
+            action="Upload"
             accept=".zip,application/zip"
             disabled={isBusy}
             status={statusLabel}
             error={currentUpload?.error}
             onUpload={handleUpload}
-            sample={{ name: "SBLGNT.zip", url: "/SBLGNT.zip" }}
             resultAction={
               currentUpload?.status === "ready"
                 ? {

@@ -3,6 +3,7 @@
 import { FileUp, LoaderCircle } from "lucide-react"
 import { useRef, useState } from "react"
 import { cn } from "~/lib/utils"
+import { Button } from "~/components/ui/button"
 
 interface Upload8Props {
   title?: string
@@ -67,22 +68,24 @@ export function Upload8({
   return (
     <div
       className={cn(
-        "relative flex size-full items-center justify-center p-4",
+        "relative flex w-full items-center justify-center min-h-80 group" +
+        " rounded-lg",
         className
       )}
     >
       <div
-        className="flex w-full max-w-80 flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border bg-card px-5 py-6 text-center shadow-sm">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          <FileUp className="size-4" aria-hidden="true" />
+        className="flex w-full flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-background/10 px-5 py-6  text-center shadow-sm h-full">
+        <div
+          className="flex size-16 items-center justify-center rounded-2xl bg-muted text-muted-foreground scale-125 mb-4">
+          <FileUp
+            className=" opacity-75 fill-white/20 shadow-lg -skew-3 size-10 rotate-12 transition-transform group-hover:rotate-0 group-hover:scale-110 group-hover:skew-x-0"
+            aria-hidden="true" />
         </div>
-        {title && (
-          <span className="text-sm font-semibold text-card-foreground">
-            {title}
+        <span className="text-lg font-semibold text-card-foreground">
+            {title ?? "Upload your file"}
           </span>
-        )}
         {formats.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-1">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             {formats.map((fmt, idx) => (
               <span
                 key={idx}
@@ -96,19 +99,25 @@ export function Upload8({
         {limit && (
           <span className="text-xs text-muted-foreground">{limit}</span>
         )}
-        <button
+        <Button
           type="button"
+          size="sm"
+          className="cursor-pointer"
           disabled={disabled || isLoadingSample}
           onClick={() =>
             sample ? void uploadSample() : inputRef.current?.click()
           }
-          className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold text-card-foreground shadow-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isLoadingSample && (
-            <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+          {sample ? (
+            isLoadingSample ? (
+              <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+            ) : (
+              `Upload ${sample.name}`
+            )
+          ) : (
+            action
           )}
-          {action}
-        </button>
+        </Button>
         {sample && (
           <button
             type="button"
