@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "xds": {
-      "type": "url",
-      "url": "https://astryx.atmeta.com/mcp"
-    }
-  }
-}
