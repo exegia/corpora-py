@@ -90,6 +90,19 @@ python_version = "3.13"
 warn_unused_configs = true
 # Third-party deps (ebooklib, text-fabric, supabase, ...) ship no type stubs.
 ignore_missing_imports = true
+exclude = [
+    # Legacy standalone scripts superseded by admin.parsers/admin.converters;
+    # not wired into PARSERS/CONVERTERS and full of pre-annotation-era code.
+    "^packages/admin/src/admin/utils/",
+    # generate_ssl_cert is dead code broken under pyOpenSSL >= 25
+    # (X509.add_extensions removed); fix/removal tracked separately --
+    # drop this exclusion once helpers.py is cleaned up.
+    "^packages/common/src/common/utils/helpers\\.py$",
+    # tests/ uses pytest's conventional __init__.py-less layout, which mypy
+    # rejects as duplicate "conftest" modules; the suite is validated by
+    # running it, so type-check only the shipped packages.
+    "^tests/",
+]
 # Aspirational strictness (disallow_untyped_defs, warn_return_any) is tracked
 # as tech debt; the codebase does not satisfy it yet and CI runs mypy.
 
