@@ -1,8 +1,8 @@
 import { useAtom } from "jotai"
 import { useCallback, useEffect, useRef } from "react"
-import { API_URL } from "~/lib/types"
-import { subscribeJobStatus, type JobStatusMessage } from "./use-socket"
-import { uploadAtom, type UploadEntry } from "~/lib/atoms"
+import { API_URL } from "~/lib/types/socket"
+import { type JobStatusMessage, subscribeJobStatus } from "./use-socket"
+import { uploadAtom, type UploadEntry } from "~/lib/atoms/upload-atom"
 
 // Where past-conversion history is mirrored so it survives a page reload or
 // app relaunch. `corpora-api`'s `JobManager` (see jobs.py) is in-memory only
@@ -58,7 +58,8 @@ const EXTENSION_TO_FORMAT: Record<string, string> = {
   ".tei": "tei",
   ".pdf": "pdf",
   ".txt": "plain",
-  ".text": "plain"
+  ".text": "plain",
+  ".zip": "tf_zip"
 }
 
 const detectSourceFormat = (filename: string): string => {
@@ -77,20 +78,31 @@ const detectSourceFormat = (filename: string): string => {
 type SaveFilePicker = (options: {
   suggestedName: string
   types: { description: string; accept: Record<string, string[]> }[]
-}) => Promise<{ createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> }>
+}) => Promise<{
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>
+    close: () => Promise<void>
+  }>
+}>
 
 // Saves via the File System Access API's native save-as dialog where
 // available (desktop webviews backing ElectroBun); falls back to a plain
 // anchor-download for browsers that don't support it.
 const saveCorpusFile = async (filename: string, blob: Blob): Promise<void> => {
-  const showSaveFilePicker = (window as unknown as { showSaveFilePicker?: SaveFilePicker })
-    .showSaveFilePicker
+  const showSaveFilePicker = (
+    window as unknown as { showSaveFilePicker?: SaveFilePicker }
+  ).showSaveFilePicker
 
   if (showSaveFilePicker) {
     try {
       const handle = await showSaveFilePicker({
         suggestedName: filename,
-        types: [{ description: "Corpus archive", accept: { "application/octet-stream": [".corpus"] } }]
+        types: [
+          {
+            description: "Corpus archive",
+            accept: { "application/octet-stream": [".corpus"] }
+          }
+        ]
       })
       const writable = await handle.createWritable()
       await writable.write(blob)
@@ -111,6 +123,12 @@ const saveCorpusFile = async (filename: string, blob: Blob): Promise<void> => {
 }
 
 type ConvertResponse = { job_id: string; status_url: string; ws_url: string }
+
+type UploadOptions = {
+  name?: string
+  description?: string
+  sourceFormat?: string
+}
 
 /**
  * Uploads a file to the `corpora-api` conversion endpoint (`POST /convert`,
@@ -171,8 +189,11 @@ export const useUpload = () => {
         const entry = uploadsRef.current[id]
         if (!entry?.jobId || !entry.corpusName) return
         try {
-          const response = await fetch(`${API_URL}/convert/${entry.jobId}/download`)
-          if (!response.ok) throw new Error(`Download failed (${response.status})`)
+          const response = await fetch(
+            `${API_URL}/convert/${entry.jobId}/download`
+          )
+          if (!response.ok)
+            throw new Error(`Download failed (${response.status})`)
           cached = { blob: await response.blob(), filename: entry.corpusName }
           blobsRef.current.set(id, cached)
         } catch (error) {
@@ -213,7 +234,10 @@ export const useUpload = () => {
         // (see websocket.py), and the UI should reflect that either way.
         setUploads((draft) => {
           const entry = draft[id]
-          if (entry) entry.lastLog = message.last_log
+          if (entry) {
+            entry.logs = message.logs
+            entry.lastLog = message.last_log
+          }
         })
 
         if (message.status === "running") {
@@ -245,8 +269,11 @@ export const useUpload = () => {
         if (message.status === "succeeded") {
           void (async () => {
             try {
-              const response = await fetch(`${API_URL}/convert/${jobId}/download`)
-              if (!response.ok) throw new Error(`Download failed (${response.status})`)
+              const response = await fetch(
+                `${API_URL}/convert/${jobId}/download`
+              )
+              if (!response.ok)
+                throw new Error(`Download failed (${response.status})`)
               const blob = await response.blob()
               const filename = `${message.name}.corpus`
 
@@ -271,14 +298,14 @@ export const useUpload = () => {
                 const entry = draft[id]
                 if (!entry) return
                 entry.status = "error"
-                entry.error = error instanceof Error ? error.message : String(error)
+                entry.error =
+                  error instanceof Error ? error.message : String(error)
               })
               stopTracking(id)
               return
             }
 
             stopTracking(id)
-            await trySave(id)
           })()
         }
       }
@@ -289,7 +316,7 @@ export const useUpload = () => {
   )
 
   const uploadFile = useCallback(
-    async (file: File): Promise<string> => {
+    async (file: File, options: UploadOptions = {}): Promise<string> => {
       const id = createId()
       filesRef.current.set(id, file)
 
@@ -301,25 +328,37 @@ export const useUpload = () => {
           type: file.type,
           status: "uploading",
           progress: 0,
-          error: null
+          error: null,
+          logs: []
         }
       })
 
       try {
-        const sourceFormat = detectSourceFormat(file.name)
+        const sourceFormat =
+          options.sourceFormat ?? detectSourceFormat(file.name)
 
         const formData = new FormData()
         formData.append("file", file)
         formData.append("source_format", sourceFormat)
-        formData.append("name", file.name.replace(/\.[^./]+$/, ""))
+        formData.append(
+          "name",
+          options.name?.trim() || file.name.replace(/\.[^./]+$/, "")
+        )
+        formData.append("description", options.description?.trim() || "")
 
-        const response = await fetch(`${API_URL}/convert`, { method: "POST", body: formData })
+        const response = await fetch(`${API_URL}/convert`, {
+          method: "POST",
+          body: formData
+        })
         if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as { detail?: string }
+          const body = (await response.json().catch(() => ({}))) as {
+            detail?: string
+          }
           throw new Error(body.detail ?? `Upload failed (${response.status})`)
         }
 
-        const { job_id: jobId, ws_url: wsPath } = (await response.json()) as ConvertResponse
+        const { job_id: jobId, ws_url: wsPath } =
+          (await response.json()) as ConvertResponse
 
         setUploads((draft) => {
           const entry = draft[id]
@@ -393,8 +432,12 @@ export const useUpload = () => {
     async (id: string, jobId: string) => {
       try {
         const response = await fetch(`${API_URL}/convert/${jobId}`)
-        if (!response.ok) throw new Error(`Job lookup failed (${response.status})`)
-        const status = (await response.json()) as { status: string; download_ready: boolean }
+        if (!response.ok)
+          throw new Error(`Job lookup failed (${response.status})`)
+        const status = (await response.json()) as {
+          status: string
+          download_ready: boolean
+        }
         if (status.status !== "succeeded" || !status.download_ready) {
           throw new Error(`Job is ${status.status}, not ready`)
         }

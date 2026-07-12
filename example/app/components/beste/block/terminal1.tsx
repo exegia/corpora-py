@@ -8,31 +8,33 @@ import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
 
 interface TerminalCommand {
-  id: string;
-  prompt?: string;
-  command: string;
-  output?: string;
-  outputDelay?: number;
+  id: string
+  prompt?: string
+  command: string
+  output?: string
+  outputDelay?: number
 }
 
 interface Terminal1Props {
   badge?: {
-    label: string;
-    variant?: "default" | "secondary" | "outline";
-  };
-  heading?: string;
-  description?: string;
+    label: string
+    variant?: "default" | "secondary" | "outline"
+  }
+  heading?: string
+  description?: string
   terminal?: {
-    title?: string;
-    commands: TerminalCommand[];
-    typeSpeed?: number;
-    delayBetweenCommands?: number;
-    showLineNumbers?: boolean;
-    showControls?: boolean;
-  };
-  showCopyButton?: boolean;
-  glowEffect?: boolean;
-  className?: string;
+    title?: string
+    commands: TerminalCommand[]
+    typeSpeed?: number
+    delayBetweenCommands?: number
+    showLineNumbers?: boolean
+    showControls?: boolean
+  }
+  showCopyButton?: boolean
+  glowEffect?: boolean
+  className?: string
+  logs?: string[]
+  status?: string
 }
 
 export const terminal1Demo: Terminal1Props = {
@@ -75,12 +77,12 @@ export const terminal1Demo: Terminal1Props = {
 }
 
 interface TypewriterState {
-  commandIndex: number;
-  charIndex: number;
-  outputCharIndex: number;
-  isTypingCommand: boolean;
-  isTypingOutput: boolean;
-  isComplete: boolean;
+  commandIndex: number
+  charIndex: number
+  outputCharIndex: number
+  isTypingCommand: boolean
+  isTypingOutput: boolean
+  isComplete: boolean
 }
 
 function useTerminalTypewriter(
@@ -293,7 +295,9 @@ export function Terminal1({
                             terminal,
                             showCopyButton = true,
                             glowEffect = true,
-                            className
+                            className,
+                            logs,
+                            status
                           }: Terminal1Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(containerRef, { amount: 0.3 })
@@ -314,25 +318,27 @@ export function Terminal1({
   )
 
   const handleCopy = useCallback(() => {
-    const allCommands = terminal?.commands
-      .map((cmd) => `${cmd.prompt || "$ "}${cmd.command}`)
-      .join("\n")
+    const allCommands = logs
+      ? logs.join("\n")
+      : terminal?.commands
+        .map((cmd) => `${cmd.prompt || "$ "}${cmd.command}`)
+        .join("\n")
 
     if (allCommands) {
       navigator.clipboard.writeText(allCommands)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
-  }, [terminal?.commands])
+  }, [logs, terminal?.commands])
 
   const handleRestart = useCallback(() => {
     reset()
   }, [reset])
 
   return (
-    <section className={cn("py-16 md:py-24 w-full", className)}>
-      <div className="mx-auto max-w-4xl px-4 md:px-6">
-        <div className="flex gap-4 items-center justify-center flex-col">
+    <section className={cn("h-full w-full", className)}>
+      <div className="mx-auto h-full max-w-4xl">
+        <div className="flex h-full flex-col items-center justify-center gap-4">
           {badge && (
             <div>
               <Badge variant={badge.variant ?? "default"}>{badge.label}</Badge>
@@ -340,20 +346,20 @@ export function Terminal1({
           )}
 
           {heading && (
-            <h2 className="text-2xl md:text-4xl text-center font-semibold">
+            <h2 className="text-center text-2xl font-semibold md:text-4xl">
               {heading}
             </h2>
           )}
 
           {description && (
-            <p className="text-base md:text-lg text-balance text-center max-w-3xl text-muted-foreground">
+            <p className="max-w-3xl text-center text-base text-balance text-muted-foreground md:text-lg">
               {description}
             </p>
           )}
 
-          <div ref={containerRef} className="w-full">
+          <div ref={containerRef} className="h-full w-full">
             <div
-              className="rounded-xl overflow-hidden"
+              className="h-full overflow-hidden rounded-lg"
               style={{
                 backgroundColor: terminalTheme.bg,
                 border: `1px solid ${terminalTheme.border}`,
@@ -367,30 +373,35 @@ export function Terminal1({
               >
                 {/* Left: Window controls */}
 
-                <div className={cn("flex items-center gap-2", terminal?.showControls && "visible", "invisible")}>
-                  <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
-                  <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
-                  <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
+                <div
+                  className={cn(
+                    "flex items-center gap-2",
+                    terminal?.showControls && "visible",
+                    "invisible"
+                  )}
+                >
+                  <div className="h-3 w-3 rounded-full bg-[#ff5f56]" />
+                  <div className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
+                  <div className="h-3 w-3 rounded-full bg-[#27c93f]" />
                 </div>
-
 
                 {/* Center: Title (always centered) */}
                 <span
-                  className="text-sm font-medium text-center"
+                  className="text-center text-sm font-medium"
                   style={{ color: terminalTheme.headerText }}
                 >
                   {terminal?.title || "Terminal"}
                 </span>
 
                 {/* Right: Action buttons */}
-                <div className="flex items-center gap-2 justify-end">
+                <div className="flex items-center justify-end gap-2">
                   {showCopyButton && (
                     <Button
                       variant="ghost"
                       size="icon"
                       aria-label="Copy commands"
                       onClick={handleCopy}
-                      className="w-6 h-6 rounded-md transition-colors hover:bg-white/10"
+                      className="h-6 w-6 rounded-md transition-colors hover:bg-white/10"
                       style={{ color: terminalTheme.headerText }}
                       title="Copy commands"
                     >
@@ -401,13 +412,13 @@ export function Terminal1({
                       )}
                     </Button>
                   )}
-                  {isComplete && (
+                  {isComplete && logs === undefined && (
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={handleRestart}
                       aria-label="Restart animation"
-                      className="w-6 h-6 rounded-md transition-colors hover:bg-white/10"
+                      className="h-6 w-6 rounded-md transition-colors hover:bg-white/10"
                       style={{ color: terminalTheme.headerText }}
                       title="Restart animation"
                     >
@@ -417,53 +428,102 @@ export function Terminal1({
                 </div>
               </div>
 
-              <div className="p-4 md:p-6 font-mono text-sm md:text-base min-h-50">
-                {displayedCommands.map((item, index) => {
-                  const command = terminal?.commands[index]
-                  const isCurrentCommand =
-                    index === displayedCommands.length - 1
-                  return (
-                    <div key={command?.id || index} className="mb-3 last:mb-0">
-                      <div className="flex items-start gap-2">
-                        {terminal?.showLineNumbers && (
+              <div className="h-full p-4 font-mono text-sm md:p-6 md:text-base">
+                {logs !== undefined &&
+                  logs.map((line, index) => (
+                    <div
+                      key={`${index}-${line}`}
+                      className="mb-2 flex items-start gap-2 last:mb-0"
+                    >
+                      <span
+                        className="font-semibold"
+                        style={{ color: terminalTheme.prompt }}
+                      >
+                        &gt;
+                      </span>
+                      <span
+                        className="whitespace-pre-wrap"
+                        style={{ color: terminalTheme.output }}
+                      >
+                        {line}
+                      </span>
+                    </div>
+                  ))}
+                {logs !== undefined && logs.length === 0 && (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="font-semibold"
+                      style={{ color: terminalTheme.prompt }}
+                    >
+                      &gt;
+                    </span>
+                    <span style={{ color: terminalTheme.output }}>
+                      {status || "Waiting for an upload"}
+                    </span>
+                    {status && (
+                      <span
+                        className="animate-pulsing animate-duration-fast"
+                        style={{ color: terminalTheme.text }}
+                      >
+                        |
+                      </span>
+                    )}
+                  </div>
+                )}
+                {logs === undefined &&
+                  displayedCommands.map((item, index) => {
+                    const command = terminal?.commands[index]
+                    const isCurrentCommand =
+                      index === displayedCommands.length - 1
+                    return (
+                      <div
+                        key={command?.id || index}
+                        className="mb-3 last:mb-0"
+                      >
+                        <div className="flex items-start gap-2">
+                          {terminal?.showLineNumbers && (
+                            <span
+                              className="w-6 text-right select-none"
+                              style={{ color: terminalTheme.output }}
+                            >
+                              {index + 1}
+                            </span>
+                          )}
                           <span
-                            className="select-none w-6 text-right"
+                            className="font-semibold"
+                            style={{ color: terminalTheme.prompt }}
+                          >
+                            {command?.prompt || "$ "}
+                          </span>
+                          <span style={{ color: terminalTheme.text }}>
+                            {item.command}
+                            {isCurrentCommand && isTypingCommand && (
+                              <span className="animate-pulsing animate-duration-fast">
+                                |
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {item.output && (
+                          <div
+                            className={cn(
+                              "mt-1 whitespace-pre-wrap",
+                              terminal?.showLineNumbers && "ml-8"
+                            )}
                             style={{ color: terminalTheme.output }}
                           >
-                            {index + 1}
-                          </span>
+                            {item.output}
+                            {isCurrentCommand && isTypingOutput && (
+                              <span className="animate-pulsing animate-duration-fast">
+                                |
+                              </span>
+                            )}
+                          </div>
                         )}
-                        <span
-                          className="font-semibold"
-                          style={{ color: terminalTheme.prompt }}
-                        >
-                          {command?.prompt || "$ "}
-                        </span>
-                        <span style={{ color: terminalTheme.text }}>
-                          {item.command}
-                          {isCurrentCommand && isTypingCommand && (
-                            <span className="animate-pulse">|</span>
-                          )}
-                        </span>
                       </div>
-                      {item.output && (
-                        <div
-                          className={cn(
-                            "mt-1 whitespace-pre-wrap",
-                            terminal?.showLineNumbers && "ml-8"
-                          )}
-                          style={{ color: terminalTheme.output }}
-                        >
-                          {item.output}
-                          {isCurrentCommand && isTypingOutput && (
-                            <span className="animate-pulse">|</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-                {displayedCommands.length === 0 && (
+                    )
+                  })}
+                {logs === undefined && displayedCommands.length === 0 && (
                   <div className="flex items-center gap-2">
                     <span
                       className="font-semibold"
@@ -472,7 +532,7 @@ export function Terminal1({
                       {terminal?.commands[0]?.prompt || "$ "}
                     </span>
                     <span
-                      className="animate-pulse"
+                      className="animate-pulsing animate-duration-fast"
                       style={{ color: terminalTheme.text }}
                     >
                       |

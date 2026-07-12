@@ -6,6 +6,7 @@ DIST_DIR           ?= dist
 GHCR_REGISTRY      ?= ghcr.io
 GHCR_OWNER         ?= exegia
 CORPORA_IMAGE      ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py
+GITHUB_TOKEN       ?= $GITHUB_ACCESS_TOKEN
 # Vercel Container Registry (VCR). Image ref is registry/team-slug/project-slug/repository.
 # Override VCR_TEAM/VCR_PROJECT/VCR_REPOSITORY to match your Vercel project.
 VCR_REGISTRY       ?= vcr.vercel.com
@@ -136,6 +137,10 @@ docker-login-ghcr: ## Authenticate Docker with GHCR (uses GITHUB_TOKEN or gh CLI
 		exit 1; \
 	fi; \
 	echo "$$token" | docker login $(GHCR_REGISTRY) -u "$$user" --password-stdin
+
+.PHONY: supabase-pull-image
+supabase-pull-image: docker-login-ghcr ## Authenticate Docker with GHCR (uses GITHUB_TOKEN or gh CLI).
+	@docker pull $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-supabase:latest
 
 .PHONY: docker-build-corpora
 docker-build-corpora: ## Build corpora-py Docker image locally.

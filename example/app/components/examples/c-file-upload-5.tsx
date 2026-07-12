@@ -1,4 +1,4 @@
-import React, { type ReactNode, useEffect, useState } from "react"
+import React, { type ReactNode, useState } from "react"
 import { type FileMetadata, type FileWithPreview, formatBytes, useFileUpload } from "~/lib/hooks/use-file-upload"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/reui/alert"
 
@@ -199,7 +199,7 @@ export function CFileUpload({
           </p>
         </div>
 
-        <Button size="sm" onClick={openFileDialog} className="rounded-full px-4 text-xs">
+        <Button size="sm" onClick={openFileDialog} className="rounded-full px-4 text-xs cursor-pointer">
           <UploadIcon className="h-2 w-2" />
           Select file
         </Button>

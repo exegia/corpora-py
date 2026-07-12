@@ -9,7 +9,8 @@ import { atomWithImmer } from "jotai-immer"
 // manual retry via `useUpload().saveUpload`) -- deliberately distinct from
 // "error", since a save-dialog failure doesn't mean the conversion itself
 // needs to be redone.
-export type UploadStatus = "uploading" | "queued" | "converting" | "ready" | "success" | "error"
+export type UploadStatus =
+  "uploading" | "queued" | "converting" | "ready" | "success" | "error"
 
 export type UploadEntry = {
   id: string
@@ -19,6 +20,8 @@ export type UploadEntry = {
   status: UploadStatus
   progress: number
   error: string | null
+  /** Coarse conversion checkpoints returned by the API. */
+  logs?: string[]
   /** Last coarse stage message reported by the server (see `JobStatusMessage.last_log`). */
   lastLog?: string | null
   /** Set once conversion succeeds -- the resulting `.corpus` archive's name/size. */

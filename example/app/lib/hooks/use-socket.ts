@@ -15,12 +15,15 @@ export type JobStatusMessage = {
   started_at: number | null
   finished_at: number | null
   error: string | null
+  /** Complete coarse log history for the job, in server emission order. */
+  logs: string[]
   /** Last coarse stage message the server logged for this job, or null if none yet. */
   last_log: string | null
   download_ready: boolean
 }
 
-export type WebSocketStatus = "idle" | "connecting" | "open" | "closed" | "error"
+export type WebSocketStatus =
+  "idle" | "connecting" | "open" | "closed" | "error"
 
 const TERMINAL_STATUSES: JobStatus[] = ["succeeded", "failed"]
 
