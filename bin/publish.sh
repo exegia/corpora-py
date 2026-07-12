@@ -1,4 +1,4 @@
-# !/usr/bin/env bash
+#!/usr/bin/env bash
 #
 # publish.sh
 # Shell equivalent of scripts/publish.py

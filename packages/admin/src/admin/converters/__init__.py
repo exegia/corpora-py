@@ -15,6 +15,7 @@ from ._html_to_tf import convert_html_to_tf
 from ._pdf_to_tf import convert_pdf_to_tf
 from ._tei_to_tf import convert_tei_to_tf
 from ._text_to_tf import convert_text_to_tf
+from ._tf_zip_to_tf import convert_tf_zip_to_tf
 from .convert_to_cfm import convert_to_cfm
 from .convert_to_corpus import convert_to_corpus
 
@@ -24,6 +25,7 @@ CONVERTERS = {
     SourceFormat.PDF: convert_pdf_to_tf,
     SourceFormat.TEI: convert_tei_to_tf,
     SourceFormat.PLAIN: convert_text_to_tf,
+    SourceFormat.TF_ZIP: convert_tf_zip_to_tf,
 }
 
 __all__ = [
@@ -33,6 +35,7 @@ __all__ = [
     "convert_pdf_to_tf",
     "convert_tei_to_tf",
     "convert_text_to_tf",
+    "convert_tf_zip_to_tf",
     "convert_to_cfm",
     "convert_to_corpus",
 ]

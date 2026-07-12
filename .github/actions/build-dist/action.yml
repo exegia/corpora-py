@@ -4,24 +4,20 @@ runs:
   using: "composite"
   steps:
     - name: Install uv
-      uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      uses: astral-sh/setup-uv@v5
       with:
         enable-cache: true
 
     - name: Build all workspace packages
       shell: bash
       run: |
-        # Build each workspace package separately so they can be published independently
-        uv build --package corpora-shared-py --wheel --out-dir dist/
-        uv build --package corpora-client-py --wheel --out-dir dist/
-        uv build --package corpora-admin-py  --wheel --out-dir dist/
-        # Also build the umbrella package (corpora-py) for sidecar/demo installs
+        # build the umbrella package (corpora-py) for sidecar/example installs
         uv build --wheel --out-dir dist/
         echo "Built wheels:"
         ls -lh dist/*.whl
 
     - name: Upload artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: dist/

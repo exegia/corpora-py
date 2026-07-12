@@ -26,7 +26,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-target="${1:-demo/build/lib}"
+target="${1:-example/build/lib}"
 force="${2:-false}"
 
 bin_path="$(ensure_python_runtime "$target" "$force")"

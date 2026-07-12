@@ -94,8 +94,10 @@ class ConversionJob:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "error": self.error,
+            "logs": list(self.logs),
             "last_log": self.logs[-1] if self.logs else None,
-            "download_ready": self.status == JobStatus.SUCCEEDED and self.result_path is not None,
+            "download_ready": self.status == JobStatus.SUCCEEDED
+            and self.result_path is not None,
         }
 
     def is_visible_to(self, claims: dict[str, Any] | None) -> bool:
@@ -123,9 +125,9 @@ class ConversionJob:
 class JobManager:
     """Tracks conversion jobs and runs them on a background thread pool.
 
-    A process-local singleton is sufficient here: conversion output lands on
-    local disk (see `convert_to_corpus`), so a multi-worker/multi-process
-    deployment would need a shared store + queue (Redis, Celery, ...) instead
+    A process-local singleton is enough here: conversion output lands on
+     the local disk (see `convert_to_corpus`), so a multi-worker/multi-process
+    deployment would need a shared store and queue (Redis, Celery, ...) instead
     of this in-memory registry. That's a deliberate scope cut for a
     single-process admin/conversion service, not an oversight -- revisit if
     this ever needs to run behind more than one uvicorn worker. See
@@ -157,7 +159,9 @@ class JobManager:
     ) -> None:
         self._jobs: dict[str, ConversionJob] = {}
         self._lock = Lock()
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="convert")
+        self._executor = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="convert"
+        )
         self._max_pending = max_pending
         self._stall_timeout_seconds = stall_timeout_seconds
 
@@ -189,10 +193,15 @@ class JobManager:
         returns it.
         """
         job = ConversionJob(
-            id=job_id or str(uuid.uuid4()), source_format=source_format, name=name, owner=owner
+            id=job_id or str(uuid.uuid4()),
+            source_format=source_format,
+            name=name,
+            owner=owner,
         )
         with self._lock:
-            pending = sum(1 for j in self._jobs.values() if j.status not in _TERMINAL_STATUSES)
+            pending = sum(
+                1 for j in self._jobs.values() if j.status not in _TERMINAL_STATUSES
+            )
             if pending >= self._max_pending:
                 raise JobQueueFullError(
                     f"{pending} conversions already queued/running (limit {self._max_pending})"
@@ -272,9 +281,7 @@ class JobManager:
                 job.id,
                 self._stall_timeout_seconds,
             )
-            job.error = (
-                f"Conversion timed out after {self._stall_timeout_seconds / 60:.0f} minutes"
-            )
+            job.error = f"Conversion timed out after {self._stall_timeout_seconds / 60:.0f} minutes"
             job.status = JobStatus.FAILED
             job.finished_at = time.time()
 

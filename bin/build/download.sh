@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # download.sh
-# Shell equivalent of scripts/build/download.py
 #
 # Downloads (and caches) the python-build-standalone tarball for a given platform.
 #

@@ -2,7 +2,7 @@
 #
 # start.sh
 #
-# Start the demo app (ElectroBun + Vite).
+# Start the example app (ElectroBun + Vite).
 #
 # Usage:
 #   ./scripts/start.sh
@@ -31,7 +31,7 @@ _python_has_shared_module() {
 }
 
 ensure_demo_python_runtime() {
-  local runtime="$ROOT/demo/build/lib/python/bin/python3"
+  local runtime="$ROOT/example/build/lib/python/bin/python3"
 
   if [[ -x "$runtime" ]] && _python_has_shared_module "$runtime"; then
     echo "✅ Demo embedded Python runtime already present and up-to-date."
@@ -63,7 +63,7 @@ ensure_demo_python_runtime() {
 }
 
 clean_electrobun_dev_build() {
-  local build_dir="$ROOT/demo/dist/build"
+  local build_dir="$ROOT/example/dist/build"
   if [[ -d "$build_dir" ]]; then
     echo "🧹 Cleaning stale ElectroBun build at $build_dir (ensures fresh python runtime copy)…"
     rm -rf "$build_dir"
