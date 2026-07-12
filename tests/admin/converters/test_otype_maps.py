@@ -1,7 +1,6 @@
 """Per-format otype mappings and the CONVERTERS registry contract."""
 
 import pytest
-
 from admin.converters import CONVERTERS
 from admin.converters._epub_to_tf import _otype_for as epub_otype
 from admin.converters._tei_to_tf import _otype_for as tei_otype

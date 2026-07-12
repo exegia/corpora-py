@@ -368,7 +368,6 @@ def search_csv(
         corpus:      Corpus name. Defaults to current.
     """
     import csv
-    from pathlib import Path
 
     api = corpus_manager.get_api(corpus)
 

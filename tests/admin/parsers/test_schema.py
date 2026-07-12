@@ -3,7 +3,6 @@
 import io
 
 import pytest
-
 from admin.parsers.schema import (
     Document,
     DocumentMetadata,

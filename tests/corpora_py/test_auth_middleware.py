@@ -1,8 +1,8 @@
 """AuthMiddleware: exempt paths, bearer/query token extraction, rejects, claims."""
 
 import pytest
-
 from common.utils.jwt_auth import AuthError
+
 from corpora_py import auth as auth_module
 from corpora_py.auth import AuthMiddleware, _extract_bearer_token
 

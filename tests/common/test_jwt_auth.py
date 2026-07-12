@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import jwt as pyjwt
 import pytest
-
 from common.utils import jwt_auth
 from common.utils.jwt_auth import AuthError, verify_jwt
 

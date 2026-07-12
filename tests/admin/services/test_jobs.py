@@ -4,7 +4,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 from admin.parsers.schema import SourceFormat
 from admin.services.jobs import (
     _MAX_LOG_LINES,

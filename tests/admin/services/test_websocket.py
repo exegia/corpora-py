@@ -2,10 +2,9 @@
 
 from pathlib import Path
 
-from starlette.websockets import WebSocketDisconnect
-
 from admin.parsers.schema import SourceFormat
 from admin.services.jobs import JobStatus
+from starlette.websockets import WebSocketDisconnect
 
 
 def _submit(manager, **kwargs):

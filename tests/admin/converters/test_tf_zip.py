@@ -5,7 +5,6 @@ import zipfile
 from pathlib import PurePosixPath
 
 import pytest
-
 from admin.converters._tf_zip_to_tf import (
     _MAX_FILES,
     _find_dataset_root,

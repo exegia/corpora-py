@@ -1,9 +1,8 @@
 """Settings: env binding, jwks_url resolution, cors parsing, auth default."""
 
 import pytest
-from pydantic import ValidationError
-
 from common.utils.config import Settings
+from pydantic import ValidationError
 
 
 def _settings(**kwargs) -> Settings:

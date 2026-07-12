@@ -7,7 +7,6 @@ autouse fixtures defined in the package-level conftests.
 """
 
 import pytest
-
 from common.utils.config import Settings
 
 

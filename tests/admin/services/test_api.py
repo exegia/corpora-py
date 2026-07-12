@@ -4,7 +4,6 @@ import io
 from pathlib import Path
 
 import pytest
-
 from admin.services import api as api_module
 from admin.services.jobs import JobStatus
 

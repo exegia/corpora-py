@@ -1,12 +1,11 @@
 """Fixtures for exercising the /convert HTTP surface without real conversions."""
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from admin.services import api as api_module
 from admin.services import websocket as ws_module
 from admin.services.jobs import JobManager
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 class DeferredExecutor:

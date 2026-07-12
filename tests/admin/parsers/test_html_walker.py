@@ -1,7 +1,6 @@
 """The shared markup walker in _html.py and the HtmlParser."""
 
-from bs4 import BeautifulSoup
-
+from admin.parsers import HtmlParser
 from admin.parsers._html import (
     SKIP_TAGS,
     TEXT_UNIT_TYPE,
@@ -10,8 +9,8 @@ from admin.parsers._html import (
     top_level_units,
     unit_attrs,
 )
-from admin.parsers import HtmlParser
 from admin.parsers.schema import SourceFormat
+from bs4 import BeautifulSoup
 
 
 def _tag(html: str):

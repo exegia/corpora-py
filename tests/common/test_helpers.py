@@ -3,7 +3,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from common.utils import helpers
 
 
