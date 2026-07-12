@@ -30,10 +30,10 @@ from typing import Any
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
+from .jobs import ConversionJob, JobQueueFullError, JobStatus, job_manager
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers.schema import SourceFormat
-from .jobs import ConversionJob, JobQueueFullError, JobStatus, job_manager
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,9 @@ def _claims(request: Request) -> dict[str, Any] | None:
     return getattr(request.state, "user", None)
 
 
-def _not_found_unless_visible(job: ConversionJob | None, request: Request) -> ConversionJob:
+def _not_found_unless_visible(
+    job: ConversionJob | None, request: Request
+) -> ConversionJob:
     if job is None or not job.is_visible_to(_claims(request)):
         # Same message/status for "doesn't exist" and "exists but isn't
         # yours" -- distinguishing the two would let a client enumerate
@@ -128,13 +130,13 @@ async def _save_upload(upload: UploadFile, dest_dir: Path) -> Path:
 
 
 def _run_conversion(
-        *,
-        source_path: Path,
-        work_dir: Path,
-        source_format: SourceFormat,
-        name: str,
-        description: str,
-        job_id: str,
+    *,
+    source_path: Path,
+    work_dir: Path,
+    source_format: SourceFormat,
+    name: str,
+    description: str,
+    job_id: str,
 ) -> Path:
     """Blocking pipeline: parse -> Text-Fabric -> .cfm -> .corpus.
 
@@ -151,15 +153,28 @@ def _run_conversion(
     conversion instead of a status stuck on "running" with no other signal.
     """
     try:
-        job_manager.log(job_id, f"Parsing {source_format.value} source and building Text-Fabric dataset...")
+        if source_format == SourceFormat.TF_ZIP:
+            job_manager.log(
+                job_id, "Inspecting ZIP and importing Text-Fabric dataset..."
+            )
+        else:
+            job_manager.log(
+                job_id,
+                f"Parsing {source_format.value} source and building Text-Fabric dataset...",
+            )
         converter = CONVERTERS[source_format]
         tf_dir = work_dir / "tf"
         converter(str(source_path), tf_dir)
 
-        job_manager.log(job_id, "Text-Fabric dataset built. Compiling cache and packaging .corpus archive...")
+        job_manager.log(
+            job_id,
+            "Text-Fabric dataset ready. Compiling cache and packaging .corpus archive...",
+        )
         _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
         corpus_path = _RESULTS_ROOT / f"{work_dir.name}.corpus"
-        result = convert_to_corpus(tf_dir, corpus_path, name=name, description=description)
+        result = convert_to_corpus(
+            tf_dir, corpus_path, name=name, description=description
+        )
 
         job_manager.log(job_id, "Conversion complete.")
         return result
@@ -169,11 +184,11 @@ def _run_conversion(
 
 @router.post("", status_code=202)
 async def create_conversion(
-        request: Request,
-        file: UploadFile,
-        source_format: SourceFormat = Form(...),
-        name: str = Form(...),
-        description: str = Form(""),
+    request: Request,
+    file: UploadFile,
+    source_format: SourceFormat = Form(...),
+    name: str = Form(...),
+    description: str = Form(""),
 ) -> dict[str, str]:
     """Upload a source document and start converting it in the background.
 
@@ -185,7 +200,7 @@ async def create_conversion(
         raise HTTPException(
             status_code=422,
             detail=f"No converter registered for {source_format!r}. "
-                   f"Available: {sorted(f.value for f in CONVERTERS)}",
+            f"Available: {sorted(f.value for f in CONVERTERS)}",
         )
 
     claims = _claims(request)
@@ -255,5 +270,7 @@ async def download_conversion(job_id: str, request: Request) -> FileResponse:
     """Download the finished `.corpus` archive for a succeeded job."""
     job = _not_found_unless_visible(job_manager.get(job_id), request)
     if job.status != JobStatus.SUCCEEDED or job.result_path is None:
-        raise HTTPException(status_code=409, detail=f"Job is {job.status.value}, not ready")
+        raise HTTPException(
+            status_code=409, detail=f"Job is {job.status.value}, not ready"
+        )
     return FileResponse(job.result_path, filename=job.result_path.name)

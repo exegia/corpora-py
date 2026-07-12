@@ -33,6 +33,7 @@ class SourceFormat(StrEnum):
     TEI = "tei"
     PDF = "pdf"
     PLAIN = "plain"
+    TF_ZIP = "tf_zip"
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────

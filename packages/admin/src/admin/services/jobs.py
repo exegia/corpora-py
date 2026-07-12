@@ -94,6 +94,7 @@ class ConversionJob:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "error": self.error,
+            "logs": list(self.logs),
             "last_log": self.logs[-1] if self.logs else None,
             "download_ready": self.status == JobStatus.SUCCEEDED
             and self.result_path is not None,
