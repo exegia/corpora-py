@@ -55,7 +55,9 @@ corpora-admin = { workspace = true }
 # Dev-only tools (not shipped in any package)
 dev = [
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.0.0",
     "pytest-cov>=7.1.0",
+    "httpx>=0.28.0",
     "ruff>=0.15.20",
     "mypy>=2.1.0",
 ]
@@ -97,9 +99,10 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v"
+asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["packages"]
+source = ["packages", "src"]
 omit = ["*/tests/*"]
 
 [tool.vercel]
