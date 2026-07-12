@@ -101,3 +101,6 @@ addopts = "-v"
 [tool.coverage.run]
 source = ["packages"]
 omit = ["*/tests/*"]
+
+[tool.vercel]
+entrypoint = "src.corpora_py.app:app"
