@@ -2,7 +2,6 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
-
 from admin.converters import convert_tf_zip_to_tf
 
 
