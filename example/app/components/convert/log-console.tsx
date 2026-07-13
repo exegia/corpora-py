@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowDown, Check, Copy } from "lucide-react"
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
 
@@ -99,7 +99,7 @@ export function LogConsole({
   return (
     <section
       className={cn(
-        "flex h-full min-h-72 flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950",
+        "flex h-full min-h-72 flex-col overflow-hidden rounded-lg border-2 border-border bg-background",
         className
       )}
       aria-label={title}

@@ -26,15 +26,15 @@ interface UploadDropzoneProps {
  * inline error through `onReject`, so the user can retry without a reload.
  */
 export function UploadDropzone({
-  title = "Upload your file",
-  extensions,
-  hint,
-  disabled = false,
-  error,
-  onFile,
-  onReject,
-  className,
-}: UploadDropzoneProps) {
+                                 title = "Upload your file",
+                                 extensions,
+                                 hint,
+                                 disabled = false,
+                                 error,
+                                 onFile,
+                                 onReject,
+                                 className
+                               }: UploadDropzoneProps) {
   const accept = extensions.join(",")
 
   const [
@@ -45,8 +45,8 @@ export function UploadDropzone({
       handleDragOver,
       handleDrop,
       openFileDialog,
-      getInputProps,
-    },
+      getInputProps
+    }
   ] = useFileUpload({
     accept,
     multiple: false,
@@ -56,7 +56,7 @@ export function UploadDropzone({
     },
     onError: (errors) => {
       if (errors[0]) onReject(errors[0])
-    },
+    }
   })
 
   return (
@@ -108,7 +108,6 @@ export function UploadDropzone({
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
         <Button
           type="button"
-          size="sm"
           className="cursor-pointer"
           disabled={disabled}
           onClick={openFileDialog}

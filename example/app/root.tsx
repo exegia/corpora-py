@@ -1,4 +1,5 @@
 import "~/app.css"
+import type { ReactNode } from "react"
 import { useEffect } from "react"
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigate } from "react-router"
 import NavHeaderIcon from "~/components/logo"
@@ -7,7 +8,6 @@ import { bindCues } from "~/lib/cue"
 import { NAV } from "~/lib/constant"
 
 import type { Route } from "./+types/root"
-import type { ReactNode } from "react"
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   let message = "Oops!"
@@ -78,7 +78,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <Links />
       <title>Corpora | Example</title>
     </head>
-    <body className="min-h-svh bg-background text-foreground">
+    <body className="min-h-svh bg-neutral-100 dark:bg-neutral-900 text-foreground">
     <Header />
     <main className="container mx-auto px-4 py-6">{children}</main>
     <ScrollRestoration />
