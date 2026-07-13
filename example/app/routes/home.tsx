@@ -1,7 +1,13 @@
 import { useNavigate } from "react-router"
 import { MENU_ITEMS } from "~/lib/constant"
 import { Uploading } from "undraw-react"
-import { Card, CardContent, CardDescription, CardFooter, CardTitle } from "~/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardTitle,
+} from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 
 export function meta() {
@@ -30,9 +36,9 @@ export default function Home() {
 }
 
 function MenuCard({
-                    item,
-                    size
-                  }: {
+  item,
+  size,
+}: {
   item: (typeof MENU_ITEMS)[number]
   size: "primary" | "secondary"
 }) {
@@ -42,7 +48,7 @@ function MenuCard({
 
   return (
     <Card
-      className="h-full cursor-pointer border-2 border-neutral-200 hover:mix-blend-plus-lighter dark:border-neutral-800"
+      className="h-full transform cursor-pointer rounded-2xl border border-neutral-100 shadow shadow-neutral-900/200 transition-all hover:-translate-y-1 hover:bg-neutral-100 hover:shadow-2xl dark:border-neutral-800 dark:hover:bg-neutral-950"
       onClick={() => navigate(item.to)}
     >
       <CardContent>
@@ -58,11 +64,6 @@ function MenuCard({
         </CardTitle>
         <CardDescription>{item.description}</CardDescription>
       </CardContent>
-      <CardFooter>
-        <Button variant="link" className="cursor-pointer">
-          Open →
-        </Button>
-      </CardFooter>
     </Card>
   )
 }

@@ -1,18 +1,12 @@
 "use client"
 
-import {
-  CircleAlert,
-  CircleCheck,
-  LoaderCircle,
-  RefreshCw,
-  X
-} from "lucide-react"
+import { CircleAlert, CircleCheck, LoaderCircle, RefreshCw, X } from "lucide-react"
 import type { UploadEntry, UploadStatus } from "~/lib/atoms/upload-atom"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
-import { FileTypeIcon, fileExtension } from "./file-icon"
+import { fileExtension, FileTypeIcon } from "./file-icon"
 
 const STATUS_META: Record<
   UploadStatus,
@@ -61,7 +55,7 @@ export function FileSummary({ entry, onRemove, onReplace, className }: FileSumma
   return (
     <div
       className={cn(
-        "flex w-full flex-col gap-4 rounded-lg border border-border bg-card p-4 shadow-sm",
+        "flex w-full flex-col gap-4 rounded-lg border-2 border-border bg-background p-5 shadow-sm",
         "animate-in duration-300 fade-in slide-in-from-bottom-2 motion-reduce:animate-none",
         className
       )}

@@ -2,21 +2,13 @@ import { useEffect, useRef, useState } from "react"
 import { type MetaDescriptor } from "react-router"
 import { Card, CardContent } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
+import { GithubRepoInput } from "~/components/convert/github-repo-input"
 import { UploadDropzone } from "~/components/convert/upload-dropzone"
 import { FileSummary } from "~/components/convert/file-summary"
 import { ProcessingStages } from "~/components/convert/processing-stages"
-import {
-  LogConsole,
-  TONE_PREFIX,
-  type LogLine
-} from "~/components/convert/log-console"
+import { LogConsole, type LogLine, TONE_PREFIX } from "~/components/convert/log-console"
 import { CompletedResult, FailedResult } from "~/components/convert/result-actions"
-import {
-  deriveStages,
-  deriveView,
-  failedStage,
-  type Stage
-} from "~/components/convert/state-model"
+import { deriveStages, deriveView, failedStage, type Stage } from "~/components/convert/state-model"
 import type { UploadEntry } from "~/lib/atoms/upload-atom"
 import { useUpload } from "~/lib/hooks/use-upload"
 import { cue } from "~/lib/cue"
@@ -227,13 +219,17 @@ export default function CorpusConvert() {
         >
           <div className="flex flex-col gap-4">
             {view === "empty" ? (
-              <UploadDropzone
-                extensions={ACCEPTED_EXTENSIONS}
-                hint="Drag and drop, or browse"
-                error={rejection}
-                onFile={(file) => void handleFile(file)}
-                onReject={reject}
-              />
+              <>
+                <GithubRepoInput onFile={(file) => void handleFile(file)} />
+                <UploadDropzone
+                  extensions={ACCEPTED_EXTENSIONS}
+                  className="rounded-xl"
+                  hint="Drag and drop, or browse"
+                  error={rejection}
+                  onFile={(file) => void handleFile(file)}
+                  onReject={reject}
+                />
+              </>
             ) : (
               entry && (
                 <>

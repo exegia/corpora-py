@@ -5,6 +5,7 @@ import { useFileUpload } from "~/lib/hooks/use-file-upload"
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
+import GlassFolder from "../glass-folder"
 
 interface UploadDropzoneProps {
   title?: string
@@ -79,19 +80,20 @@ export function UploadDropzone({
           error && !isDragging && "border-destructive/50"
         )}
       >
-        <div
+        {/*<div
           className={cn(
             "mb-2 flex size-16 items-center justify-center rounded-2xl",
             isDragging
               ? "bg-primary/10 text-primary"
               : "bg-neutral-200 text-muted-foreground dark:bg-neutral-900"
           )}
-        >
-          <FileUp
+        >*/}
+        <GlassFolder className="scale-75 transform" open={false} />
+        {/*<FileUp
             className="size-9 rotate-12 -skew-3 fill-black/20 opacity-75 transition-transform group-hover:scale-110 group-hover:rotate-0 group-hover:skew-x-0 motion-reduce:transition-none"
             aria-hidden="true"
-          />
-        </div>
+          />*/}
+        {/*</div>*/}
         <span className="text-lg font-semibold text-card-foreground">
           {isDragging ? "Drop to upload" : title}
         </span>
@@ -108,7 +110,6 @@ export function UploadDropzone({
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
         <Button
           type="button"
-          size="sm"
           className="cursor-pointer"
           disabled={disabled}
           onClick={openFileDialog}

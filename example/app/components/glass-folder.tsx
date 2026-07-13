@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { motion, type Variants } from "framer-motion"
+import { cn } from "~/lib/utils"
 
 const noiseBg =
   "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E\")"
@@ -10,27 +11,27 @@ const folderVariants: Variants = {
   closed: { rotateX: 0, scale: 1 },
   hover: {
     scale: 1.02,
-    transition: { type: "spring", stiffness: 200, damping: 20, mass: 1 }
+    transition: { type: "spring", stiffness: 200, damping: 20, mass: 1 },
   },
   open: {
     scale: 1.1,
-    transition: { type: "spring", stiffness: 150, damping: 18, mass: 1 }
-  }
+    transition: { type: "spring", stiffness: 150, damping: 18, mass: 1 },
+  },
 }
 
 const lidVariants: Variants = {
   closed: {
     rotateX: -20,
-    transition: { type: "spring", stiffness: 60, damping: 20 }
+    transition: { type: "spring", stiffness: 60, damping: 20 },
   },
   hover: {
     rotateX: -30,
-    transition: { type: "spring", stiffness: 100, damping: 18, mass: 1 }
+    transition: { type: "spring", stiffness: 100, damping: 18, mass: 1 },
   },
   open: {
     rotateX: -60,
-    transition: { type: "spring", stiffness: 90, damping: 18, mass: 1 }
-  }
+    transition: { type: "spring", stiffness: 90, damping: 18, mass: 1 },
+  },
 }
 
 const paperVariants: Variants = {
@@ -40,7 +41,7 @@ const paperVariants: Variants = {
     scale: 0.95,
     rotate: (t - 1) * 2,
     z: (2 - t) * 5,
-    transition: { type: "spring", stiffness: 150, damping: 25, mass: 1 }
+    transition: { type: "spring", stiffness: 150, damping: 25, mass: 1 },
   }),
   hover: (t: number) => ({
     y: -70 - 5 * t,
@@ -48,7 +49,7 @@ const paperVariants: Variants = {
     rotate: (t - 1) * 4,
     scale: 0.95,
     z: (2 - t) * 5,
-    transition: { type: "spring", stiffness: 140, damping: 18 }
+    transition: { type: "spring", stiffness: 140, damping: 18 },
   }),
   open: (t: number) => ({
     y: -160 + 10 * Math.abs(t - 1),
@@ -61,9 +62,9 @@ const paperVariants: Variants = {
       stiffness: 80,
       damping: 14,
       mass: 1,
-      delay: 0.08 * t
-    }
-  })
+      delay: 0.08 * t,
+    },
+  }),
 }
 
 function PaperContent({ index }: { index: number }) {
@@ -113,8 +114,14 @@ function PaperContent({ index }: { index: number }) {
   )
 }
 
-export default function GlassFolder() {
-  const [open, setOpen] = useState(false)
+export default function GlassFolder({
+  open,
+  className,
+}: {
+  className?: string
+  open: boolean
+}) {
+  const [isOpen, setOpen] = useState(open)
   const [hover, setHover] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -128,17 +135,17 @@ export default function GlassFolder() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const state = open ? "open" : hover ? "hover" : "closed"
+  const state = isOpen ? "open" : hover ? "hover" : "closed"
 
   return (
     <div
       ref={ref}
-      className="group relative h-52 w-64"
+      className={cn("group relative h-52 w-64", className)}
       style={{ perspective: "1200px" }}
     >
       {/* Contact shadow under the folder */}
       <div
-        className="absolute right-8 -bottom-12 left-8 h-6 rounded-full bg-black/40 blur-3xl transition-transform duration-700 group-hover:scale-x-110"
+        className="absolute right-8 -bottom-12 left-8 h-6 rounded-full bg-black/20 blur-2xl transition-transform duration-700 group-hover:scale-x-110"
         style={{ transform: "rotateX(90deg) translateZ(-80px)" }}
       />
 
@@ -154,7 +161,7 @@ export default function GlassFolder() {
       >
         {/* Folder body / back panel */}
         <div
-          className="absolute inset-0 rounded-3xl shadow-2xl"
+          className="absolute inset-0 rounded-3xl shadow-xl"
           style={{
             transformStyle: "preserve-3d",
             background:
@@ -167,16 +174,15 @@ export default function GlassFolder() {
               inset 0 0 40px rgba(0,0,0,0.6),
               0 25px 50px -12px rgba(0,0,0,0.8)
             `,
-            border: "1px solid rgba(255,255,255,0.05)",
-            transform: "translateZ(-20px)"
+            border: "2px solid rgba(255,255,255,0.05)",
+            transform: "translateZ(-20px)",
           }}
         >
           <div
-            className="pointer-events-none absolute inset-0 rounded-3xl opacity-[0.12] mix-blend-overlay"
+            className="pointer-events-none absolute inset-0 rounded-3xl opacity-[0.2] mix-blend-overlay"
             style={{ backgroundImage: noiseBg }}
           />
-          <div
-            className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-60" />
+          <div className="absolute inset-0 rounded-3xl bg-linear-to-t from-black/90 via-black/80 to-transparent opacity-60" />
         </div>
 
         {/* Papers stacked inside the folder */}
@@ -203,7 +209,7 @@ export default function GlassFolder() {
                   0 1px 2px rgba(0,0,0,0.05),
                   0 4px 8px rgba(0,0,0,0.05),
                   0 8px 24px -4px rgba(0,0,0,0.1)
-                `
+                `,
               }}
             >
               <div
@@ -213,8 +219,7 @@ export default function GlassFolder() {
               <div className="relative z-10">
                 <PaperContent index={t} />
               </div>
-              <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/60 via-transparent to-black/[0.02]" />
+              <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-white/60 via-transparent to-black/2" />
             </motion.div>
           ))}
         </div>
@@ -229,7 +234,7 @@ export default function GlassFolder() {
             className="absolute inset-x-0 bottom-0 h-[85%] overflow-hidden rounded-3xl transition-all duration-500"
             style={{
               background:
-                "linear-gradient(145deg, rgba(30,30,30,0.4) 0%, rgba(5,5,5,0.85) 100%)",
+                "linear-gradient(145deg, rgba(30,30,30,0.8) 0%, rgba(5,5,5,0.85) 100%)",
               backdropFilter: "blur(4px)",
               WebkitBackdropFilter: "blur(4px)",
               boxShadow: `
@@ -238,13 +243,12 @@ export default function GlassFolder() {
                 inset -1px 0 0 rgba(255,255,255,0.05),
                 0 -5px 20px rgba(0,0,0,0.3)
               `,
-              borderTop: "1px solid rgba(255,255,255,0.12)"
+              borderTop: "1px solid rgba(255,255,255,0.4)",
             }}
           >
+            <div className="pointer-events-none absolute -inset-full translate-y-1/3 rotate-0 transform bg-gradient-to-tr from-transparent via-white/5 to-transparent transition-transform duration-700 group-hover:translate-y-0" />
             <div
-              className="pointer-events-none absolute -inset-full translate-y-1/3 rotate-0 transform bg-gradient-to-tr from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-y-0" />
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.15] mix-blend-overlay"
+              className="pointer-events-none absolute inset-0 opacity-[0.5] mix-blend-overlay"
               style={{ backgroundImage: noiseBg }}
             />
           </div>

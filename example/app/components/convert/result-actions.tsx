@@ -33,7 +33,7 @@ export function CompletedResult({
         className
       )}
     >
-      <Alert role="status">
+      <Alert role="status" className="bg-background border-2 p-3">
         <CircleCheck className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
         <AlertTitle>Conversion completed</AlertTitle>
         <AlertDescription>
@@ -43,7 +43,7 @@ export function CompletedResult({
         </AlertDescription>
       </Alert>
 
-      <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+      <div className="flex items-center gap-3 rounded-lg border-border border-2 bg-background p-3">
         <FileTypeIcon filename={corpusName} className="size-10 rounded-lg" iconClassName="size-5" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium" title={corpusName}>
@@ -63,7 +63,7 @@ export function CompletedResult({
           data-cuelume-release
         >
           <Download className="size-4" aria-hidden="true" />
-          {saved ? "Save again" : "Save .corpus"}
+          {saved ? "Saved" : "Download"}
         </Button>
         <Button
           variant="outline"
