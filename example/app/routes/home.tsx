@@ -1,18 +1,13 @@
 import { useNavigate } from "react-router"
 import { MENU_ITEMS } from "~/lib/constant"
 import { Uploading } from "undraw-react"
-import {
-  Card,
-  CardContent,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from "~/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 
 export function meta() {
   return [{ title: "Home | Corpora" }]
 }
+
 
 export default function Home() {
   const [, ...rest] = MENU_ITEMS
@@ -35,33 +30,20 @@ export default function Home() {
   )
 }
 
-function MenuCard({
-  item,
-  size,
-}: {
-  item: (typeof MENU_ITEMS)[number]
-  size: "primary" | "secondary"
-}) {
+function MenuCard({ item, size }: { item: typeof MENU_ITEMS[number]; size: "primary" | "secondary" }) {
   const Illustration = item.illustration ?? Uploading
   const isPrimary = size === "primary"
   const navigate = useNavigate()
 
   return (
     <Card
-      className="h-full cursor-pointer border-2 border-neutral-200 hover:mix-blend-plus-lighter dark:border-neutral-800"
-      onClick={() => navigate(item.to)}
-    >
+      className="h-full cursor-pointer hover:mix-blend-plus-lighter border-2 border-neutral-200 dark:border-neutral-800"
+      onClick={() => navigate(item.to)}>
       <CardContent>
-        <div
-          className={
-            isPrimary ? "mt-4 mb-8 p-4" : "mt-2 mb-4 w-full justify-center p-2"
-          }
-        >
+        <div className={isPrimary ? "mb-8 mt-4 p-4" : "mb-4 mt-2 p-2 w-full justify-center"}>
           {item.illustration && <Illustration viewBox="0 0 200 120" />}
         </div>
-        <CardTitle className={isPrimary ? "text-2xl" : "text-lg"}>
-          {item.label}
-        </CardTitle>
+        <CardTitle className={isPrimary ? "text-2xl" : "text-lg"}>{item.label}</CardTitle>
         <CardDescription>{item.description}</CardDescription>
       </CardContent>
       <CardFooter>
