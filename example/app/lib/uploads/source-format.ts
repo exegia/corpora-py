@@ -9,13 +9,11 @@
 export const EXTENSION_TO_FORMAT: Record<string, string> = {
   ".epub": "epub",
   ".html": "html",
-  ".htm": "html",
   ".xml": "tei",
   ".tei": "tei",
   ".pdf": "pdf",
   ".txt": "plain",
-  ".text": "plain",
-  ".zip": "tf_zip"
+  ".zip": "tf_zip",
 }
 
 export const detectSourceFormat = (filename: string): string => {
@@ -25,7 +23,7 @@ export const detectSourceFormat = (filename: string): string => {
   if (!format) {
     throw new Error(
       `Can't auto-detect a source format from "${filename}" (extension "${extension}"). ` +
-      `Recognized: ${Object.keys(EXTENSION_TO_FORMAT).join(", ")}`
+        `Recognized: ${Object.keys(EXTENSION_TO_FORMAT).join(", ")}`
     )
   }
   return format
