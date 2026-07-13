@@ -21,9 +21,17 @@ export function GithubRepoInput({
   onFile,
   className,
 }: GithubRepoInputProps) {
-  const { url, setUrl, phase, busy, importRepository } = useGithubRepoImport({
-    onFile,
-  })
+  const { url, setUrl, phase, busy, validation, retryValidation, importRepository } =
+    useGithubRepoImport({
+      onFile,
+    })
+
+  const errorMessage =
+    phase.kind === "error"
+      ? phase.message
+      : validation.kind === "invalid"
+        ? validation.message
+        : null
 
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
@@ -39,7 +47,7 @@ export function GithubRepoInput({
         className="group flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault()
-          if (!busy) void importRepository()
+          if (!busy && validation.kind === "valid") void importRepository()
         }}
       >
         <div className="relative flex flex-1 items-stretch overflow-hidden rounded-full bg-background pr-2 outline-2 outline-border focus-within:outline-input">
@@ -69,18 +77,53 @@ export function GithubRepoInput({
             )}
             onChange={(event) => setUrl(event.target.value)}
           />
-        </div>
-        <Button
-          type="submit"
-          size="lg"
-          className="cursor-pointer rounded-full"
-          disabled={disabled || busy || !url.trim()}
-        >
-          {busy && (
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+
+          {validation.kind === "validating" && (
+            <div
+              className="flex items-center pl-1"
+              role="status"
+              aria-label="Checking repository"
+            >
+              <LoaderCircle
+                className="size-4 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
+            </div>
           )}
-          Import
-        </Button>
+        </div>
+
+        {validation.kind === "valid" && (
+          <Button
+            type="submit"
+            size="lg"
+            className="cursor-pointer rounded-full"
+            disabled={disabled || busy}
+            data-cuelume-press
+            data-cuelume-release
+          >
+            {busy && (
+              <LoaderCircle
+                className="size-4 animate-spin"
+                aria-hidden="true"
+              />
+            )}
+            Import
+          </Button>
+        )}
+        {validation.kind === "invalid" && (
+          <Button
+            type="button"
+            size="lg"
+            variant="secondary"
+            className="cursor-pointer rounded-full"
+            disabled={disabled}
+            data-cuelume-press
+            data-cuelume-release
+            onClick={retryValidation}
+          >
+            Retry
+          </Button>
+        )}
       </form>
 
       {phase.kind === "checking" && (
@@ -89,12 +132,12 @@ export function GithubRepoInput({
         </p>
       )}
 
-      {phase.kind === "error" && (
+      {errorMessage && (
         <Alert variant="destructive" role="alert">
           <CircleAlert className="size-4" aria-hidden="true" />
           <AlertTitle>Can't import repository</AlertTitle>
           <AlertDescription>
-            <p>{phase.message}</p>
+            <p>{errorMessage}</p>
           </AlertDescription>
         </Alert>
       )}

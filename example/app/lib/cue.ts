@@ -29,7 +29,11 @@ const CUES = {
   /** The finished archive was written to disk. */
   saved: "sparkle",
   /** Conversion failed. */
-  error: "droplet"
+  error: "droplet",
+  /** The GitHub repo URL validated — the repository exists and can be imported. */
+  repoValid: "bloom",
+  /** GitHub repo validation failed, or the repo import itself failed. */
+  repoInvalid: "droplet"
 } satisfies Record<string, SoundName>
 
 export type Cue = keyof typeof CUES

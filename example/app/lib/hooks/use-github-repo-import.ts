@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { cue } from "~/lib/cue"
 import { buildStoredZip, type ZipFileInput } from "~/lib/uploads/build-zip"
 
 interface RepoRef {
@@ -20,6 +21,12 @@ export type GithubRepoImportPhase =
   | { kind: "idle" }
   | { kind: "checking"; message: string }
   | { kind: "error"; message: string }
+
+export type GithubRepoValidation =
+  | { kind: "idle" }
+  | { kind: "validating" }
+  | { kind: "valid" }
+  | { kind: "invalid"; message: string }
 
 export interface UseGithubRepoImportOptions {
   onFile: (file: File) => void
@@ -100,17 +107,102 @@ const detectConvertibleContent = (nodes: TreeNode[]): Detection | null => {
   return largest ? { paths: [largest.path], description: largest.path } : null
 }
 
+type RepoCheck =
+  | { ok: true; info: { default_branch: string } }
+  | { ok: false; message: string }
+
+// Shared by the live validation (as-you-type) and the import flow itself, so
+// both report the same failures for the same repo.
+const checkRepository = async (ref: RepoRef): Promise<RepoCheck> => {
+  const repoLabel = `${ref.owner}/${ref.repo}`
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${ref.owner}/${ref.repo}`
+    )
+    if (response.status === 404) {
+      return {
+        ok: false,
+        message: `Repository ${repoLabel} was not found — it may not exist, or it's private. Only public repositories can be imported.`
+      }
+    }
+    if (response.status === 403) {
+      return {
+        ok: false,
+        message:
+          "GitHub API rate limit reached for unauthenticated requests. Wait a few minutes and try again."
+      }
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: `GitHub returned an unexpected error (HTTP ${response.status}).`
+      }
+    }
+    return {
+      ok: true,
+      info: (await response.json()) as { default_branch: string }
+    }
+  } catch {
+    return {
+      ok: false,
+      message:
+        "Couldn't reach GitHub. Check your connection (or the repository URL) and try again."
+    }
+  }
+}
+
+// Debounce before hitting the GitHub API on keystrokes — unauthenticated
+// requests are limited to 60/hour.
+const VALIDATION_DEBOUNCE_MS = 600
+
 export const useGithubRepoImport = ({ onFile }: UseGithubRepoImportOptions) => {
   const [url, setUrlState] = useState("")
   const [phase, setPhase] = useState<GithubRepoImportPhase>({ kind: "idle" })
+  const [validation, setValidation] = useState<GithubRepoValidation>({
+    kind: "idle"
+  })
+  const [validationAttempt, setValidationAttempt] = useState(0)
+  // Guards against out-of-order responses: only the latest validation run may
+  // publish its result.
+  const validationSeq = useRef(0)
   const busy = phase.kind === "checking"
 
-  const fail = (message: string) => setPhase({ kind: "error", message })
+  const fail = (message: string) => {
+    cue("repoInvalid")
+    setPhase({ kind: "error", message })
+  }
 
   const setUrl = (value: string) => {
     setUrlState(value)
     if (phase.kind === "error") setPhase({ kind: "idle" })
   }
+
+  // Live validation: as soon as the input parses as a GitHub repo URL, show
+  // the spinner and (after a debounce) ask GitHub whether the repo exists.
+  useEffect(() => {
+    const ref = parseGithubUrl(url)
+    if (!ref) {
+      validationSeq.current++
+      setValidation({ kind: "idle" })
+      return
+    }
+
+    const seq = ++validationSeq.current
+    setValidation({ kind: "validating" })
+    const timer = setTimeout(async () => {
+      const result = await checkRepository(ref)
+      if (validationSeq.current !== seq) return
+      setValidation(
+        result.ok
+          ? { kind: "valid" }
+          : { kind: "invalid", message: result.message }
+      )
+      cue(result.ok ? "repoValid" : "repoInvalid")
+    }, VALIDATION_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [url, validationAttempt])
+
+  const retryValidation = () => setValidationAttempt((n) => n + 1)
 
   const importRepository = async () => {
     const ref = parseGithubUrl(url)
@@ -125,30 +217,13 @@ export const useGithubRepoImport = ({ onFile }: UseGithubRepoImportOptions) => {
     setPhase({ kind: "checking", message: `Checking ${repoLabel}…` })
 
     try {
-      const repoResponse = await fetch(
-        `https://api.github.com/repos/${ref.owner}/${ref.repo}`
-      )
-      if (repoResponse.status === 404) {
-        fail(
-          `Repository ${repoLabel} was not found — it may not exist, or it's private. Only public repositories can be imported.`
-        )
-        return
-      }
-      if (repoResponse.status === 403) {
-        fail(
-          "GitHub API rate limit reached for unauthenticated requests. Wait a few minutes and try again."
-        )
-        return
-      }
-      if (!repoResponse.ok) {
-        fail(
-          `GitHub returned an unexpected error (HTTP ${repoResponse.status}).`
-        )
+      const check = await checkRepository(ref)
+      if (!check.ok) {
+        fail(check.message)
         return
       }
 
-      const repoInfo = (await repoResponse.json()) as { default_branch: string }
-      const branch = ref.branch || repoInfo.default_branch
+      const branch = ref.branch || check.info.default_branch
       setPhase({
         kind: "checking",
         message: `Scanning ${repoLabel}@${branch}…`
@@ -237,5 +312,13 @@ export const useGithubRepoImport = ({ onFile }: UseGithubRepoImportOptions) => {
     }
   }
 
-  return { url, setUrl, phase, busy, importRepository }
+  return {
+    url,
+    setUrl,
+    phase,
+    busy,
+    validation,
+    retryValidation,
+    importRepository
+  }
 }
