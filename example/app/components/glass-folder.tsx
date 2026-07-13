@@ -176,7 +176,7 @@ export default function GlassFolder() {
             style={{ backgroundImage: noiseBg }}
           />
           <div
-            className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-60" />
+            className="absolute inset-0 rounded-3xl bg-linear-to-t from-black/90 via-black/40 to-transparent opacity-60" />
         </div>
 
         {/* Papers stacked inside the folder */}
@@ -214,7 +214,7 @@ export default function GlassFolder() {
                 <PaperContent index={t} />
               </div>
               <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/60 via-transparent to-black/[0.02]" />
+                className="pointer-events-none absolute inset-0 bg-linear-to-br from-white/60 via-transparent to-black/2" />
             </motion.div>
           ))}
         </div>
