@@ -36,8 +36,9 @@ const store = getDefaultStore()
 const PROGRESS = { started: 0, queued: 20, converting: 60, done: 100 } as const
 
 // The real `File` objects (needed to retry) never go into the atom -- atoms
-// hold serializable UI state.
-const files = new Map<string, File>()
+// hold serializable UI state. The upload options ride along so a retry
+// re-runs with the same detected source format and inspection notes.
+const files = new Map<string, { file: File; options: UploadOptions }>()
 
 // Per-job WebSocket unsubscribers, so the status socket can be closed early
 // if the upload is deleted before the job reaches a terminal state.
@@ -158,6 +159,8 @@ export type UploadOptions = {
   name?: string
   description?: string
   sourceFormat?: string
+  /** Pre-upload inspection notes to surface in the conversion console. */
+  inspection?: string[]
 }
 
 type ConvertResponse = { job_id: string; status_url: string; ws_url: string }
@@ -184,7 +187,7 @@ export const uploadFile = async (
   options: UploadOptions = {}
 ): Promise<string> => {
   const id = createId()
-  files.set(id, file)
+  files.set(id, { file, options })
 
   store.set(uploadAtom, (draft) => {
     draft[id] = {
@@ -197,6 +200,7 @@ export const uploadFile = async (
       error: null,
       lastModified: file.lastModified || undefined,
       uploadedAt: Date.now(),
+      inspection: options.inspection,
       logs: []
     }
   })
@@ -261,13 +265,13 @@ export const deleteUpload = (id: string): void => {
 }
 
 export const retryUpload = (id: string): Promise<string> | undefined => {
-  const file = files.get(id)
+  const cached = files.get(id)
   deleteUpload(id)
   // Retrying mints a fresh id via uploadFile() rather than reusing `id` --
   // a stale in-flight status push for the old id (unlikely but possible)
   // would otherwise resurrect a deleted atom entry. The new id is returned
   // so a view tracking the old entry can follow the retried one.
-  return file ? uploadFile(file) : undefined
+  return cached ? uploadFile(cached.file, cached.options) : undefined
 }
 
 /**

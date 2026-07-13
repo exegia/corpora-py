@@ -29,9 +29,33 @@ module-level manager (`~/lib/uploads/manager`); everything in this directory
 | `completed`  | `ready` / `success`                   | `FileSummary` + `CompletedResult`    | stages (all done) + logs    |
 | `failed`     | `error`                               | `FileSummary` + `FailedResult`       | stages (failure marked) + logs |
 
+## ZIP inspection
+
+A `.zip` is a container, not a format. Before uploading one, the client
+reads its central directory (`~/lib/uploads/inspect-zip.ts` -- entry names
+only, no full read) and routes it:
+
+- contains `.tf` files → a Text-Fabric dataset → uploaded as `tf_zip`
+  (the pre-existing behavior);
+- contains only TEI/XML documents (two or more) → a TEI corpus → uploaded as
+  `tei_zip` (the server converts every member into one dataset);
+- contains exactly one convertible document (`.tei`/`.xml`/`.epub`/`.html`/
+  `.pdf`/`.txt`/…) → extracted in the browser (`DecompressionStream`) and
+  continues the normal single-file flow;
+- anything else (mixed documents, nothing convertible, empty) → rejected
+  inline with an inventory of what was found -- the service has no converter
+  for it, so it never leaves the machine;
+- uninspectable (ZIP64/unusual layout) → falls back to `tf_zip` and lets the
+  server validate, so inspection never breaks an upload that used to work.
+
+The findings appear as log lines under the "File type validated" stage.
+
 ## Pipeline stages (`deriveStages`)
 
-Each stage maps to a real observable event — nothing is simulated:
+Each stage maps to a real observable event — nothing is simulated — and
+carries its own log lines, rendered inline under the stage in the timeline.
+The console's bottom block shows only the final success/error completion
+message.
 
 1. **File received** — a file passed the client-side extension check.
 2. **File type validated** — `detectSourceFormat` resolved a `source_format`.

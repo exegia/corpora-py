@@ -1,4 +1,6 @@
 import type { UploadEntry } from "~/lib/atoms/upload-atom"
+import { formatBytes } from "~/lib/hooks/use-file-upload"
+import type { LogLine } from "./log-console"
 
 /**
  * Client-side state model for the upload -> conversion experience.
@@ -35,32 +37,42 @@ export type StageState =
 export type Stage = {
   id: string
   label: string
-  /** One-line detail shown under the label, when known. */
-  detail?: string
   state: StageState
+  /** The real log lines belonging to this stage, shown inline under it. */
+  logs: LogLine[]
 }
 
 const WARNING_PATTERN = /\bwarn(ing)?\b/i
+const ERROR_PATTERN = /\b(error|fail(ed|ure)?)\b/i
+
+const serverLineTone = (line: string): LogLine["tone"] =>
+  WARNING_PATTERN.test(line)
+    ? "warning"
+    : ERROR_PATTERN.test(line)
+      ? "error"
+      : "info"
 
 /**
  * Maps a tracked upload onto the visible stage-by-stage pipeline. Every
  * stage corresponds to a real observable event (client-side validation, the
  * POST /convert round-trip, the server's coarse queued/running/succeeded/
- * failed states, and the archive download) -- nothing here is simulated.
+ * failed states, and the archive download) and carries that event's log
+ * lines -- nothing here is simulated.
  *
  * The server has no progress hook (see use-socket.ts), so the "Converting"
- * stage carries the server's own coarse log checkpoints as its detail
- * rather than a fake percentage.
+ * stage carries the server's own coarse log checkpoints rather than a fake
+ * percentage.
  */
 export const deriveStages = (entry: UploadEntry): Stage[] => {
-  const { status, error, jobId, sourceFormat, logs, lastLog } = entry
+  const { status, error, jobId, sourceFormat, logs } = entry
 
   const failed = status === "error"
   // No job id means the failure happened during (or before) the POST --
   // the server never accepted the file.
   const failedBeforeServer = failed && !jobId
   const done = status === "ready" || status === "success"
-  const serverLogsHaveWarning = (logs ?? []).some((line) =>
+  const serverLogs = logs ?? []
+  const serverLogsHaveWarning = serverLogs.some((line) =>
     WARNING_PATTERN.test(line)
   )
 
@@ -69,6 +81,19 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     : status === "uploading"
       ? "active"
       : "completed"
+
+  const uploadLogs: LogLine[] = [
+    { text: "Uploading to POST /convert…", tone: "info" }
+  ]
+  if (failedBeforeServer) {
+    uploadLogs.push(
+      { text: `Error: ${error ?? "Upload failed"}`, tone: "error" },
+      {
+        text: "Suggested action: check that the conversion API is running, then retry.",
+        tone: "info"
+      }
+    )
+  }
 
   const queuedState: StageState = failedBeforeServer
     ? "pending"
@@ -91,55 +116,93 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
             : "completed"
           : "pending"
 
-  const downloadState: StageState = done
-    ? "completed"
-    : failed
-      ? "pending"
-      : "pending"
+  const convertingLogs: LogLine[] = serverLogs.map((line) => ({
+    text: line,
+    tone: serverLineTone(line)
+  }))
+  if (failed && jobId) {
+    convertingLogs.push(
+      { text: `Error: ${error ?? "Conversion failed"}`, tone: "error" },
+      {
+        text: "Suggested action: retry the conversion, or replace the file.",
+        tone: "info"
+      }
+    )
+  }
 
   return [
     {
       id: "received",
       label: "File received",
-      detail: entry.name,
-      state: "completed"
+      state: "completed",
+      logs: [
+        {
+          text: `File received: ${entry.name} (${formatBytes(entry.size)})`,
+          tone: "info"
+        }
+      ]
     },
     {
       id: "validated",
       label: "File type validated",
-      detail: sourceFormat ? `Detected source format: ${sourceFormat}` : undefined,
-      state: sourceFormat ? "completed" : failedBeforeServer ? "failed" : "completed"
+      state: sourceFormat ? "completed" : failedBeforeServer ? "failed" : "completed",
+      logs: [
+        // ZIP inspection findings (contents inventory, extraction notes)
+        // happen as part of validating what the upload actually is.
+        ...(entry.inspection ?? []).map(
+          (text): LogLine => ({ text, tone: "info" })
+        ),
+        ...(sourceFormat
+          ? [
+            {
+              text: `File type validated — source format "${sourceFormat}"`,
+              tone: "success"
+            } satisfies LogLine
+          ]
+          : [])
+      ]
     },
     {
       id: "upload",
       label: "Uploaded to conversion service",
-      detail: failedBeforeServer ? (error ?? undefined) : undefined,
-      state: uploadState
+      state: uploadState,
+      logs: uploadLogs
     },
     {
       id: "queued",
       label: "Queued for conversion",
-      detail: jobId ? `Job ${jobId}` : undefined,
-      state: queuedState
+      state: queuedState,
+      logs: jobId
+        ? [
+          {
+            text: `Job ${jobId} created — tracking status over WebSocket`,
+            tone: "success"
+          }
+        ]
+        : []
     },
     {
       id: "converting",
       label: "Converting to .corpus",
-      detail:
-        failed && jobId
-          ? (error ?? undefined)
-          : convertingState === "warning" && !done
-            ? (lastLog ?? "Completed with warnings")
-            : done && serverLogsHaveWarning
-              ? "Completed with warnings"
-              : (lastLog ?? undefined),
-      state: convertingState
+      state: convertingState,
+      logs: convertingLogs
     },
     {
       id: "download",
       label: "Archive downloaded",
-      detail: entry.corpusName,
-      state: downloadState
+      state: done ? "completed" : "pending",
+      logs: done
+        ? [
+          {
+            text: `Downloaded ${entry.corpusName ?? "archive"}${
+              entry.corpusSize !== undefined
+                ? ` (${formatBytes(entry.corpusSize)})`
+                : ""
+            }`,
+            tone: "success"
+          }
+        ]
+        : []
     }
   ]
 }

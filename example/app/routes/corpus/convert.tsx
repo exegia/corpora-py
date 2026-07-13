@@ -5,16 +5,21 @@ import { Badge } from "~/components/ui/badge"
 import { UploadDropzone } from "~/components/convert/upload-dropzone"
 import { FileSummary } from "~/components/convert/file-summary"
 import { ProcessingStages } from "~/components/convert/processing-stages"
-import { LogConsole, type LogLine } from "~/components/convert/log-console"
+import {
+  LogConsole,
+  TONE_PREFIX,
+  type LogLine
+} from "~/components/convert/log-console"
 import { CompletedResult, FailedResult } from "~/components/convert/result-actions"
 import {
   deriveStages,
   deriveView,
-  failedStage
+  failedStage,
+  type Stage
 } from "~/components/convert/state-model"
 import type { UploadEntry } from "~/lib/atoms/upload-atom"
-import { formatBytes } from "~/lib/hooks/use-file-upload"
 import { useUpload } from "~/lib/hooks/use-upload"
+import { extractZipEntry, inspectZip } from "~/lib/uploads/inspect-zip"
 import { EXTENSION_TO_FORMAT } from "~/lib/uploads/source-format"
 import { cn } from "~/lib/utils"
 
@@ -27,68 +32,36 @@ export function meta(): MetaDescriptor[] {
 
 const ACCEPTED_EXTENSIONS = Object.keys(EXTENSION_TO_FORMAT)
 
-const WARNING_PATTERN = /\bwarn(ing)?\b/i
-const ERROR_PATTERN = /\b(error|fail(ed|ure)?)\b/i
-
-// Every line reflects a real event from the tracked entry -- client-side
-// validation, the POST round-trip, the server's own coarse checkpoints
-// (entry.logs, pushed over /convert/{id}/ws), and the download/save steps.
-const buildLogLines = (entry: UploadEntry | undefined): LogLine[] => {
+// The bottom block of the console carries only the final completion
+// message -- the per-stage log lines live inline in the stage timeline
+// (see deriveStages).
+const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
   if (!entry) return []
-  const lines: LogLine[] = [
-    {
-      text: `File received: ${entry.name} (${formatBytes(entry.size)})`,
-      tone: "info"
-    }
-  ]
-  if (entry.sourceFormat) {
-    lines.push({
-      text: `File type validated — source format "${entry.sourceFormat}"`,
-      tone: "success"
-    })
+  switch (entry.status) {
+    case "error":
+      return [
+        {
+          text: `Conversion failed: ${entry.error ?? "unknown error"}`,
+          tone: "error"
+        }
+      ]
+    case "ready":
+      return [
+        {
+          text: `Conversion complete — ${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
+          tone: "success"
+        }
+      ]
+    case "success":
+      return [
+        {
+          text: `Conversion complete — ${entry.corpusName ?? "archive"} saved to disk.`,
+          tone: "success"
+        }
+      ]
+    default:
+      return []
   }
-  lines.push({ text: "Uploading to POST /convert…", tone: "info" })
-  if (entry.jobId) {
-    lines.push({
-      text: `Job ${entry.jobId} created — tracking status over WebSocket`,
-      tone: "success"
-    })
-  }
-  for (const line of entry.logs ?? []) {
-    lines.push({
-      text: line,
-      tone: WARNING_PATTERN.test(line)
-        ? "warning"
-        : ERROR_PATTERN.test(line)
-          ? "error"
-          : "info"
-    })
-  }
-  if (entry.error) {
-    lines.push({ text: `Error: ${entry.error}`, tone: "error" })
-    lines.push({
-      text: entry.jobId
-        ? "Suggested action: retry the conversion, or replace the file."
-        : "Suggested action: check that the conversion API is running, then retry.",
-      tone: "info"
-    })
-  }
-  if (entry.status === "ready" || entry.status === "success") {
-    lines.push({
-      text: `Downloaded ${entry.corpusName ?? "archive"}${
-        entry.corpusSize !== undefined ? ` (${formatBytes(entry.corpusSize)})` : ""
-      }`,
-      tone: "success"
-    })
-    lines.push({
-      text:
-        entry.status === "success"
-          ? "Saved to disk. Conversion complete."
-          : "Ready to save. Use “Save .corpus” to write it to disk.",
-      tone: "success"
-    })
-  }
-  return lines
 }
 
 const STATUS_TEXT: Record<UploadEntry["status"], string> = {
@@ -97,8 +70,13 @@ const STATUS_TEXT: Record<UploadEntry["status"], string> = {
   converting: "Converting — this can take a while for large documents.",
   ready: "Conversion completed. Archive ready to save.",
   success: "Conversion completed and saved to disk.",
-  error: "Conversion failed. See the log above for details."
+  error: "Conversion failed. See the failed step above."
 }
+
+const buildCopyText = (stages: Stage[], completion: LogLine[]): string =>
+  [...stages.flatMap((stage) => stage.logs), ...completion]
+    .map((line) => `${TONE_PREFIX[line.tone]} ${line.text}`)
+    .join("\n")
 
 export default function CorpusConvert() {
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
@@ -109,11 +87,61 @@ export default function CorpusConvert() {
   const entry = currentUploadId ? uploads[currentUploadId] : undefined
   const view = deriveView(entry)
   const stages = entry ? deriveStages(entry) : []
+  const completionLines = buildCompletionLines(entry)
+  const totalLogCount =
+    stages.reduce((count, stage) => count + stage.logs.length, 0) +
+    completionLines.length
 
+  // A ZIP is a container, not a format -- inspect it client-side to decide
+  // what it actually is (see inspect-zip.ts): a Text-Fabric dataset goes up
+  // as tf_zip (the existing behavior), a single zipped document is extracted
+  // and continues the normal single-file flow, and anything the service
+  // can't convert is rejected here with an inline explanation instead of a
+  // doomed round-trip.
   const handleFile = async (file: File) => {
     setRejection(null)
     setCurrentUploadId(null)
-    setCurrentUploadId(await uploadFile(file))
+
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      setCurrentUploadId(await uploadFile(file))
+      return
+    }
+
+    const result = await inspectZip(file)
+    switch (result.kind) {
+      case "unsupported":
+        setRejection(result.message)
+        return
+      case "tf":
+      case "fallback":
+        setCurrentUploadId(
+          await uploadFile(file, {
+            sourceFormat: "tf_zip",
+            inspection: result.notes
+          })
+        )
+        return
+      case "tei":
+        setCurrentUploadId(
+          await uploadFile(file, {
+            sourceFormat: "tei_zip",
+            inspection: result.notes
+          })
+        )
+        return
+      case "document": {
+        const extracted = await extractZipEntry(file, result.entry)
+        if (!extracted) {
+          setRejection(
+            `"${result.entry.name}" inside ${file.name} uses a compression method this app can't extract. Upload the document directly instead.`
+          )
+          return
+        }
+        setCurrentUploadId(
+          await uploadFile(extracted, { inspection: result.notes })
+        )
+      }
+    }
   }
 
   const handleReset = () => {
@@ -195,8 +223,10 @@ export default function CorpusConvert() {
               <LogConsole
                 title="Conversion console"
                 header={<ProcessingStages stages={stages} />}
-                lines={buildLogLines(entry)}
+                lines={completionLines}
                 status={STATUS_TEXT[entry.status]}
+                scrollKey={totalLogCount}
+                copyText={buildCopyText(stages, completionLines)}
               />
             </div>
           )}

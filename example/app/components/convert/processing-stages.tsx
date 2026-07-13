@@ -8,6 +8,7 @@ import {
   TriangleAlert
 } from "lucide-react"
 import { cn } from "~/lib/utils"
+import { TONE_CLASSES, TONE_PREFIX } from "./log-console"
 import type { Stage, StageState } from "./state-model"
 
 const STATE_META: Record<
@@ -22,8 +23,10 @@ const STATE_META: Record<
 }
 
 /**
- * Stage-by-stage pipeline view. Completed stages stay visible; each state
- * is communicated with an icon *and* a text label (never color alone).
+ * Stage-by-stage pipeline view. Each stage renders its own real log lines
+ * inline underneath it (the console's bottom area is reserved for the final
+ * completion message). Completed stages stay visible; each state is
+ * communicated with an icon *and* a text label (never color alone).
  * Motion is limited to the active stage's spinner and a short fade when a
  * stage changes state.
  */
@@ -71,10 +74,36 @@ export function ProcessingStages({
                 <span className="font-medium">{stage.label}</span>
                 <span className={cn("text-xs", meta.className)}>{meta.label}</span>
               </p>
-              {stage.detail && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground" title={stage.detail}>
-                  {stage.detail}
-                </p>
+              {stage.logs.length > 0 && (
+                <div className="mt-1 font-mono text-xs leading-relaxed">
+                  {stage.logs.map((line, lineIndex) => (
+                    <p
+                      key={`${lineIndex}-${line.text}`}
+                      className="flex animate-in items-start gap-2 duration-300 fade-in motion-reduce:animate-none"
+                    >
+                      <span
+                        className={cn("shrink-0 font-semibold", TONE_CLASSES[line.tone])}
+                        aria-hidden="true"
+                      >
+                        {TONE_PREFIX[line.tone]}
+                      </span>
+                      {/* Tone is also in the text for screen readers, not color alone. */}
+                      <span className="sr-only">
+                        {line.tone !== "info" ? `${line.tone}: ` : ""}
+                      </span>
+                      <span
+                        className={cn(
+                          "whitespace-pre-wrap",
+                          line.tone === "info"
+                            ? "text-muted-foreground"
+                            : TONE_CLASSES[line.tone]
+                        )}
+                      >
+                        {line.text}
+                      </span>
+                    </p>
+                  ))}
+                </div>
               )}
             </div>
           </li>

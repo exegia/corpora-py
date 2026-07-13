@@ -26,6 +26,12 @@ export type UploadEntry = {
   uploadedAt?: number
   /** Source format sent as `source_format` to `POST /convert` (see source-format.ts). */
   sourceFormat?: string
+  /**
+   * Client-side pre-upload findings (ZIP contents inventory, extraction
+   * notes -- see inspect-zip.ts), shown under the "File type validated"
+   * stage in the conversion console.
+   */
+  inspection?: string[]
   /** Coarse conversion checkpoints returned by the API. */
   logs?: string[]
   /** Last coarse stage message reported by the server (see `JobStatusMessage.last_log`). */

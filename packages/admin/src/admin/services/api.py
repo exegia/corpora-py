@@ -157,6 +157,11 @@ def _run_conversion(
             job_manager.log(
                 job_id, "Inspecting ZIP and importing Text-Fabric dataset..."
             )
+        elif source_format == SourceFormat.TEI_ZIP:
+            job_manager.log(
+                job_id,
+                "Extracting TEI documents from ZIP and building Text-Fabric dataset...",
+            )
         else:
             job_manager.log(
                 job_id,

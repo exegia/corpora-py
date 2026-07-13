@@ -12,14 +12,14 @@ export type LogLine = {
   tone: LogTone
 }
 
-const TONE_CLASSES: Record<LogTone, string> = {
+export const TONE_CLASSES: Record<LogTone, string> = {
   info: "text-zinc-400",
   success: "text-emerald-400",
   warning: "text-amber-400",
   error: "text-red-400"
 }
 
-const TONE_PREFIX: Record<LogTone, string> = {
+export const TONE_PREFIX: Record<LogTone, string> = {
   info: ">",
   success: "✓",
   warning: "!",
@@ -28,21 +28,42 @@ const TONE_PREFIX: Record<LogTone, string> = {
 
 interface LogConsoleProps {
   title?: string
+  /**
+   * Final completion message lines (success or error) -- the per-stage log
+   * lines live inside the stage timeline passed as `header`.
+   */
   lines: LogLine[]
   /** Current one-line status, announced to screen readers on change. */
   status?: string
-  /** Rendered above the log area (e.g. the ProcessingStages list). */
+  /** The stage timeline, rendered inside the scroll area above `lines`. */
   header?: ReactNode
+  /**
+   * Bumps whenever any log content (including per-stage lines inside
+   * `header`) grows, so auto-scroll can follow output it doesn't render
+   * itself.
+   */
+  scrollKey?: number
+  /** Full text placed on the clipboard by the copy button. */
+  copyText?: string
   className?: string
 }
 
 /**
- * Terminal-style processing console: verbose, real log lines under a
- * stage-progress header. Auto-scrolls while new lines arrive, but never
- * fights the user -- scrolling up pauses the follow behavior and shows a
- * "Jump to latest" control instead.
+ * Terminal-style processing console: the stage timeline (with its inline
+ * log lines) scrolls in the body, and the bottom block carries only the
+ * final success/error completion message. Auto-scrolls while new output
+ * arrives, but never fights the user -- scrolling up pauses the follow
+ * behavior and shows a "Jump to latest" control instead.
  */
-export function LogConsole({ title = "Conversion log", lines, status, header, className }: LogConsoleProps) {
+export function LogConsole({
+                             title = "Conversion log",
+                             lines,
+                             status,
+                             header,
+                             scrollKey = 0,
+                             copyText,
+                             className
+                           }: LogConsoleProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [atBottom, setAtBottom] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -57,10 +78,10 @@ export function LogConsole({ title = "Conversion log", lines, status, header, cl
     })
   }, [])
 
-  // Follow new lines only while the user is already at (or near) the bottom.
+  // Follow new output only while the user is already at (or near) the bottom.
   useEffect(() => {
     if (atBottom) scrollToBottom()
-  }, [lines.length, atBottom, scrollToBottom])
+  }, [scrollKey, lines.length, atBottom, scrollToBottom])
 
   const handleScroll = () => {
     const node = scrollRef.current
@@ -69,7 +90,8 @@ export function LogConsole({ title = "Conversion log", lines, status, header, cl
   }
 
   const handleCopy = () => {
-    void navigator.clipboard.writeText(lines.map((line) => line.text).join("\n"))
+    const text = copyText ?? lines.map((line) => line.text).join("\n")
+    void navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -100,42 +122,46 @@ export function LogConsole({ title = "Conversion log", lines, status, header, cl
         </Button>
       </div>
 
-      {header && <div className="border-b border-zinc-800 px-4 py-3 text-zinc-100">{header}</div>}
-
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="h-full max-h-80 overflow-y-auto p-4 font-mono text-xs leading-relaxed md:text-sm"
+          className="h-full max-h-96 overflow-y-auto"
           tabIndex={0}
           role="log"
           aria-label="Processing log"
         >
-          {lines.length === 0 && (
-            <p className="text-zinc-500">Waiting for an upload…</p>
+          {header && <div className="px-4 py-3 text-zinc-100">{header}</div>}
+
+          {lines.length > 0 && (
+            <div className="border-t border-zinc-800 p-4 font-mono text-xs leading-relaxed md:text-sm">
+              {lines.map((line, index) => (
+                <p
+                  key={`${index}-${line.text}`}
+                  className="mb-1.5 flex animate-in items-start gap-2 duration-300 fade-in last:mb-0 motion-reduce:animate-none"
+                >
+                  <span
+                    className={cn("shrink-0 font-semibold", TONE_CLASSES[line.tone])}
+                    aria-hidden="true"
+                  >
+                    {TONE_PREFIX[line.tone]}
+                  </span>
+                  {/* Tone is also in the text for screen readers, not color alone. */}
+                  <span className="sr-only">
+                    {line.tone !== "info" ? `${line.tone}: ` : ""}
+                  </span>
+                  <span
+                    className={cn(
+                      "whitespace-pre-wrap",
+                      line.tone === "info" ? "text-zinc-300" : TONE_CLASSES[line.tone]
+                    )}
+                  >
+                    {line.text}
+                  </span>
+                </p>
+              ))}
+            </div>
           )}
-          {lines.map((line, index) => (
-            <p
-              key={`${index}-${line.text}`}
-              className="mb-1.5 flex animate-in items-start gap-2 duration-300 fade-in last:mb-0 motion-reduce:animate-none"
-            >
-              <span className={cn("shrink-0 font-semibold", TONE_CLASSES[line.tone])} aria-hidden="true">
-                {TONE_PREFIX[line.tone]}
-              </span>
-              {/* Tone is also in the text for screen readers, not color alone. */}
-              <span className="sr-only">
-                {line.tone !== "info" ? `${line.tone}: ` : ""}
-              </span>
-              <span
-                className={cn(
-                  "whitespace-pre-wrap",
-                  line.tone === "info" ? "text-zinc-300" : TONE_CLASSES[line.tone]
-                )}
-              >
-                {line.text}
-              </span>
-            </p>
-          ))}
         </div>
 
         {!atBottom && (
