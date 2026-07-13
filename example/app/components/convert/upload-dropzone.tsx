@@ -112,6 +112,8 @@ export function UploadDropzone({
           className="cursor-pointer"
           disabled={disabled}
           onClick={openFileDialog}
+          data-cuelume-press
+          data-cuelume-release
         >
           Browse files
         </Button>

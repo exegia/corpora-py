@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { type MetaDescriptor } from "react-router"
 import { Card, CardContent } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
@@ -19,6 +19,7 @@ import {
 } from "~/components/convert/state-model"
 import type { UploadEntry } from "~/lib/atoms/upload-atom"
 import { useUpload } from "~/lib/hooks/use-upload"
+import { cue } from "~/lib/cue"
 import { extractZipEntry, inspectZip } from "~/lib/uploads/inspect-zip"
 import { EXTENSION_TO_FORMAT } from "~/lib/uploads/source-format"
 import { cn } from "~/lib/utils"
@@ -85,6 +86,43 @@ export default function CorpusConvert() {
     useUpload()
 
   const entry = currentUploadId ? uploads[currentUploadId] : undefined
+
+  // Play a cue on meaningful status transitions of the tracked upload. A ref
+  // keyed by (id, status) makes each transition fire exactly once, even
+  // though the atom re-renders this component on every log line. The first
+  // time a brand-new upload appears (currentUploadId only ever points at
+  // fresh, this-session uploads) its "uploading"/"queued" state stands in for
+  // "conversion started".
+  const cuedRef = useRef<{ id: string; status: UploadEntry["status"] } | null>(
+    null
+  )
+  useEffect(() => {
+    if (!entry) {
+      cuedRef.current = null
+      return
+    }
+    const prev = cuedRef.current
+    const isNew = prev?.id !== entry.id
+    if (!isNew && prev?.status === entry.status) return
+    cuedRef.current = { id: entry.id, status: entry.status }
+
+    if (isNew && (entry.status === "uploading" || entry.status === "queued")) {
+      cue("upload")
+      return
+    }
+    switch (entry.status) {
+      case "ready":
+        cue("converted")
+        break
+      case "success":
+        cue("saved")
+        break
+      case "error":
+        cue("error")
+        break
+    }
+  }, [entry?.id, entry?.status])
+
   const view = deriveView(entry)
   const stages = entry ? deriveStages(entry) : []
   const completionLines = buildCompletionLines(entry)
@@ -98,6 +136,14 @@ export default function CorpusConvert() {
   // and continues the normal single-file flow, and anything the service
   // can't convert is rejected here with an inline explanation instead of a
   // doomed round-trip.
+  // A rejection (unsupported file, un-extractable archive) gets a negative
+  // cue. Clearing the message on the next attempt stays a plain setState with
+  // no sound.
+  const reject = (message: string) => {
+    cue("reject")
+    setRejection(message)
+  }
+
   const handleFile = async (file: File) => {
     setRejection(null)
     setCurrentUploadId(null)
@@ -110,7 +156,7 @@ export default function CorpusConvert() {
     const result = await inspectZip(file)
     switch (result.kind) {
       case "unsupported":
-        setRejection(result.message)
+        reject(result.message)
         return
       case "tf":
       case "fallback":
@@ -132,7 +178,7 @@ export default function CorpusConvert() {
       case "document": {
         const extracted = await extractZipEntry(file, result.entry)
         if (!extracted) {
-          setRejection(
+          reject(
             `"${result.entry.name}" inside ${file.name} uses a compression method this app can't extract. Upload the document directly instead.`
           )
           return
@@ -186,7 +232,7 @@ export default function CorpusConvert() {
                 hint="Drag and drop, or browse"
                 error={rejection}
                 onFile={(file) => void handleFile(file)}
-                onReject={setRejection}
+                onReject={reject}
               />
             ) : (
               entry && (

@@ -1,7 +1,9 @@
 import "~/app.css"
+import { useEffect } from "react"
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigate } from "react-router"
 import NavHeaderIcon from "~/components/logo"
 import { ThemeProvider } from "~/components/theme-provider"
+import { bindCues } from "~/lib/cue"
 import { NAV } from "~/lib/constant"
 
 import type { Route } from "./+types/root"
@@ -87,6 +89,12 @@ export function Layout({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  // Wire the declarative `data-cuelume-*` interaction sounds once, on the
+  // client. Idempotent and SSR-safe (see `bindCues`).
+  useEffect(() => {
+    bindCues()
+  }, [])
+
   return (
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
       <Outlet />

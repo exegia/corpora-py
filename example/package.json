@@ -18,6 +18,7 @@
     "@react-router/serve": "7.15.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cuelume": "^0.1.0",
     "electrobun": "1.18.4-beta.6",
     "framer-motion": "^12.42.2",
     "immer": "^11.1.9",

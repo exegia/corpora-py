@@ -113,6 +113,8 @@ export function LogConsole({
           title="Copy log"
           onClick={handleCopy}
           className="size-6 rounded-md text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+          data-cuelume-press
+          data-cuelume-release
         >
           {copied ? (
             <Check className="size-4 text-emerald-400" aria-hidden="true" />
