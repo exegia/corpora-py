@@ -20,6 +20,12 @@ export type UploadEntry = {
   status: UploadStatus
   progress: number
   error: string | null
+  /** `File.lastModified` of the source file, when the browser provided one. */
+  lastModified?: number
+  /** When this upload was started on the client (`Date.now()`). */
+  uploadedAt?: number
+  /** Source format sent as `source_format` to `POST /convert` (see source-format.ts). */
+  sourceFormat?: string
   /** Coarse conversion checkpoints returned by the API. */
   logs?: string[]
   /** Last coarse stage message reported by the server (see `JobStatusMessage.last_log`). */
