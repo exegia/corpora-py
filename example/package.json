@@ -19,6 +19,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electrobun": "1.18.4-beta.6",
+    "framer-motion": "^12.42.2",
     "immer": "^11.1.9",
     "isbot": "^5.1.44",
     "jotai": "^2.20.1",
