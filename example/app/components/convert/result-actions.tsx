@@ -56,11 +56,22 @@ export function CompletedResult({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={onSave} className="gap-1.5">
+        <Button
+          onClick={onSave}
+          className="gap-1.5"
+          data-cuelume-press
+          data-cuelume-release
+        >
           <Download className="size-4" aria-hidden="true" />
           {saved ? "Save again" : "Save .corpus"}
         </Button>
-        <Button variant="outline" onClick={onReset} className="gap-1.5">
+        <Button
+          variant="outline"
+          onClick={onReset}
+          className="gap-1.5"
+          data-cuelume-press
+          data-cuelume-release
+        >
           <Undo2 className="size-4" aria-hidden="true" />
           Convert another file
         </Button>
@@ -109,11 +120,22 @@ export function FailedResult({
       </Alert>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={onRetry} className="gap-1.5">
+        <Button
+          onClick={onRetry}
+          className="gap-1.5"
+          data-cuelume-press
+          data-cuelume-release
+        >
           <RefreshCw className="size-4" aria-hidden="true" />
           Retry
         </Button>
-        <Button variant="outline" onClick={onReplace} className="gap-1.5">
+        <Button
+          variant="outline"
+          onClick={onReplace}
+          className="gap-1.5"
+          data-cuelume-press
+          data-cuelume-release
+        >
           Replace file
         </Button>
       </div>

@@ -101,6 +101,8 @@ export function FileSummary({ entry, onRemove, onReplace, className }: FileSumma
             onClick={onReplace}
             title="Replace file"
             aria-label="Replace file"
+            data-cuelume-press
+            data-cuelume-release
           >
             <RefreshCw className="size-4" aria-hidden="true" />
           </Button>
@@ -111,6 +113,8 @@ export function FileSummary({ entry, onRemove, onReplace, className }: FileSumma
             onClick={onRemove}
             title="Remove file"
             aria-label="Remove file"
+            data-cuelume-press
+            data-cuelume-release
           >
             <X className="size-4" aria-hidden="true" />
           </Button>
