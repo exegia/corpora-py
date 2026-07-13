@@ -40,6 +40,7 @@ class TestRegistries:
             SourceFormat.HTML,
             SourceFormat.PDF,
             SourceFormat.TEI,
+            SourceFormat.TEI_ZIP,
             SourceFormat.PLAIN,
             SourceFormat.TF_ZIP,
         }

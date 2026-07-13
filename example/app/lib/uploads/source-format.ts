@@ -9,12 +9,10 @@
 export const EXTENSION_TO_FORMAT: Record<string, string> = {
   ".epub": "epub",
   ".html": "html",
-  ".htm": "html",
   ".xml": "tei",
   ".tei": "tei",
   ".pdf": "pdf",
   ".txt": "plain",
-  ".text": "plain",
   ".zip": "tf_zip"
 }
 

@@ -36,8 +36,9 @@ const store = getDefaultStore()
 const PROGRESS = { started: 0, queued: 20, converting: 60, done: 100 } as const
 
 // The real `File` objects (needed to retry) never go into the atom -- atoms
-// hold serializable UI state.
-const files = new Map<string, File>()
+// hold serializable UI state. The upload options ride along so a retry
+// re-runs with the same detected source format and inspection notes.
+const files = new Map<string, { file: File; options: UploadOptions }>()
 
 // Per-job WebSocket unsubscribers, so the status socket can be closed early
 // if the upload is deleted before the job reaches a terminal state.
@@ -73,10 +74,12 @@ const fetchCorpusBlob = async (jobId: string): Promise<Blob> => {
   return response.blob()
 }
 
+// Closes the status socket only -- the original `File` stays cached so a
+// failed job can be retried (`retryUpload`) without re-picking the file.
+// `deleteUpload` and the success path drop it explicitly.
 const stopTracking = (id: string): void => {
   unsubscribers.get(id)?.()
   unsubscribers.delete(id)
-  files.delete(id)
 }
 
 const handleJobSucceeded = async (
@@ -94,6 +97,9 @@ const handleJobSucceeded = async (
     // the local save-to-disk step can still fail, and that must never
     // downgrade this to "error" (see `saveUpload`).
     blobs.set(id, { blob, filename })
+    // Conversion is done -- nothing left to retry from the source file, so
+    // release it rather than hold large uploads in memory.
+    files.delete(id)
     updateEntry(id, (draft) => {
       draft.status = "ready"
       draft.progress = PROGRESS.done
@@ -153,6 +159,8 @@ export type UploadOptions = {
   name?: string
   description?: string
   sourceFormat?: string
+  /** Pre-upload inspection notes to surface in the conversion console. */
+  inspection?: string[]
 }
 
 type ConvertResponse = { job_id: string; status_url: string; ws_url: string }
@@ -179,7 +187,7 @@ export const uploadFile = async (
   options: UploadOptions = {}
 ): Promise<string> => {
   const id = createId()
-  files.set(id, file)
+  files.set(id, { file, options })
 
   store.set(uploadAtom, (draft) => {
     draft[id] = {
@@ -190,12 +198,18 @@ export const uploadFile = async (
       status: "uploading",
       progress: PROGRESS.started,
       error: null,
+      lastModified: file.lastModified || undefined,
+      uploadedAt: Date.now(),
+      inspection: options.inspection,
       logs: []
     }
   })
 
   try {
     const sourceFormat = options.sourceFormat ?? detectSourceFormat(file.name)
+    updateEntry(id, (draft) => {
+      draft.sourceFormat = sourceFormat
+    })
 
     const formData = new FormData()
     formData.append("file", file)
@@ -236,7 +250,6 @@ export const uploadFile = async (
       draft.status = "error"
       draft.error = error instanceof Error ? error.message : String(error)
     })
-    files.delete(id)
   }
 
   return id
@@ -244,19 +257,21 @@ export const uploadFile = async (
 
 export const deleteUpload = (id: string): void => {
   stopTracking(id)
+  files.delete(id)
   blobs.delete(id)
   store.set(uploadAtom, (draft) => {
     delete draft[id]
   })
 }
 
-export const retryUpload = (id: string): void => {
-  const file = files.get(id)
+export const retryUpload = (id: string): Promise<string> | undefined => {
+  const cached = files.get(id)
   deleteUpload(id)
   // Retrying mints a fresh id via uploadFile() rather than reusing `id` --
   // a stale in-flight status push for the old id (unlikely but possible)
-  // would otherwise resurrect a deleted atom entry.
-  if (file) void uploadFile(file)
+  // would otherwise resurrect a deleted atom entry. The new id is returned
+  // so a view tracking the old entry can follow the retried one.
+  return cached ? uploadFile(cached.file, cached.options) : undefined
 }
 
 /**
