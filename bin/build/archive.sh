@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # archive.sh
-# Shell equivalent of scripts/build/archive.py
 #
 # Provides two operations used by the build system:
 #   - extract:  unpack a python-build-standalone tarball

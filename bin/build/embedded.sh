@@ -2,7 +2,7 @@
 #
 # embedded.sh
 #
-# Build wheels + embed into the demo's standalone Python runtime.
+# Build wheels + embed into the example's standalone Python runtime.
 # Used for DEMO / ADMIN (optionally with [full]).
 #
 # For client opt-in full runtime: use client_runtime.sh
@@ -36,12 +36,12 @@ done
 python_bin="$DEMO_RESOURCES/bin/python3"
 
 if [[ -f "$python_bin" && "$CLEAN" != true ]]; then
-  log "Embedded Python runtime for demo already present (skipping)."
+  log "Embedded Python runtime for example already present (skipping)."
   log_step "$python_bin"
   exit 0
 fi
 
-log "Building embedded Python for ElectroBun demo"
+log "Building embedded Python for ElectroBun example"
 log_step "Repo root: $REPO_ROOT"
 log_step "Target:    $DEMO_RESOURCES"
 

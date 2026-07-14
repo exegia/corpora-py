@@ -8,8 +8,8 @@
 # Steps:
 #   1. Install workspace dependencies via `uv sync`.
 #   2. Install `dotenvx`.
-#   3. Install demo app (Bun) dependencies.
-#   4. Build embedded Python runtime for the demo (if not already present).
+#   3. Install example app (Bun) dependencies.
+#   4. Build embedded Python runtime for the example (if not already present).
 #
 # Usage:
 #   ./scripts/setup.sh
@@ -42,13 +42,13 @@ install_dotenvx() {
 
 install_demo_deps() {
   echo
-  echo "[3/4] Installing the demo app dependencies..."
+  echo "[3/4] Installing the example app dependencies..."
   run --no-dotenvx --dir "$DEMO_APP_DIR" -- "bun" "install" "--no-cache"
 }
 
 build_demo_python_runtime() {
   echo
-  echo "[4/4] Ensuring embedded Python runtime for the demo..."
+  echo "[4/4] Ensuring embedded Python runtime for the example..."
 
   # Prefer the shell implementation if present
   if [[ -x "$SCRIPT_DIR/build/embedded.sh" ]]; then
@@ -63,8 +63,8 @@ main() {
   is_uv_install
   sync_dependencies
   install_dotenvx
-  install_demo_deps
-  build_demo_python_runtime
+  # install_demo_deps
+  # build_demo_python_runtime
 
   echo
   echo "Setup complete."

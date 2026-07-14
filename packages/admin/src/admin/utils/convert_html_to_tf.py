@@ -46,13 +46,13 @@ class HTMLToTFConverter:
     """
 
     def __init__(
-        self,
-        input_dir: str | Path,
-        output_dir: str | Path,
-        corpus_name: str = "HTMLCorpus",
-        version: str = "1.0",
-        tokenize: bool = True,
-        preserve_whitespace: bool = False,
+            self,
+            input_dir: str | Path,
+            output_dir: str | Path,
+            corpus_name: str = "HTMLCorpus",
+            version: str = "1.0",
+            tokenize: bool = True,
+            preserve_whitespace: bool = False,
     ):
         """
         Initialize the HTML to TF converter.
@@ -348,7 +348,7 @@ class AdvancedHTMLToTFConverter(HTMLToTFConverter):
                 self.metadata[f"meta_{name}"] = content
 
     def _walk_element_advanced(
-        self, element: Tag | NavigableString, depth: int = 0
+            self, element: Tag | NavigableString, depth: int = 0
     ):
         """Walk through HTML with advanced semantic handling."""
         if isinstance(element, NavigableString):
@@ -444,12 +444,12 @@ class AdvancedHTMLToTFConverter(HTMLToTFConverter):
 
 
 def convert_html_to_tf(
-    input_dir: str | Path,
-    output_dir: str | Path,
-    corpus_name: str = "HTMLCorpus",
-    version: str = "1.0",
-    advanced: bool = False,
-    **kwargs,
+        input_dir: str | Path,
+        output_dir: str | Path,
+        corpus_name: str = "HTMLCorpus",
+        version: str = "1.0",
+        advanced: bool = False,
+        **kwargs,
 ) -> Path:
     """
     Convenience function to convert HTML to Text-Fabric.

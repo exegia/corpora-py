@@ -1,7 +1,6 @@
-# !/usr/bin/env bash
+#!/usr/bin/env bash
 #
 # git_work.sh
-# Shell equivalent of scripts/git_work.py
 #
 # Git workflow helper:
 #   - Creates a typed branch (fix/test/doc/feature/cicd/refactor/chore-YYYY-MM-DD)

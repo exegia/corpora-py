@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # trim.sh
-# Shell equivalent of scripts/build/trim.py
 #
 # Usage:
 #   ./scripts/build/trim.sh <python_dir>

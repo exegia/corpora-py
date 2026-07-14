@@ -3,8 +3,7 @@ name: Build and test containers
 # Manual-only for now: this workflow spins up the combined FastAPI app
 # (docker compose, health check on :5002 via Caddy) which depends on
 # src/corpora_py/app.py — not yet ported to the merged package layout
-# (it imported the removed common/corpora_mcp modules). Re-enable push/PR
-# triggers once the corpora-api port lands.
+
 on:
   workflow_dispatch:
 
@@ -21,39 +20,39 @@ jobs:
 
     strategy:
       matrix:
-        python-version: [313, 314]
+        python-version: [ 313, 314 ]
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Checkout repository
+        uses: actions/checkout@v7 # v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4 # v3
 
-    - name: Spin up container
-      run: |
-        # Create .env (gitignored) with the matrix Python version so docker-compose
-        # and any tooling that reads it see the correct value.
-        echo "PYTHON_VERSION=${{ matrix.python-version }}" > .env
-        echo "Building container for Python ${{ matrix.python-version }}."
-        docker compose up -d
+      - name: Spin up container
+        run: |
+          # Create .env (gitignored) with the matrix Python version so docker-compose
+          # and any tooling that reads it see the correct value.
+          echo "PYTHON_VERSION=${{ matrix.python-version }}" > .env
+          echo "Building container for Python ${{ matrix.python-version }}."
+          docker compose up -d
 
-    - name: Wait and check the health of the container
-      run: |
-        attempts=0
-
-        while [ $attempts -lt 20 ]; do
-          # Use a TCP connection check so we don't hang on the SSE stream
-          if bash -c '</dev/tcp/localhost/8000' 2>/dev/null; then
-            echo "Port 8000 is reachable — container is up!"
-            exit 0
-          fi
-
-          attempts=$((attempts+1))
-          echo "Attempt $attempts: port 8000 not yet reachable, waiting 3s..."
-          sleep 3
-        done
-
-        echo "Failed after $attempts attempts"
-        docker compose logs
-        exit 1
+      - name: Wait and check the health of the container
+        run: |
+          attempts=0
+          
+          while [ $attempts -lt 20 ]; do
+            # Use a TCP connection check so we don't hang on the SSE stream
+            if bash -c '</dev/tcp/localhost/8000' 2>/dev/null; then
+              echo "Port 8000 is reachable — container is up!"
+              exit 0
+            fi
+          
+            attempts=$((attempts+1))
+            echo "Attempt $attempts: port 8000 not yet reachable, waiting 3s..."
+            sleep 3
+          done
+          
+          echo "Failed after $attempts attempts"
+          docker compose logs
+          exit 1
