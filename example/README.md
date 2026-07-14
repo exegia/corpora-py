@@ -86,12 +86,25 @@ dist/                  # Built app & web output
 
 - **Framework** — React 19 with React Router 8 (framework mode)
 - **Desktop** — Electrobun 1.18.4-beta
-- **Styling** — Tailwind CSS 4 + Base UI components
+- **UI Components** — [shadcn/ui](https://ui.shadcn.com) (copy-paste Radix UI + Tailwind CSS)
+- **Styling** — Tailwind CSS 4
 - **State** — Jotai with Immer for immutable updates
 - **Animation** — Framer Motion
 - **Build** — Vite with React Router preset
 - **Language** — TypeScript 6
 - **Backend** — Python via subprocess bridge (corpora-mcp/corpora-admin)
+
+## UI Components (shadcn)
+
+This project uses [shadcn/ui](https://ui.shadcn.com) for all React components. Components are copy-pasted into `app/components/ui/` and styled with Tailwind CSS.
+
+### Adding new components
+
+```bash
+npx shadcn-ui@latest add <component-name>
+```
+
+Common components: `button`, `card`, `dialog`, `input`, `select`, `table`, `toast`, etc. See [shadcn/ui docs](https://ui.shadcn.com/docs/components/button) for usage.
 
 ## Environment
 

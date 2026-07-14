@@ -126,13 +126,15 @@ against.
 ## `.corpus` archive
 
 The archive format (`manifest.yml`, `toc.yml`, `assets/`, `.git/`,
-`corpora/{*.tf, .cfm/}`) is specified outside this repo, in an Obsidian
-vault: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Corpora/corpora/Schema.md`
-(also referenced in `convert_to_corpus.py`'s docstring). Read that file
-before changing `convert_to_corpus.py`'s manifest/toc shape — it's the
-contract both the Corpora and Exegia apps parse.
+`corpora/{*.tf, .cfm/}`) is the contract both the Corpora and Exegia apps
+parse. The canonical spec is maintained in an external vault by the Corpora
+team. Before changing manifest/toc shape in `convert_to_corpus.py`, consult
+the current schema definition with the team or check the app's schema loader
+to understand the expected format.
 
 ## Known gaps
+
+**TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no cross-process job registry, no archive cleanup, no test coverage for HTTP API.
 
 - **`ConversionJob.logs`/`last_log` (`services/jobs.py`) are fixed checkpoint
   strings, not real progress.** `_run_conversion` (`services/api.py`) calls
