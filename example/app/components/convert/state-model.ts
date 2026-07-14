@@ -13,7 +13,8 @@ import type { LogLine } from "./log-console"
  *                 rejected (unsupported) file stays in this view with an
  *                 inline error.
  * - "processing": a valid file was accepted and the upload/conversion
- *                 pipeline is running ("uploading" | "queued" | "converting").
+ *                 pipeline is running ("uploading" | "queued" | "converting"
+ *                 | "validating").
  * - "completed":  the `.corpus` bytes are downloaded ("ready") or already
  *                 saved to disk ("success").
  * - "failed":     the upload or conversion errored ("error").
@@ -56,21 +57,24 @@ const serverLineTone = (line: string): LogLine["tone"] =>
  * Maps a tracked upload onto the visible stage-by-stage pipeline. Every
  * stage corresponds to a real observable event (client-side validation, the
  * POST /convert round-trip, the server's coarse queued/running/succeeded/
- * failed states, and the archive download) and carries that event's log
- * lines -- nothing here is simulated.
+ * failed states, the post-conversion POST /validate verdict, and the archive
+ * download) and carries that event's log lines -- nothing here is simulated.
  *
  * The server has no progress hook (see use-socket.ts), so the "Converting"
  * stage carries the server's own coarse log checkpoints rather than a fake
  * percentage.
  */
 export const deriveStages = (entry: UploadEntry): Stage[] => {
-  const { status, error, jobId, sourceFormat, logs } = entry
+  const { status, error, jobId, sourceFormat, logs, validation } = entry
 
   const failed = status === "error"
   // No job id means the failure happened during (or before) the POST --
   // the server never accepted the file.
   const failedBeforeServer = failed && !jobId
   const done = status === "ready" || status === "success"
+  // "validating" means the server-side conversion already succeeded -- the
+  // stages before validation should render as completed, not stuck.
+  const conversionDone = done || status === "validating"
   const serverLogs = logs ?? []
   const serverLogsHaveWarning = serverLogs.some((line) =>
     WARNING_PATTERN.test(line)
@@ -110,7 +114,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
         ? serverLogsHaveWarning
           ? "warning"
           : "active"
-        : done
+        : conversionDone
           ? serverLogsHaveWarning
             ? "warning"
             : "completed"
@@ -128,6 +132,74 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
         tone: "info"
       }
     )
+  }
+
+  // Post-conversion validation (POST /validate by job id): "invalid" marks
+  // the stage failed but never blocks the download/save flow -- the verdict
+  // annotates the finished conversion, it doesn't gate it (see manager.ts).
+  // Entries converted before validation existed have no `validation` at all
+  // and get an honest warning rather than a pretend pass.
+  const validationState: StageState =
+    status === "validating" || validation?.status === "running"
+      ? "active"
+      : validation?.status === "valid"
+        ? "completed"
+        : validation?.status === "invalid"
+          ? "failed"
+          : validation?.status === "skipped"
+            ? "warning"
+            : done
+              ? "warning"
+              : "pending"
+
+  const validationLogs: LogLine[] = []
+  if (status === "validating" || validation) {
+    validationLogs.push({
+      text: "Validating dataset — POST /validate (full .tf → .cfm load cycle)…",
+      tone: "info"
+    })
+  }
+  switch (validation?.status) {
+    case "valid": {
+      const stats = validation.stats
+      validationLogs.push({
+        text: stats
+          ? `Corpus validated — ${(stats.max_slot ?? 0).toLocaleString()} slots, ${
+            stats.node_types ?? 0
+          } node types, ${
+            (stats.node_features ?? 0) + (stats.edge_features ?? 0)
+          } features`
+          : "Corpus validated.",
+        tone: "success"
+      })
+      break
+    }
+    case "invalid":
+      validationLogs.push(
+        { text: "Corpus failed validation:", tone: "error" },
+        ...(validation.reasons ?? []).map(
+          (reason): LogLine => ({ text: reason, tone: "error" })
+        ),
+        {
+          text: "Suggested action: the archive can still be saved, but apps may fail to load it — retry the conversion or check the source document.",
+          tone: "info"
+        }
+      )
+      break
+    case "skipped":
+      validationLogs.push({
+        text: `Validation could not run: ${
+          validation.reasons?.[0] ?? "unknown error"
+        }. The archive is still downloadable.`,
+        tone: "warning"
+      })
+      break
+  }
+  if (!validation && done) {
+    validationLogs.push({
+      text: "No validation recorded for this run (converted before validation was added).",
+      tone: "warning"
+    })
   }
 
   return [
@@ -186,6 +258,12 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       label: "Converting to .corpus",
       state: convertingState,
       logs: convertingLogs
+    },
+    {
+      id: "validation",
+      label: "Dataset validated",
+      state: validationState,
+      logs: validationLogs
     },
     {
       id: "download",

@@ -1,6 +1,10 @@
 import { getDefaultStore } from "jotai"
 import { API_URL } from "~/lib/types/socket"
-import { uploadAtom, type UploadEntry } from "~/lib/atoms/upload-atom"
+import {
+  uploadAtom,
+  type UploadEntry,
+  type ValidationOutcome
+} from "~/lib/atoms/upload-atom"
 import {
   type JobStatusMessage,
   subscribeJobStatus
@@ -33,7 +37,13 @@ const store = getDefaultStore()
 // JobStatus's docstring in use-socket.ts) so these are NOT real completion
 // percentages -- the file card renders an indeterminate animation while
 // "converting" rather than trusting these numbers as progress.
-const PROGRESS = { started: 0, queued: 20, converting: 60, done: 100 } as const
+const PROGRESS = {
+  started: 0,
+  queued: 20,
+  converting: 60,
+  validating: 85,
+  done: 100
+} as const
 
 // The real `File` objects (needed to retry) never go into the atom -- atoms
 // hold serializable UI state. The upload options ride along so a retry
@@ -82,11 +92,63 @@ const stopTracking = (id: string): void => {
   unsubscribers.delete(id)
 }
 
+/**
+ * Runs the converted archive through `POST /validate` (by job id -- see
+ * `admin.services.validation_api`), mapping every outcome to a
+ * `ValidationOutcome` instead of throwing: an unreachable/failing validation
+ * *request* is "skipped" (the check couldn't run), while a 200 with
+ * `valid: false` is "invalid" (the check ran and the corpus is broken).
+ * Neither blocks the download -- see `handleJobSucceeded`.
+ */
+const validateConversion = async (jobId: string): Promise<ValidationOutcome> => {
+  try {
+    const response = await fetch(`${API_URL}/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId })
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        detail?: string
+      }
+      throw new Error(body.detail ?? `Validation request failed (${response.status})`)
+    }
+    const result = (await response.json()) as {
+      valid: boolean
+      reasons: string[]
+      stats: Record<string, number> | null
+    }
+    return result.valid
+      ? { status: "valid", stats: result.stats ?? undefined }
+      : { status: "invalid", reasons: result.reasons }
+  } catch (error) {
+    return {
+      status: "skipped",
+      reasons: [error instanceof Error ? error.message : String(error)]
+    }
+  }
+}
+
 const handleJobSucceeded = async (
   id: string,
   jobId: string,
   jobName: string
 ): Promise<void> => {
+  // Validate before downloading: the verdict annotates the conversion (the
+  // "Dataset validated" stage in the console) but never gates it -- an
+  // invalid or unvalidatable archive is still downloaded and saveable, with
+  // the problem surfaced in the UI instead of silently discarding minutes of
+  // conversion work.
+  updateEntry(id, (draft) => {
+    draft.status = "validating"
+    draft.progress = PROGRESS.validating
+    draft.validation = { status: "running" }
+  })
+  const validation = await validateConversion(jobId)
+  updateEntry(id, (draft) => {
+    draft.validation = validation
+  })
+
   try {
     const blob = await fetchCorpusBlob(jobId)
     // `jobName` is the server-side job name (the `name` form field sent at
@@ -375,11 +437,17 @@ export const initUploadManager = (): void => {
 
   for (const entry of persisted) {
     if (!entry.jobId) continue
-    if (entry.status === "queued" || entry.status === "converting") {
+    if (
+      entry.status === "queued" ||
+      entry.status === "converting" ||
+      entry.status === "validating"
+    ) {
       // Still in flight as of the last session -- resume live tracking.
       // `websocket.py` sends the job's current status as soon as this
       // connects, so this also self-corrects if it actually finished (or
       // failed, or the server restarted and 404s) while the app was closed.
+      // A reload mid-"validating" lands here too: the socket re-pushes
+      // "succeeded", which re-runs validation and the download from scratch.
       if (entry.wsPath) trackJob(entry.id, entry.jobId, entry.wsPath)
     } else if (entry.status === "ready") {
       void reconcileReady(entry.id, entry.jobId)

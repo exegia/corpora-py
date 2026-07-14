@@ -25,7 +25,7 @@ module-level manager (`~/lib/uploads/manager`); everything in this directory
 | View         | `UploadEntry.status`                  | Left column                          | Right column (console)      |
 |--------------|---------------------------------------|--------------------------------------|-----------------------------|
 | `empty`      | *(no entry)*                          | `UploadDropzone` (+ inline rejection)| hidden                      |
-| `processing` | `uploading` / `queued` / `converting` | `FileSummary`                        | `ProcessingStages` + logs   |
+| `processing` | `uploading` / `queued` / `converting` / `validating` | `FileSummary`         | `ProcessingStages` + logs   |
 | `completed`  | `ready` / `success`                   | `FileSummary` + `CompletedResult`    | stages (all done) + logs    |
 | `failed`     | `error`                               | `FileSummary` + `FailedResult`       | stages (failure marked) + logs |
 
@@ -64,7 +64,15 @@ message.
 5. **Converting to .corpus** — server `running`; carries the server's coarse
    log checkpoints. Server log lines matching `/warn/i` put this stage in
    the `warning` state without interrupting the run.
-6. **Archive downloaded** — the `.corpus` blob fetched into memory (`ready`).
+6. **Dataset validated** — after the server reports `succeeded`, the client
+   POSTs `/validate` with the job id (`admin.services.validation_api`) and the
+   server runs the result archive through the full `.tf → .cfm → mmap` load
+   cycle. `valid` → completed with corpus stats; `invalid` → the stage is
+   marked failed and the reasons are logged, but the download/save flow is
+   NOT blocked — the verdict annotates the conversion, it doesn't gate it. An
+   unreachable `/validate` (network error) shows as a `warning` ("skipped"),
+   as do history entries converted before this stage existed.
+7. **Archive downloaded** — the `.corpus` blob fetched into memory (`ready`).
 
 Stage states: `pending → active → completed | warning | failed`. Completed
 stages stay visible. A failure marks the stage it happened in (`upload` when

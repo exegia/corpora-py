@@ -30,6 +30,18 @@ const ACCEPTED_EXTENSIONS = Object.keys(EXTENSION_TO_FORMAT)
 // (see deriveStages).
 const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
   if (!entry) return []
+  // A failed validation never blocks download/save (see manager.ts), so the
+  // completion block carries the caveat alongside the success message rather
+  // than replacing it.
+  const validationCaveat: LogLine[] =
+    entry.validation?.status === "invalid"
+      ? [
+        {
+          text: "Warning: the corpus failed validation — see the “Dataset validated” step above before shipping this archive.",
+          tone: "warning"
+        }
+      ]
+      : []
   switch (entry.status) {
     case "error":
       return [
@@ -40,6 +52,7 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
       ]
     case "ready":
       return [
+        ...validationCaveat,
         {
           text: `Conversion complete — ${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
           tone: "success"
@@ -47,6 +60,7 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
       ]
     case "success":
       return [
+        ...validationCaveat,
         {
           text: `Conversion complete — ${entry.corpusName ?? "archive"} saved to disk.`,
           tone: "success"
@@ -61,6 +75,7 @@ const STATUS_TEXT: Record<UploadEntry["status"], string> = {
   uploading: "Uploading file to the conversion service…",
   queued: "Queued — waiting for the conversion worker…",
   converting: "Converting — this can take a while for large documents.",
+  validating: "Validating — checking the dataset loads through the .tf → .cfm cycle…",
   ready: "Conversion completed. Archive ready to save.",
   success: "Conversion completed and saved to disk.",
   error: "Conversion failed. See the failed step above."

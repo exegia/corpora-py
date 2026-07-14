@@ -9,6 +9,13 @@ It lives in ``admin.services`` (not in the umbrella ``corpora_py`` package)
 because API surfaces belong here — the umbrella package's role is to mount
 routers, not define them. This keeps the split clear: umbrella orchestrates,
 admin implements.
+
+Like ``/convert``, every route here is gated by ``AuthMiddleware`` simply by
+being mounted on the combined app. Validation by ``corpus``/``path`` is
+stateless (it reads a directory and returns a verdict), but validation by
+``job_id`` targets another user's potential job, so it applies the same
+visibility rule as ``GET /convert/{id}``: a job that exists but isn't yours
+404s exactly like an unknown id.
 """
 
 from __future__ import annotations
@@ -20,8 +27,10 @@ from typing import Any
 
 from corpora_mcp.corpus import corpus_manager
 from corpora_mcp.validate import validate_corpus, validate_corpus_archive
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
+
+from .jobs import JobStatus, job_manager
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +38,7 @@ router = APIRouter(prefix="/validate", tags=["Validation"])
 
 
 class ValidationRequest(BaseModel):
-    """Target of a validation run: a loaded corpus by name, or a path on disk."""
+    """Target of a validation run: a conversion job, a loaded corpus, or a path."""
 
     corpus: str | None = Field(
         default=None,
@@ -41,6 +50,14 @@ class ValidationRequest(BaseModel):
             "Validate a dataset directory or a packaged `.corpus` archive on "
             "disk instead (overrides corpus). For a `.corpus` archive the "
             "shipped `.cfm` cache is checked against a `.tf` recompile."
+        ),
+    )
+    job_id: str | None = Field(
+        default=None,
+        description=(
+            "Validate the finished `.corpus` archive of a succeeded conversion "
+            "job (overrides path and corpus). This is how the desktop app "
+            "validates a just-converted upload without knowing server paths."
         ),
     )
 
@@ -63,21 +80,44 @@ class ValidationResponse(BaseModel):
     checks: dict[str, Any]
 
 
-def _resolve_target(request: ValidationRequest) -> tuple[str, Path]:
-    """Resolve the request to a (name, directory) pair, or raise HTTP 404.
+def _resolve_job_target(payload: ValidationRequest, request: Request) -> tuple[str, Path]:
+    """Resolve a ``job_id`` request to the job's finished ``.corpus`` archive.
 
-    Mirrors the ``validate_corpus`` MCP tool: ``path`` wins over ``corpus``;
-    otherwise the named (or current) loaded corpus supplies the directory.
+    Applies the same visibility rule as ``GET /convert/{id}`` (see
+    ``admin.services.api._not_found_unless_visible``): a job that exists but
+    belongs to a different submitter 404s identically to an unknown id, so
+    this endpoint can't be used to enumerate other users' job ids either.
     """
-    if request.path is not None:
-        target_path = Path(request.path).expanduser()
-        name = request.corpus or target_path.name
+    claims = getattr(request.state, "user", None)
+    job = job_manager.get(payload.job_id)  # type: ignore[arg-type]
+    if job is None or not job.is_visible_to(claims):
+        raise HTTPException(status_code=404, detail="Unknown job id")
+    if job.status != JobStatus.SUCCEEDED or job.result_path is None:
+        raise HTTPException(
+            status_code=409, detail=f"Job is {job.status.value}, not ready"
+        )
+    return payload.corpus or job.name, job.result_path
+
+
+def _resolve_target(payload: ValidationRequest, request: Request) -> tuple[str, Path]:
+    """Resolve the request to a (name, path) pair, or raise HTTP 404.
+
+    ``job_id`` wins over ``path``, which wins over ``corpus`` (mirroring the
+    ``validate_corpus`` MCP tool for the latter two); with none given, the
+    current loaded corpus supplies the directory.
+    """
+    if payload.job_id is not None:
+        return _resolve_job_target(payload, request)
+
+    if payload.path is not None:
+        target_path = Path(payload.path).expanduser()
+        name = payload.corpus or target_path.name
     else:
         try:
-            target_path = corpus_manager.get_path(request.corpus)
+            target_path = corpus_manager.get_path(payload.corpus)
         except (KeyError, RuntimeError) as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        name = request.corpus or corpus_manager.current or target_path.name
+        name = payload.corpus or corpus_manager.current or target_path.name
 
     if not target_path.exists():
         raise HTTPException(status_code=404, detail=f"Corpus path not found: {target_path}")
@@ -86,14 +126,14 @@ def _resolve_target(request: ValidationRequest) -> tuple[str, Path]:
 
 
 @router.post("", response_model=ValidationResponse)
-async def validate(request: ValidationRequest) -> ValidationResponse:
+async def validate(payload: ValidationRequest, request: Request) -> ValidationResponse:
     """Validate a corpus through the full Context-Fabric load cycle.
 
     Returns 200 with ``valid: false`` and the reasons when the dataset loads but
     fails validation -- an invalid corpus is a result, not a bad request. Only a
-    missing corpus/path (unresolvable target) is a 404.
+    missing corpus/path/job (unresolvable target) is a 404.
     """
-    name, target_path = _resolve_target(request)
+    name, target_path = _resolve_target(payload, request)
 
     # Blocking, CPU-bound load cycle (text-fabric / cfabric are synchronous);
     # run it off the event loop so the server stays responsive. A file is
@@ -101,7 +141,7 @@ async def validate(request: ValidationRequest) -> ValidationResponse:
     # too); a directory as a raw Text-Fabric dataset.
     if target_path.is_file():
         result = await asyncio.to_thread(
-            validate_corpus_archive, target_path, request.corpus
+            validate_corpus_archive, target_path, payload.corpus
         )
     else:
         result = await asyncio.to_thread(validate_corpus, name, target_path)
