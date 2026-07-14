@@ -29,18 +29,18 @@
 # three tiers *relative to the content directory* — create the subfolders
 # only when you need them:
 #
-#   1. external-sources/  — raw content fetched from URLs, PDFs. No analysis,
+#   1. external-sources/ — raw content fetched from URLs, PDFs. No analysis,
 #                           just preservation. Use the `ingest` MCP tool.
-#   2. research/          — analysis and synthesis. Provisional findings,
+#   2. research/ — analysis and synthesis. Provisional findings,
 #                           trade-offs, open questions. Use the `research`
 #                           MCP tool.
-#   3. articles/          — canonical knowledge. Use the `consolidate` MCP
+#   3. articles/ — canonical knowledge. Use the `consolidate` MCP
 #                           tool to promote research -> articles once
 #                           decisions are made.
 #
 # This is a pattern, not a requirement. Projects with existing layouts
 # (`specs/`, `reports/`, `docs/`, etc.) should use those; the lifecycle
-# exists as mental scaffolding, not as enforced filesystem structure.
+# exists as mental scaffolding, not as an enforced filesystem structure.
 
 
 # --- Server ----------------------------------------------------------------
@@ -56,4 +56,4 @@
 # explicitly write here.
 #
 # appearance:
-#   theme: system            # 'light' | 'dark' | 'system'
+#   theme: system # 'light' | 'dark' | 'system'
