@@ -1,7 +1,6 @@
 # Binary-source wrappers (`ingest`-produced)
 
-Docs that wrap a co-located binary file under `external-sources/` carry extra frontmatter so the wrapper-binary pair is
-fully described:
+Docs that wrap a co-located binary file under `external-sources/` carry extra frontmatter so the wrapper-binary pair is fully described:
 
 ```yaml
 ---
@@ -22,6 +21,4 @@ tags: [source, immutable, layer-ingest, binary]
 ![[<slug>.<ext>]]
 ```
 
-Body is just the wiki-embed. PDFs/opaque attachments render as a click-dispatching File row;
-`<Pdf src="./<slug>.pdf" />` is the opt-in inline viewer. See `ingest`'s tool body for full re-ingest / size /
-executable rules.
+Body is just the wiki-embed. PDFs/opaque attachments render as a click-dispatching File row; `<Pdf src="./<slug>.pdf" />` is the opt-in inline viewer. See `ingest`'s tool body for full re-ingest / size / executable rules.
