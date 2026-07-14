@@ -230,35 +230,36 @@ a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun 
 anywhere in the repo** (`tests/` doesn't exist), so this currently collects 0 items and passes trivially rather than
 verifying anything.
 
-<!-- ASTRYX:START -->
-Astryx v0.1.3 · 90+ components CLI: run every command as `bunx astryx <cmd>` (shown below as `astryx ...`).
+## Demo App
 
-SETUP (once, in your app entry e.g. main.tsx) — without these, components render unstyled:
-import "@astryxdesign/core/reset.css"; import "@astryxdesign/core/astryx.css";
+A React/Electrobun desktop app that exercises the conversion pipeline:
 
-WORKFLOW — discover, don't guess. Before writing UI:
+```bash
+cd demo
+npm install
+npm run dev  # Start dev server
+npm run build # Build Electrobun bundle
+```
 
-1. `astryx build "<idea>"` — START HERE: returns a kit (closest [page] + [block]s + [component]s). No args = full
-   playbook.
-2. `astryx template <name> [--skeleton]` — scaffold the [page]/[block]s it named, or study their layout. Templates are
-   reference code.
-3. `astryx component <Name>` — props + examples for every component you use.
+The demo integrates with `corpora-api` (the FastAPI sidecar) via WebSocket for file uploads and conversion status.
 
-RULES:
+## UI Components (shadcn)
 
-- No <div> — components do all layout/spacing. Full page → AppShell; sidebar nav → SideNav.
-- Frame first: pick the shell (AppShell / Layout+LayoutPanel) and budget regions in px BEFORE writing content
-  (`astryx docs layout`).
-- Dense data = rows (Table, List/Item) edge-to-edge — never Card-wrapped list items. Card = dashboard widgets,
-  galleries, settings groups only.
-- Status → StatusDot/Token; Badge only for counts and enumerated states, never decoration.
-- Custom styling: component props first; else style/className with tokens — var (--color- *|--spacing-*|--radius-*). No
-  raw hex/px. (No StyleX/Tailwind compiler here — don't use xstyle/utility classes.)
-- Tokens for every value (`astryx docs tokens`). Brand/accent via `astryx theme` — never override --color-* in :root.
+The demo app uses [shadcn/ui](https://ui.shadcn.com) for React components — a collection of copy-paste component primitives built on Radix UI and Tailwind CSS.
 
-MORE CLI:
-search "<query>"   find any component / hook / doc / template / block component --list 90+ components by category
-template --list page + block recipes docs <topic>       color, elevation, icons, illustrations, layout, migration,
-motion, principles, shape, spacing, styling, theme, tokens, typography swizzle <Name>     eject component source for
-deep customization upgrade --apply run after any @astryxdesign/core bump
-<!-- ASTRYX:END -->
+### Adding components
+
+```bash
+cd demo
+npx shadcn-ui@latest add <component-name>
+```
+
+Popular components used in this project: `button`, `card`, `dialog`, `input`, `label`, `select`, `toast`, `dropdown-menu`, etc.
+
+### Setup
+
+- Components are copied to `demo/src/components/ui/`
+- Styled with Tailwind CSS (see `demo/tailwind.config.ts`)
+- Import and use directly: `import { Button } from "@/components/ui/button"`
+
+Refer to [shadcn/ui docs](https://ui.shadcn.com/docs/components/button) for component props and usage patterns.
