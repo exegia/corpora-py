@@ -1,7 +1,7 @@
-import json
 import os
-import subprocess
 import sys
+import json
+import subprocess
 
 MAJOR_BUMP_THRESHOLD = int(os.environ.get('MAJOR_BUMP_THRESHOLD', 1500))
 MINOR_BUMP_THRESHOLD = int(os.environ.get('MINOR_BUMP_THRESHOLD', 1000))
@@ -19,13 +19,13 @@ def run_cmd(cmd_list, allow_failure=False):
 def main():
     pr_number = os.environ.get('PR_NUMBER')
     pr_title = os.environ.get('PR_TITLE', '')
-
+    
     if not pr_number:
         print("PR_NUMBER not set.")
         return
-
+        
     print(f"Analyzing PR #{pr_number}: {pr_title}")
-
+    
     # Get PR details
     pr_json = run_cmd(["gh", "pr", "view", str(pr_number), "--json", "additions,deletions,title"])
     pr_data = json.loads(pr_json)
@@ -33,13 +33,13 @@ def main():
     deletions = pr_data.get('deletions', 0)
     total_changes = additions + deletions
     title = pr_data.get('title', '').lower()
-
+    
     print(f"Total lines changed: {total_changes}")
-
+    
     # Simple agentic logic for version bump
     bump_type = "patch"
     title_prefix = title.split(":")[0].strip() if ":" in title else title.strip()
-
+    
     if "breaking" in title or "major" in title or title_prefix.endswith("!"):
         bump_type = "major"
     elif title.startswith("feat") or title.startswith("feature"):
@@ -54,17 +54,17 @@ def main():
             bump_type = "minor"
         else:
             bump_type = "patch"
-
+            
     print(f"Determined bump type: {bump_type}")
-
+    
     # Add label
     label_name = f"bump:{bump_type}"
     run_cmd(["gh", "pr", "edit", str(pr_number), "--add-label", label_name], allow_failure=True)
-
+    
     # Determine the current highest tag
     tags_output = run_cmd(["git", "tag", "-l", "v*"])
     tags = [t for t in tags_output.split('\n') if t]
-
+    
     current_version = (0, 0, 0)
     for t in tags:
         try:
@@ -77,7 +77,7 @@ def main():
                     current_version = parsed_version
         except (ValueError, IndexError):
             pass
-
+            
     current_major, current_minor, current_patch = current_version
     if bump_type == "major":
         current_major += 1
@@ -88,12 +88,12 @@ def main():
         current_patch = 0
     else:
         current_patch += 1
-
+        
     new_tag = f"v{current_major}.{current_minor}.{current_patch}-next"
     print(f"Creating new tag: {new_tag}")
-
+    
     run_cmd(["git", "tag", new_tag], allow_failure=True)
     run_cmd(["git", "push", "origin", new_tag], allow_failure=True)
-
+    
 if __name__ == "__main__":
     main()
