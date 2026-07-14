@@ -17,6 +17,9 @@ Layout:
                    watch a WebSocket for status, download the `.corpus`
                    result. See `admin/services/api.py` for why conversion is
                    job-based rather than synchronous.
+    /validate   -- corpus validation (`corpora_py.validation_api`): confirm a
+                   dataset round-trips the `.tf -> .cfm -> mmap` cycle. Shares
+                   the validation logic with the `validate_corpus` MCP tool.
     /health     -- liveness check for the combined app.
 
 This ships as a sidecar spawned by a Tauri+Supabase desktop app, not a public
@@ -70,6 +73,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastmcp.utilities.lifespan import combine_lifespans
 
 from .auth import AuthMiddleware
+from .validation_api import router as validation_router
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).
@@ -107,6 +111,7 @@ app.add_middleware(
 app.mount("/mcp", _mcp_app)
 app.include_router(conversion_router)
 app.include_router(conversion_ws_router)
+app.include_router(validation_router)
 
 
 @app.get("/health", tags=["Health"])

@@ -27,7 +27,9 @@ source document  --parse-->  Document/Unit tree  --walk-->  Text-Fabric (.tf)  -
    compiles it into the memory-mapped `.cfm` cache Context-Fabric reads at runtime.
 4. **Package** — `convert_to_corpus()` bundles the `.tf`/`.cfm` payload with a `manifest.yml`, `toc.yml`, optional
    cover/asset images, and a git repository for version history, into a single `.corpus` zip archive. See the schema doc
-   referenced in `converters/convert_to_corpus.py` for the full archive contract.
+   referenced in `converters/convert_to_corpus.py` for the full archive contract, and
+   [Corpus validation & .cfm integrity checking](../../docs/lessons/corpus-validation-and-cfm-integrity.md) for how the
+   packaged `.cfm` cache is validated.
 
 ## Supported formats
 

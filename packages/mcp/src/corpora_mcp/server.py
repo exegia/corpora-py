@@ -1,13 +1,15 @@
 """FastMCP server exposing the Context-Fabric corpus tools."""
 
 import argparse
+import asyncio
 import logging
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
+from fastmcp.exceptions import ToolError
 
 from .corpus import corpus_manager
 
@@ -53,6 +55,92 @@ def _feat(api: Any, name: str) -> Any:
         return api.Fs(name)
     except Exception:
         return getattr(api.F, name, None)
+
+
+# ── Corpus validation tool ────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def validate_corpus(
+    corpus: str | None = None,
+    path: str | None = None,
+    ctx: Context | None = None,
+) -> str:
+    """
+    Validate that a corpus is a valid Context-Fabric (.cfm) corpus.
+
+    Runs the full validation cycle: loading from .tf files, compiling to the
+    .cfm mmap format, reloading from the .cfm cache, and comparing statistics
+    and sampled feature values between both loading paths. If the corpus is
+    valid a notification is sent to the client; if not, the call fails with the
+    reasons it is invalid.
+
+    If `path` points at a packaged `.corpus` archive (a file), the `.cfm` cache
+    that ships *inside* the archive is additionally loaded as-is and compared
+    against a fresh recompile from the `.tf` sources -- catching a corrupt or
+    stale delivered cache. A dataset directory is validated by recompiling.
+
+    Args:
+        corpus: Name of a loaded corpus to validate. Defaults to the current corpus.
+        path:   Validate a dataset directory or a `.corpus` archive on disk
+                instead (overrides corpus).
+    """
+    from .validate import validate_corpus as run_validation
+    from .validate import validate_corpus_archive as run_archive_validation
+
+    if path is not None:
+        target_path = Path(path).expanduser()
+        name = corpus or target_path.name
+    else:
+        try:
+            target_path = corpus_manager.get_path(corpus)
+        except (KeyError, RuntimeError) as exc:
+            raise ToolError(str(exc)) from exc
+        name = corpus or corpus_manager.current or target_path.name
+
+    if not target_path.exists():
+        raise ToolError(f"Corpus path not found: {target_path}")
+
+    # Validation is a blocking, CPU-bound load cycle (text-fabric / cfabric are
+    # synchronous); run it off the event loop so the server stays responsive.
+    # A file is treated as a packaged `.corpus` archive; a directory as a raw
+    # Text-Fabric dataset.
+    if target_path.is_file():
+        result = await asyncio.to_thread(run_archive_validation, target_path, corpus)
+    else:
+        result = await asyncio.to_thread(run_validation, name, target_path)
+
+    # For archives the definitive name comes from the manifest inside.
+    name = result.corpus
+
+    if not result.is_valid:
+        reasons = "; ".join(result.failure_reasons())
+        message = f"Corpus '{name}' is NOT a valid Context-Fabric corpus: {reasons}"
+        if ctx is not None:
+            await ctx.error(message)
+        raise ToolError(message)
+
+    stats = result.cf_stats
+    shipped_line = (
+        "  shipped .cfm:  verified against .tf recompile\n"
+        if result.shipped_cfm_stats is not None
+        else ""
+    )
+    message = f"Corpus '{name}' is a valid Context-Fabric (.cfm) corpus."
+    if ctx is not None:
+        await ctx.info(message)
+    return (
+        f"{message}\n"
+        f"  path:          {target_path}\n"
+        f"  slots:         {stats.max_slot:,}\n"
+        f"  nodes:         {stats.max_node:,}\n"
+        f"  node types:    {stats.node_types}\n"
+        f"  node features: {stats.node_features}\n"
+        f"  edge features: {stats.edge_features}\n"
+        f"{shipped_line}"
+        f"Checks: .tf load OK, .cfm compile + mmap reload OK, "
+        f"stats and feature samples match."
+    )
 
 
 # ── Discovery tools ───────────────────────────────────────────────────────────
