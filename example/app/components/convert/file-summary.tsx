@@ -15,6 +15,7 @@ const STATUS_META: Record<
   uploading: { label: "Uploading", className: "text-blue-600 dark:text-blue-400", busy: true },
   queued: { label: "Queued", className: "text-blue-600 dark:text-blue-400", busy: true },
   converting: { label: "Converting", className: "text-blue-600 dark:text-blue-400", busy: true },
+  validating: { label: "Validating", className: "text-blue-600 dark:text-blue-400", busy: true },
   ready: { label: "Completed", className: "text-emerald-600 dark:text-emerald-400" },
   success: { label: "Saved", className: "text-emerald-600 dark:text-emerald-400" },
   error: { label: "Failed", className: "text-destructive", failed: true }
