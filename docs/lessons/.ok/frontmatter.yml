@@ -1,0 +1,6 @@
+title: Lessons Learned
+description: "Technical retrospectives and captured learnings from shipped features, bug fixes, and architecture decisions. Each lesson documents what was discovered, why it matters, and gotchas worth knowing for future work. Uses the `lesson-page` template."
+tags:
+  - lessons-learned
+  - retrospective
+  - technical-knowledge
