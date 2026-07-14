@@ -1,4 +1,4 @@
-"""Tests for the `/validate` HTTP endpoint (`corpora_py.validation_api`).
+"""Tests for the `/validate` HTTP endpoint (`admin.services.validation_api`).
 
 The endpoint's own contract is exercised here with the underlying
 `validate_corpus` function monkeypatched to canned results -- the actual
@@ -8,12 +8,11 @@ gating is the combined app's `AuthMiddleware` concern (see
 """
 
 import pytest
+from admin.services import validation_api
+from admin.services.validation_api import router
 from corpora_mcp.validate import CorpusStats, ValidationResult
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from corpora_py import validation_api
-from corpora_py.validation_api import router
 
 
 def _stats(**overrides: object) -> CorpusStats:

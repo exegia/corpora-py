@@ -17,7 +17,7 @@ Layout:
                    watch a WebSocket for status, download the `.corpus`
                    result. See `admin/services/api.py` for why conversion is
                    job-based rather than synchronous.
-    /validate   -- corpus validation (`corpora_py.validation_api`): confirm a
+    /validate   -- corpus validation (`admin.services.validation_api`): confirm a
                    dataset round-trips the `.tf -> .cfm -> mmap` cycle. Shares
                    the validation logic with the `validate_corpus` MCP tool.
     /health     -- liveness check for the combined app.
@@ -66,6 +66,7 @@ from contextlib import asynccontextmanager
 
 from admin.services.api import router as conversion_router
 from admin.services.jobs import job_manager
+from admin.services.validation_api import router as validation_router
 from admin.services.websocket import router as conversion_ws_router
 from corpora_mcp import mcp
 from fastapi import FastAPI
@@ -73,7 +74,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastmcp.utilities.lifespan import combine_lifespans
 
 from .auth import AuthMiddleware
-from .validation_api import router as validation_router
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).

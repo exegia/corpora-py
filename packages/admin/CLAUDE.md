@@ -44,6 +44,7 @@ packages/admin/
     services/                 # HTTP surface over the pipeline above (FastAPI routers)
       api.py                    # POST/GET /convert (upload, poll, download)
       websocket.py              # /convert/{id}/ws (status push)
+      validation_api.py         # POST /validate (corpus integrity checks)
       jobs.py                   # JobManager (in-process ThreadPoolExecutor job registry)
 ```
 
@@ -57,6 +58,17 @@ code in it (hatchling silently resolves `packages = ["admin"]` or
 `packages = ["."]` against the wrong base path or pollutes the wheel with
 non-code files). The `src/admin` layout is the one that's been verified to
 actually build and import correctly.
+
+## API Work Goes in admin.services
+
+All FastAPI routers for the conversion and validation pipelines live in `admin.services/` and are mounted by the
+umbrella app (`corpora_py.app`). This keeps the split clean:
+- **`admin`** — owns all API surfaces over its pipelines (conversion, validation)
+- **`corpora_py`** (umbrella) — orchestrates: mounts routers, handles auth middleware, combines lifespans
+
+Do not add new HTTP routers to `src/corpora_py/` — add them to `admin.services/` and re-export from
+`admin.services/__init__.py`, then import into `corpora_py.app` and mount them. This preserves the invariant that
+the umbrella package has zero business logic and exists only to glue the other three together.
 
 ## Architecture
 
