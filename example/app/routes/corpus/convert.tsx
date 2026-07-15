@@ -238,7 +238,7 @@ export default function CorpusConvert() {
                 <GithubRepoInput onFile={(file) => void handleFile(file)} />
                 <UploadDropzone
                   extensions={ACCEPTED_EXTENSIONS}
-                  className="rounded-xl"
+                  className="rounded-2xl"
                   hint="Drag and drop, or browse"
                   error={rejection}
                   onFile={(file) => void handleFile(file)}

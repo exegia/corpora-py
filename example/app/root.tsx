@@ -1,5 +1,5 @@
 import "~/app.css"
-import type { ReactNode } from "react"
+import type { FC, ReactNode, SVGProps } from "react"
 import { useEffect } from "react"
 import {
   isRouteErrorResponse,
@@ -8,15 +8,17 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
   useNavigate,
 } from "react-router"
 import { Moon, Sun } from "lucide-react"
 import NavHeaderIcon from "~/components/logo"
 import { ThemeProvider, useTheme } from "~/components/theme-provider"
 import { bindCues } from "~/lib/cue"
-import { NAV } from "~/lib/constant"
+import { MENU_ITEMS } from "~/lib/constant"
 
 import type { Route } from "./+types/root"
+import { cn } from "~/lib/utils"
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   let message = "Oops!"
@@ -65,25 +67,45 @@ function ThemeToggle() {
   )
 }
 
+const MenuIconComponent = ({
+  icon,
+}: {
+  icon: FC<SVGProps<SVGSVGElement>> | undefined
+}) => {
+  if (!icon) return
+  return icon
+}
+
 function Header() {
   const navigate = useNavigate()
+  const active = useLocation()
   return (
     <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur supports-backdrop-filter:bg-white/60 dark:bg-neutral-900/60">
       <div className="container mx-auto flex h-14 items-center justify-between gap-4 px-4">
         <button
-          className="flex cursor-pointer items-center gap-2"
-          onClick={() => navigate(NAV[0].to)}
+          className={cn("flex cursor-pointer items-center gap-2", active.key)}
+          onClick={() => navigate(MENU_ITEMS[0].to)}
         >
           <NavHeaderIcon className="h-5 w-5 fill-amber-400" />
           <span className="text-sm font-semibold">Corpora</span>
         </button>
-        <nav className="flex items-center gap-1">
-          {NAV.map((item) => (
+        <nav className="anim flex items-center gap-1">
+          {MENU_ITEMS.map((item) => (
             <button
               key={item.label}
               onClick={() => navigate(item.to)}
-              className="cursor-pointer rounded-md px-3 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className={cn(
+                "bg-opacity-0 cursor-pointer rounded-md px-3 py-1.5 text-sm animate-delay-100 animate-duration-slow" +
+                  " hover:bg-neutral-100" +
+                  " transition-colors dark:hover:bg-neutral-800",
+                active.pathname == item.to
+                  ? "bg-amber-300 font-medium text-neutral-700 hover:bg-amber-400!"
+                  : ""
+              )}
             >
+              {item.icon && (
+                <MenuIconComponent icon={undefined} {...item.icon} />
+              )}
               {item.label}
             </button>
           ))}
