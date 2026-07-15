@@ -1,6 +1,6 @@
 "use client"
 
-import { CircleAlert, FileUp } from "lucide-react"
+import { CircleAlert } from "lucide-react"
 import { useFileUpload } from "~/lib/hooks/use-file-upload"
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
 import { Button } from "~/components/ui/button"
@@ -73,27 +73,19 @@ export function UploadDropzone({
     >
       <div
         className={cn(
-          "group flex min-h-72 w-full flex-col items-center justify-center gap-3 overflow-clip rounded-lg border-2 border-dashed px-5 py-6 text-center transition-colors",
+          "group flex min-h-72 w-full flex-col items-center justify-center gap-3 overflow-clip rounded-xl border-2" +
+            " border-dashed px-5 py-6 text-center transition-colors",
           isDragging
             ? "border-primary bg-primary/5"
             : "border-border bg-background/10",
           error && !isDragging && "border-destructive/50"
         )}
       >
-        {/*<div
-          className={cn(
-            "mb-2 flex size-16 items-center justify-center rounded-2xl",
-            isDragging
-              ? "bg-primary/10 text-primary"
-              : "bg-neutral-200 text-muted-foreground dark:bg-neutral-900"
-          )}
-        >*/}
-        <GlassFolder className="scale-75 transform" open={false} />
-        {/*<FileUp
-            className="size-9 rotate-12 -skew-3 fill-black/20 opacity-75 transition-transform group-hover:scale-110 group-hover:rotate-0 group-hover:skew-x-0 motion-reduce:transition-none"
-            aria-hidden="true"
-          />*/}
-        {/*</div>*/}
+        <GlassFolder
+          className="scale-75 transform"
+          open={false}
+          isHovered={isDragging}
+        />
         <span className="text-lg font-semibold text-card-foreground">
           {isDragging ? "Drop to upload" : title}
         </span>
