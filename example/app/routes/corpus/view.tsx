@@ -17,7 +17,14 @@ export default function CorpusView() {
       {/* Search uses Form method="get" so the query lives in the URL. */}
       <Form method="get" className="w-full">
         <label htmlFor="q" className="sr-only">{`Search ${id}`}</label>
-        <Input id="q" name="q" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${id}…`} />
+        <Input
+          aria-label="placeholder="
+          id="q"
+          name="q"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${id}…`}
+        />
       </Form>
 
       <Card>
@@ -27,13 +34,16 @@ export default function CorpusView() {
         <CardContent className="space-y-3">
           {/* TODO: render passages/results from a loader. */}
           <p className="text-sm text-neutral-500">
-            Viewer for corpus “{id}”. Text content will render here once data loading is wired up.
+            Viewer for corpus “{id}”. Text content will render here once data
+            loading is wired up.
           </p>
           <ul className="divide-y rounded-md border text-sm">
             {Array.from({ length: 8 }).map((_, i) => (
               <li key={i} className="px-4 py-2">
                 <div className="font-medium">{`Placeholder passage ${i + 1}`}</div>
-                <div className="text-neutral-500">Sample text will appear here once the corpus loader is connected.
+                <div className="text-neutral-500">
+                  Sample text will appear here once the corpus loader is
+                  connected.
                 </div>
               </li>
             ))}

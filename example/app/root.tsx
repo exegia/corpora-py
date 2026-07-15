@@ -105,8 +105,8 @@ export function Layout({ children }: { children: ReactNode }) {
         <Links />
         <title>Corpora | Example</title>
       </head>
-      <body className="min-h-svh bg-neutral-200 text-foreground dark:bg-neutral-950">
-        {/* The provider lives here (not in App) so the Header's ThemeToggle is
+      <body className="min-h-svh bg-neutral-100 text-foreground dark:bg-neutral-950">
+        {/* The provider lives here (not in App), so the Header's ThemeToggle is
         inside it — Layout renders above App in the framework-mode tree. */}
         <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
           <Header />

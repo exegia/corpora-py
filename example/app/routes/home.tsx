@@ -5,10 +5,8 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardTitle,
 } from "~/components/ui/card"
-import { Button } from "~/components/ui/button"
 
 export function meta() {
   return [{ title: "Home | Corpora" }]
@@ -48,7 +46,7 @@ function MenuCard({
 
   return (
     <Card
-      className="h-full transform cursor-pointer rounded-2xl border border-neutral-100 shadow shadow-neutral-900/200 transition-all hover:-translate-y-1 hover:bg-neutral-100 hover:shadow-2xl dark:border-neutral-800 dark:hover:bg-neutral-950"
+      className="h-full transform cursor-pointer rounded-2xl border border-neutral-100 shadow shadow-neutral-300 transition-all hover:-translate-y-1 hover:bg-neutral-100 hover:shadow-2xl dark:border-neutral-800 dark:hover:bg-neutral-950"
       onClick={() => navigate(item.to)}
     >
       <CardContent>
