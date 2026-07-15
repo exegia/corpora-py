@@ -1,14 +1,7 @@
 import { getDefaultStore } from "jotai"
 import { API_URL } from "~/lib/types/socket"
-import {
-  uploadAtom,
-  type UploadEntry,
-  type ValidationOutcome
-} from "~/lib/atoms/upload-atom"
-import {
-  type JobStatusMessage,
-  subscribeJobStatus
-} from "~/lib/hooks/use-socket"
+import { uploadAtom, type UploadEntry, type ValidationOutcome } from "~/lib/atoms/upload-atom"
+import { type JobStatusMessage, subscribeJobStatus } from "~/lib/hooks/use-socket"
 import { loadPersistedUploads, savePersistedUploads } from "./persistence"
 import { detectSourceFormat } from "./source-format"
 import { saveCorpusFile } from "./save-corpus-file"
@@ -42,7 +35,7 @@ const PROGRESS = {
   queued: 20,
   converting: 60,
   validating: 85,
-  done: 100
+  done: 100,
 } as const
 
 // The real `File` objects (needed to retry) never go into the atom -- atoms
@@ -100,18 +93,22 @@ const stopTracking = (id: string): void => {
  * `valid: false` is "invalid" (the check ran and the corpus is broken).
  * Neither blocks the download -- see `handleJobSucceeded`.
  */
-const validateConversion = async (jobId: string): Promise<ValidationOutcome> => {
+const validateConversion = async (
+  jobId: string
+): Promise<ValidationOutcome> => {
   try {
     const response = await fetch(`${API_URL}/validate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: jobId })
+      body: JSON.stringify({ job_id: jobId }),
     })
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
         detail?: string
       }
-      throw new Error(body.detail ?? `Validation request failed (${response.status})`)
+      throw new Error(
+        body.detail ?? `Validation request failed (${response.status})`
+      )
     }
     const result = (await response.json()) as {
       valid: boolean
@@ -124,7 +121,7 @@ const validateConversion = async (jobId: string): Promise<ValidationOutcome> => 
   } catch (error) {
     return {
       status: "skipped",
-      reasons: [error instanceof Error ? error.message : String(error)]
+      reasons: [error instanceof Error ? error.message : String(error)],
     }
   }
 }
@@ -155,7 +152,7 @@ const handleJobSucceeded = async (
     // POST /convert time), which may differ from the local file name.
     const filename = `${jobName}.corpus`
 
-    // The conversion succeeded and the bytes are in hand -- from here, only
+    // The conversion succeeded, and the bytes are in hand -- from here, only
     // the local save-to-disk step can still fail, and that must never
     // downgrade this to "error" (see `saveUpload`).
     blobs.set(id, { blob, filename })
@@ -263,7 +260,7 @@ export const uploadFile = async (
       lastModified: file.lastModified || undefined,
       uploadedAt: Date.now(),
       inspection: options.inspection,
-      logs: []
+      logs: [],
     }
   })
 
@@ -284,7 +281,7 @@ export const uploadFile = async (
 
     const response = await fetch(`${API_URL}/convert`, {
       method: "POST",
-      body: formData
+      body: formData,
     })
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
@@ -370,7 +367,7 @@ export const saveUpload = async (id: string): Promise<void> => {
     })
     blobs.delete(id)
   } catch (error) {
-    // The conversion already succeeded and the bytes are safely cached in
+    // The conversion already succeeded, and the bytes are safely cached in
     // `blobs` -- only the local save step failed. Log for diagnosis but
     // deliberately don't set `status: "error"` here: that would point the
     // UI at "Try again", which re-runs the entire upload+conversion and
@@ -400,7 +397,7 @@ const reconcileReady = async (id: string, jobId: string): Promise<void> => {
     }
   } catch {
     // The server restarted (its in-memory `JobManager` forgot this job --
-    // see jobs.py) or the result was otherwise reaped. There's nothing left
+    // see jobs.py), or the result was otherwise reaped. There's nothing left
     // to save, so drop this history entry rather than leave a permanently
     // broken "Save" button behind.
     store.set(uploadAtom, (draft) => {
