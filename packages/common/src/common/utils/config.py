@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     supabase_jwks_url: str | None = os.getenv("SUPABASE_JWKS_URL")
     supabase_jwt_audience: str = "authenticated"
 
+    # Hugging Face Hub storage for converted .corpus archives (see
+    # admin.services.storage). All archives live in the single Hub repo named
+    # by hf_storage_repo (e.g. "exegia/corpora-archives"); leaving it unset
+    # keeps the /storage surface importable but every call fails with a clear
+    # "not configured" error rather than a crash at import time. hf_token may
+    # stay None -- huggingface_hub then falls back to the HF_TOKEN env var or
+    # a cached `hf auth login` token.
+    hf_token: str | None = os.getenv("HF_TOKEN")
+    hf_storage_repo: str | None = os.getenv("HF_STORAGE_REPO")
+    hf_storage_repo_type: Literal["model", "dataset", "space"] = "dataset"
+    hf_storage_private: bool = True
+
     PROJECT_NAME: ClassVar[str] = "Corpora API"
     PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."
     API_V1_STR: str = "/api/v1"

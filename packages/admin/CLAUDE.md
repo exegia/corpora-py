@@ -45,6 +45,9 @@ packages/admin/
       api.py                    # POST/GET /convert (upload, poll, download)
       websocket.py              # /convert/{id}/ws (status push)
       validation_api.py         # POST /validate (corpus integrity checks)
+      storage.py                # CorpusStorage: .corpus archives on the Hugging Face Hub
+      storage_api.py            # /storage REST surface over storage.py
+      storage_mcp.py            # storage_* MCP tools (registered by corpora_py.app, NOT here)
       jobs.py                   # JobManager (in-process ThreadPoolExecutor job registry)
 ```
 
@@ -69,6 +72,20 @@ umbrella app (`corpora_py.app`). This keeps the split clean:
 Do not add new HTTP routers to `src/corpora_py/` — add them to `admin.services/` and re-export from
 `admin.services/__init__.py`, then import into `corpora_py.app` and mount them. This preserves the invariant that
 the umbrella package has zero business logic and exists only to glue the other three together.
+
+### Hub storage (`services/storage*.py`)
+
+`storage.py` wraps `huggingface_hub.HfApi` to list/inspect/upload/download/delete finished `.corpus`
+archives in one Hub repo (`HF_STORAGE_REPO`, dataset type by default; `HF_TOKEN` for auth — both in
+`common.utils.config.Settings`). An unconfigured repo raises `StorageNotConfiguredError` per call
+(→ HTTP 503), never at import time. Two surfaces share it: `storage_api.py` (REST `/storage`,
+job-first uploads with the same job-visibility 404 rule as `/convert/{id}`) and `storage_mcp.py`
+(`storage_*` MCP tools). **`storage_mcp.py` imports `fastmcp`, which is not a `corpora-admin`
+dependency** — it is deliberately excluded from `admin.services.__init__` and only imported by
+`corpora_py.app`, which calls `register_storage_tools(mcp)` before building the MCP ASGI app.
+Registering the tools inside `corpora_mcp` instead would force the slim MCP package to depend on
+admin — don't. All `CorpusStorage` calls are blocking network I/O; both surfaces must go through
+`asyncio.to_thread`.
 
 ## Architecture
 
@@ -180,7 +197,9 @@ to understand the expected format.
   periodic task deleting files older than N hours) — not implemented yet.
   `JobManager._jobs` has the same problem: terminal job entries are never
   pruned from the in-memory registry, so it grows for the lifetime of the
-  process.
+  process. `_HUB_CACHE_ROOT` (`services/storage_api.py` — archives fetched
+  from the Hub for `GET /storage/{filename}/download`) shares the same
+  missing-TTL-reap gap.
 - **`JobManager`'s stall watchdog (`_check_stall`) cannot actually stop a
   hung conversion.** It marks a job `FAILED` after `stall_timeout_seconds`
   of wall-clock `RUNNING` time so clients stop waiting on it, but a
