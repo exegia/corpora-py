@@ -10,7 +10,10 @@ import { atomWithImmer } from "jotai-immer"
 // the local save-to-disk step hasn't completed yet (either still in flight
 // or failed and awaiting a manual retry via `useUpload().saveUpload`) --
 // deliberately distinct from "error", since a save-dialog failure doesn't
-// mean the conversion itself needs to be redone.
+// mean the conversion itself needs to be redone. Publishing to the Hugging
+// Face Hub is NOT a pipeline status: it's a manual, user-triggered action
+// on a finished conversion (see `publishUpload` in the manager), tracked in
+// `UploadEntry.storage` instead.
 export type UploadStatus =
   | "uploading"
   | "queued"
@@ -35,6 +38,29 @@ export type ValidationOutcome = {
   reasons?: string[]
   /** Corpus stats from a successful validation (see CorpusStats server-side). */
   stats?: Record<string, number>
+}
+
+/**
+ * Verdict of the manual `POST /storage` round-trip (see
+ * `admin.services.storage_api`): the finished `.corpus` archive pushed to
+ * the Hugging Face Hub storage repo (`HF_STORAGE_REPO`) when the user
+ * clicks "Publish to Hugging Face" on a completed conversion (see
+ * `publishUpload` in the manager). "skipped" means the archive could not
+ * be published (storage not configured on the server, network error, Hub
+ * rejection) -- the local download/save flow is unaffected either way, and
+ * a skipped publish can simply be retried.
+ */
+export type StorageOutcome = {
+  status: "running" | "stored" | "skipped"
+  /** `resolve/main` download URL of the archive in the Hub repo. */
+  url?: string
+  /** The Hub repo the archive was stored in (e.g. "user/corpora-archives"). */
+  repoId?: string
+  /** Name of the archive inside the repo. */
+  filename?: string
+  sizeBytes?: number
+  /** Why publishing was skipped. */
+  reasons?: string[]
 }
 
 export type UploadEntry = {
@@ -67,6 +93,13 @@ export type UploadEntry = {
    * existed). Serializable, so it persists with the rest of the entry.
    */
   validation?: ValidationOutcome
+  /**
+   * Hugging Face Hub publish outcome, set by `publishUpload` when the user
+   * manually publishes a completed conversion (absent until they do).
+   * Serializable, so it persists with the rest of the entry -- the Hub URL
+   * stays usable across reloads even after the local blob cache is gone.
+   */
+  storage?: StorageOutcome
   /** Set once conversion succeeds -- the resulting `.corpus` archive's name/size. */
   corpusName?: string
   corpusSize?: number

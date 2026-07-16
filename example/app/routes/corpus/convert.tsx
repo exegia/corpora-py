@@ -6,9 +6,21 @@ import { GithubRepoInput } from "~/components/convert/github-repo-input"
 import { UploadDropzone } from "~/components/convert/upload-dropzone"
 import { FileSummary } from "~/components/convert/file-summary"
 import { ProcessingStages } from "~/components/convert/processing-stages"
-import { LogConsole, type LogLine, TONE_PREFIX } from "~/components/convert/log-console"
-import { CompletedResult, FailedResult } from "~/components/convert/result-actions"
-import { deriveStages, deriveView, failedStage, type Stage } from "~/components/convert/state-model"
+import {
+  LogConsole,
+  type LogLine,
+  TONE_PREFIX,
+} from "~/components/convert/log-console"
+import {
+  CompletedResult,
+  FailedResult,
+} from "~/components/convert/result-actions"
+import {
+  deriveStages,
+  deriveView,
+  failedStage,
+  type Stage,
+} from "~/components/convert/state-model"
 import type { UploadEntry } from "~/lib/atoms/upload-atom"
 import { useUpload } from "~/lib/hooks/use-upload"
 import { cue } from "~/lib/cue"
@@ -19,7 +31,7 @@ import { cn } from "~/lib/utils"
 export function meta(): MetaDescriptor[] {
   return [
     { title: "Convert | Corpora" },
-    { tagName: "link", rel: "icon", href: "/favicon.ico" }
+    { tagName: "link", rel: "icon", href: "/favicon.ico" },
   ]
 }
 
@@ -36,35 +48,58 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
   const validationCaveat: LogLine[] =
     entry.validation?.status === "invalid"
       ? [
-        {
-          text: "Warning: the corpus failed validation — see the “Dataset validated” step above before shipping this archive.",
-          tone: "warning"
-        }
-      ]
+          {
+            text: "Warning: the corpus failed validation — see the “Dataset validated” step above before shipping this archive.",
+            tone: "warning",
+          },
+        ]
       : []
+  // The Hub publish is a manual, optional step (see `publishUpload` in
+  // manager.ts): once the user triggers it, a stored archive gets its
+  // download URL in the completion block and a failed attempt gets a caveat
+  // -- neither changes the local success message, and an entry that was
+  // never published gets no line at all.
+  const storageLines: LogLine[] =
+    entry.storage?.status === "stored" && entry.storage.url
+      ? [
+          {
+            text: `Published to Hugging Face — download URL: ${entry.storage.url}`,
+            tone: "success",
+          },
+        ]
+      : entry.storage?.status === "skipped"
+        ? [
+            {
+              text: "Warning: the archive was not published to Hugging Face — see the “Published to Hugging Face” step for the reason, then retry.",
+              tone: "warning",
+            },
+          ]
+        : []
   switch (entry.status) {
     case "error":
       return [
         {
           text: `Conversion failed: ${entry.error ?? "unknown error"}`,
-          tone: "error"
-        }
+          tone: "error",
+        },
       ]
     case "ready":
       return [
         ...validationCaveat,
+        ...storageLines,
         {
           text: `Conversion complete — ${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
-          tone: "success"
-        }
+          tone: "success",
+        },
       ]
     case "success":
       return [
         ...validationCaveat,
+        ...storageLines,
         {
           text: `Conversion complete — ${entry.corpusName ?? "archive"} saved to disk.`,
-          tone: "success"
-        }
+          tone: "success",
+        },
       ]
     default:
       return []
@@ -75,10 +110,11 @@ const STATUS_TEXT: Record<UploadEntry["status"], string> = {
   uploading: "Uploading file to the conversion service…",
   queued: "Queued — waiting for the conversion worker…",
   converting: "Converting — this can take a while for large documents.",
-  validating: "Validating — checking the dataset loads through the .tf → .cfm cycle…",
+  validating:
+    "Validating — checking the dataset loads through the .tf → .cfm cycle…",
   ready: "Conversion completed. Archive ready to save.",
   success: "Conversion completed and saved to disk.",
-  error: "Conversion failed. See the failed step above."
+  error: "Conversion failed. See the failed step above.",
 }
 
 const buildCopyText = (stages: Stage[], completion: LogLine[]): string =>
@@ -89,8 +125,14 @@ const buildCopyText = (stages: Stage[], completion: LogLine[]): string =>
 export default function CorpusConvert() {
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
   const [rejection, setRejection] = useState<string | null>(null)
-  const { uploads, uploadFile, deleteUpload, retryUpload, saveUpload } =
-    useUpload()
+  const {
+    uploads,
+    uploadFile,
+    deleteUpload,
+    retryUpload,
+    saveUpload,
+    publishUpload,
+  } = useUpload()
 
   const entry = currentUploadId ? uploads[currentUploadId] : undefined
 
@@ -143,7 +185,7 @@ export default function CorpusConvert() {
   // and continues the normal single-file flow, and anything the service
   // can't convert is rejected here with an inline explanation instead of a
   // doomed round-trip.
-  // A rejection (unsupported file, un-extractable archive) gets a negative
+  // A rejection (unsupported file, unextractable archive) gets a negative
   // cue. Clearing the message on the next attempt stays a plain setState with
   // no sound.
   const reject = (message: string) => {
@@ -170,7 +212,7 @@ export default function CorpusConvert() {
         setCurrentUploadId(
           await uploadFile(file, {
             sourceFormat: "tf_zip",
-            inspection: result.notes
+            inspection: result.notes,
           })
         )
         return
@@ -178,7 +220,7 @@ export default function CorpusConvert() {
         setCurrentUploadId(
           await uploadFile(file, {
             sourceFormat: "tei_zip",
-            inspection: result.notes
+            inspection: result.notes,
           })
         )
         return
@@ -236,6 +278,9 @@ export default function CorpusConvert() {
             {view === "empty" ? (
               <>
                 <GithubRepoInput onFile={(file) => void handleFile(file)} />
+                <h2 className="mt-4 ml-3 text-xl font-medium">
+                  Upload from your computer
+                </h2>
                 <UploadDropzone
                   extensions={ACCEPTED_EXTENSIONS}
                   className="rounded-2xl"
@@ -258,6 +303,8 @@ export default function CorpusConvert() {
                       corpusName={entry.corpusName}
                       corpusSize={entry.corpusSize}
                       saved={entry.status === "success"}
+                      storage={entry.storage}
+                      onPublish={() => void publishUpload(entry.id)}
                       onSave={() => void saveUpload(entry.id)}
                       onReset={handleReset}
                     />
@@ -278,7 +325,7 @@ export default function CorpusConvert() {
           {view !== "empty" && entry && (
             <div className="animate-in duration-500 fade-in slide-in-from-bottom-3 motion-reduce:animate-none">
               <LogConsole
-                title="Conversion console"
+                title="Console"
                 header={<ProcessingStages stages={stages} />}
                 lines={completionLines}
                 status={STATUS_TEXT[entry.status]}

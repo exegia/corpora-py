@@ -73,7 +73,8 @@ const MenuIconComponent = ({
   icon: FC<SVGProps<SVGSVGElement>> | undefined
 }) => {
   if (!icon) return
-  return icon
+  const Component = icon
+  return <Component className="h-4 w-auto" />
 }
 
 function Header() {
@@ -86,8 +87,8 @@ function Header() {
           className={cn("flex cursor-pointer items-center gap-2", active.key)}
           onClick={() => navigate(MENU_ITEMS[0].to)}
         >
-          <NavHeaderIcon className="h-5 w-5 fill-amber-400" />
-          <span className="text-sm font-semibold">Corpora</span>
+          <NavHeaderIcon className="h-6 w-6 fill-amber-400" />
+          <span className="font-serif text-base font-semibold">Corpora</span>
         </button>
         <nav className="anim flex items-center gap-1">
           {MENU_ITEMS.map((item) => (
@@ -95,7 +96,9 @@ function Header() {
               key={item.label}
               onClick={() => navigate(item.to)}
               className={cn(
-                "bg-opacity-0 cursor-pointer rounded-md px-3 py-1.5 text-sm animate-delay-100 animate-duration-slow" +
+                "bg-opacity-0 flex cursor-pointer flex-row items-center gap-1.5 rounded-md px-3 py-1.5 text-sm" +
+                  " animate-delay-100" +
+                  " animate-duration-slow" +
                   " hover:bg-neutral-100" +
                   " transition-colors dark:hover:bg-neutral-800",
                 active.pathname == item.to
@@ -103,9 +106,7 @@ function Header() {
                   : ""
               )}
             >
-              {item.icon && (
-                <MenuIconComponent icon={undefined} {...item.icon} />
-              )}
+              {item.icon && <MenuIconComponent icon={item.icon} />}
               {item.label}
             </button>
           ))}

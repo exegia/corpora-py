@@ -22,6 +22,8 @@ def make_settings(monkeypatch):
             "AUTH_REQUIRED",
             "PROJECT_REF",
             "SUPABASE_JWKS_URL",
+            "HF_TOKEN",
+            "HF_STORAGE_REPO",
         ):
             monkeypatch.delenv(var, raising=False)
         for key, value in env.items():
