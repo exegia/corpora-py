@@ -43,7 +43,7 @@ export const MENU_ITEMS: MenuItem[] = [
     label: "Explore",
     description: "View and download corpora that are ready to go.",
     illustration: NodesIllustration,
-    to: "/browse",
+    to: "/explore",
     icon: ListIcon,
   },
   {

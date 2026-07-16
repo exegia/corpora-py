@@ -185,7 +185,7 @@ export default function CorpusConvert() {
   // and continues the normal single-file flow, and anything the service
   // can't convert is rejected here with an inline explanation instead of a
   // doomed round-trip.
-  // A rejection (unsupported file, un-extractable archive) gets a negative
+  // A rejection (unsupported file, unextractable archive) gets a negative
   // cue. Clearing the message on the next attempt stays a plain setState with
   // no sound.
   const reject = (message: string) => {
@@ -278,6 +278,9 @@ export default function CorpusConvert() {
             {view === "empty" ? (
               <>
                 <GithubRepoInput onFile={(file) => void handleFile(file)} />
+                <h2 className="mt-4 ml-3 text-xl font-medium">
+                  Upload from your computer
+                </h2>
                 <UploadDropzone
                   extensions={ACCEPTED_EXTENSIONS}
                   className="rounded-2xl"
@@ -322,7 +325,7 @@ export default function CorpusConvert() {
           {view !== "empty" && entry && (
             <div className="animate-in duration-500 fade-in slide-in-from-bottom-3 motion-reduce:animate-none">
               <LogConsole
-                title="Conversion console"
+                title="Console"
                 header={<ProcessingStages stages={stages} />}
                 lines={completionLines}
                 status={STATUS_TEXT[entry.status]}

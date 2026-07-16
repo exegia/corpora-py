@@ -2,24 +2,12 @@
 
 import { CircleAlert, CircleCheck, Download, LoaderCircle, RefreshCw, Undo2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
+import { HuggingFaceIcon } from "~/components/icons/icon-hugging-face"
 import { Button } from "~/components/ui/button"
 import type { StorageOutcome } from "~/lib/atoms/upload-atom"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
 import { cn } from "~/lib/utils"
 import { FileTypeIcon } from "./file-icon"
-
-/** The Hugging Face brand mark (served from /public), used wherever the
- * Hub publish surfaces so the destination is recognizable at a glance. */
-function HuggingFaceIcon({ className }: { className?: string }) {
-  return (
-    <img
-      src="/hugging-face-icon.svg"
-      alt=""
-      aria-hidden="true"
-      className={cn("shrink-0", className)}
-    />
-  )
-}
 
 interface CompletedResultProps {
   corpusName: string
