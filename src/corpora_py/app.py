@@ -1,4 +1,3 @@
-
 """Combined FastAPI application: MCP server + admin conversion API.
 
 This is the natural place for this app to live: `corpora_py` (the umbrella
@@ -70,6 +69,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from admin.services.api import router as conversion_router
+from admin.services.corpus_detail_api import router as corpus_detail_router
+from admin.services.corpus_detail_mcp import register_corpus_detail_tools
 from admin.services.jobs import job_manager
 from admin.services.storage_api import router as storage_router
 from admin.services.storage_mcp import register_storage_tools
@@ -87,6 +88,11 @@ from .auth import AuthMiddleware
 # shared server here, before the ASGI app is built -- a standalone `cf-mcp`
 # process never registers them, keeping the slim MCP package admin-free.
 register_storage_tools(mcp)
+# The `corpus_*` detail tools (`admin.services.corpus_detail_mcp`) are the MCP
+# counterpart of the `/storage/{filename}/...` detail router, registered here
+# for the same reason as the storage tools -- to keep the slim MCP package free
+# of the admin/text-fabric dependency.
+register_corpus_detail_tools(mcp)
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).
@@ -126,6 +132,7 @@ app.include_router(conversion_router)
 app.include_router(conversion_ws_router)
 app.include_router(validation_router)
 app.include_router(storage_router)
+app.include_router(corpus_detail_router)
 
 
 @app.get("/health", tags=["Health"])

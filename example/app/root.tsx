@@ -84,7 +84,7 @@ function Header() {
     <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur supports-backdrop-filter:bg-white/60 dark:bg-neutral-900/60">
       <div className="container mx-auto flex h-14 items-center justify-between gap-4 px-4">
         <button
-          className={cn("flex cursor-pointer items-center gap-2", active.key)}
+          className="flex cursor-pointer items-center gap-2"
           onClick={() => navigate(MENU_ITEMS[0].to)}
         >
           <NavHeaderIcon className="h-6 w-6 fill-amber-400" />

@@ -369,20 +369,20 @@ name = "corpora-common"
 version = "0.1.2"
 source = { editable = "packages/common" }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "platformdirs" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
-    { name = "pyopenssl" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=42.0.0" },
     { name = "fastapi", specifier = ">=0.139.0" },
     { name = "platformdirs", specifier = ">=4.10.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pyjwt", specifier = ">=2.13.0" },
-    { name = "pyopenssl", specifier = ">=24.3.0" },
 ]
 
 [[package]]
@@ -1726,18 +1726,6 @@ wheels = [
 [package.optional-dependencies]
 crypto = [
     { name = "cryptography" },
-]
-
-[[package]]
-name = "pyopenssl"
-version = "26.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cryptography" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/74/b7/da07bae88f5a9506b4def6f2f4903cf4c3b8831e560dba8fa18ca08f758f/pyopenssl-26.3.0.tar.gz", hash = "sha256:589de7fae1c9ea670d18422ed00fc04da787bbde8e1454aea872aa57b49ad341", size = 182024, upload-time = "2026-06-12T20:28:07.458Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/18/1dd71c9b43192ab83f1d531ad6002dc81108ac36c475f79fb7a295abe2f4/pyopenssl-26.3.0-py3-none-any.whl", hash = "sha256:46367f8f66b92271e6d218da9c87607e1ef5a0bc5c8dea5bb3db82f395c385a3", size = 56008, upload-time = "2026-06-12T20:28:05.999Z" },
 ]
 
 [[package]]
