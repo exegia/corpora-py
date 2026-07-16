@@ -2,7 +2,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 from common.utils import helpers
 
 
@@ -11,16 +10,6 @@ def test_generate_unique_id_uses_first_tag_and_name():
     assert helpers.generate_unique_id(route) == "convert-upload"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "generate_ssl_cert is broken under pyOpenSSL >= 25: X509.add_extensions "
-        "was removed (deprecated API). The function is also unused anywhere in "
-        "the repo -- fix by porting to cryptography's CertificateBuilder, or "
-        "delete as dead code."
-    ),
-    raises=AttributeError,
-    strict=True,
-)
 def test_generate_ssl_cert_writes_valid_pem_pair(tmp_path, monkeypatch):
     cert_dir = tmp_path / "certs"
     cert_file = cert_dir / "cert.pem"

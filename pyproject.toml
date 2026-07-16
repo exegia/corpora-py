@@ -96,10 +96,6 @@ exclude = [
     # Legacy standalone scripts superseded by admin.parsers/admin.converters;
     # not wired into PARSERS/CONVERTERS and full of pre-annotation-era code.
     "^packages/admin/src/admin/utils/",
-    # generate_ssl_cert is dead code broken under pyOpenSSL >= 25
-    # (X509.add_extensions removed); fix/removal tracked separately --
-    # drop this exclusion once helpers.py is cleaned up.
-    "^packages/common/src/common/utils/helpers\\.py$",
     # tests/ uses pytest's conventional __init__.py-less layout, which mypy
     # rejects as duplicate "conftest" modules; the suite is validated by
     # running it, so type-check only the shipped packages.
