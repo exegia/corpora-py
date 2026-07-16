@@ -9,12 +9,34 @@ storage of finished `.corpus` archives; `storage_api` (REST `/storage...`) and
 `corpora_py.app` -- this package intentionally does not build its own
 `FastAPI` instance. `jobs` is the `JobManager` the conversion routers share.
 
-`storage_mcp` is deliberately NOT imported here: it imports `fastmcp`, which
-is a dependency of `corpora-mcp`/the umbrella app, not of `corpora-admin`
-itself -- eagerly importing it would make bare `import admin` fail in a
-slim admin-only install. The umbrella app imports it explicitly.
+`corpus_detail` (read/patch manifest, section index, paginated content of a
+stored `.corpus` archive) adds a detail surface over `storage`; `corpus_detail_api`
+exposes it as REST under `/storage/{filename}/...`.
+
+`storage_mcp` and `corpus_detail_mcp` are deliberately NOT imported here: they
+import `fastmcp`, which is a dependency of `corpora-mcp`/the umbrella app, not of
+`corpora-admin` itself -- eagerly importing them would make bare `import admin`
+fail in a slim admin-only install. The umbrella app imports them explicitly.
 """
 
-from . import api, jobs, storage, storage_api, validation_api, websocket
+from . import (
+    api,
+    corpus_detail,
+    corpus_detail_api,
+    jobs,
+    storage,
+    storage_api,
+    validation_api,
+    websocket,
+)
 
-__all__ = ["api", "jobs", "storage", "storage_api", "validation_api", "websocket"]
+__all__ = [
+    "api",
+    "corpus_detail",
+    "corpus_detail_api",
+    "jobs",
+    "storage",
+    "storage_api",
+    "validation_api",
+    "websocket",
+]
