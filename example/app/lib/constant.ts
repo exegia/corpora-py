@@ -33,7 +33,7 @@ export const MENU_ITEMS: MenuItem[] = [
     to: "/",
   },
   {
-    label: "Convert",
+    label: "Upload",
     description: "Turn a source document into a Text-Fabric dataset.",
     illustration: BoardIllustration,
     icon: LucideUploadCloud,

@@ -39,8 +39,7 @@ const PROGRESS = {
   started: 0,
   queued: 20,
   converting: 60,
-  validating: 80,
-  publishing: 90,
+  validating: 85,
   done: 100,
 } as const
 
@@ -138,10 +137,9 @@ const validateConversion = async (
  * every outcome to a `StorageOutcome` instead of throwing. A 201 is
  * "stored" (with the archive's `resolve/main` download URL); anything else
  * -- storage not configured on the server (503), the Hub rejecting the
- * upload (502), a network error -- is "skipped" with the reason. Like
- * validation, publishing never blocks the download -- see
- * `handleJobSucceeded`. Exported for unit tests only -- app code goes
- * through `uploadFile`'s tracking flow.
+ * upload (502), a network error -- is "skipped" with the reason, and can
+ * simply be retried. App code goes through `publishUpload`, which tracks
+ * the outcome on the entry; this is exported for unit tests.
  */
 export const publishConversion = async (
   jobId: string
@@ -201,21 +199,10 @@ const handleJobSucceeded = async (
     draft.validation = validation
   })
 
-  // Publish to the Hugging Face Hub storage repo after validation: the
-  // outcome (including the Hub download URL) annotates the conversion in
-  // the "Published to Hugging Face" stage, but a skipped/failed publish
-  // never blocks the local download/save flow -- same rule as validation.
-  // An invalid corpus is still published: the archive is the source of
-  // truth and the validation verdict travels alongside it in the UI.
-  updateEntry(id, (draft) => {
-    draft.status = "publishing"
-    draft.progress = PROGRESS.publishing
-    draft.storage = { status: "running" }
-  })
-  const storage = await publishConversion(jobId)
-  updateEntry(id, (draft) => {
-    draft.storage = storage
-  })
+  // Publishing to the Hugging Face Hub deliberately does NOT happen here:
+  // it's a manual step (`publishUpload`) the user triggers from the result
+  // panel once the conversion is done, so nothing leaves this machine for
+  // the Hub without an explicit click.
 
   try {
     const blob = await fetchCorpusBlob(jobId)
@@ -448,6 +435,30 @@ export const saveUpload = async (id: string): Promise<void> => {
   }
 }
 
+/**
+ * Manually publishes (or retries publishing) a completed conversion's
+ * `.corpus` archive to the Hugging Face Hub storage repo -- triggered by
+ * the "Publish to Hugging Face" action in the result panel, never
+ * automatically. The outcome lands in `entry.storage` ("stored" with the
+ * Hub download URL, or "skipped" with the reason and a retry available);
+ * either way the local download/save flow is unaffected.
+ */
+export const publishUpload = async (id: string): Promise<void> => {
+  const entry = store.get(uploadAtom)[id]
+  // Needs a finished server-side job to publish from, and only one publish
+  // in flight per entry -- a second click while "running" is a no-op.
+  if (!entry?.jobId || entry.storage?.status === "running") return
+  const { jobId } = entry
+
+  updateEntry(id, (draft) => {
+    draft.storage = { status: "running" }
+  })
+  const storage = await publishConversion(jobId)
+  updateEntry(id, (draft) => {
+    draft.storage = storage
+  })
+}
+
 // Confirms a rehydrated "ready" entry (server said "succeeded" in a past
 // session) is still actually downloadable before leaving it in the list.
 // Deliberately does NOT auto-fetch the blob or pop the save dialog here --
@@ -500,7 +511,13 @@ export const initUploadManager = (): void => {
   const persisted = loadPersistedUploads()
 
   store.set(uploadAtom, (draft) => {
-    for (const entry of persisted) draft[entry.id] = entry
+    for (const entry of persisted) {
+      // A reload mid-publish leaves a persisted "running" storage outcome
+      // with no fetch behind it anymore -- clear it so the manual "Publish
+      // to Hugging Face" action reappears instead of a stuck spinner.
+      if (entry.storage?.status === "running") entry.storage = undefined
+      draft[entry.id] = entry
+    }
   })
 
   for (const entry of persisted) {
@@ -508,16 +525,14 @@ export const initUploadManager = (): void => {
     if (
       entry.status === "queued" ||
       entry.status === "converting" ||
-      entry.status === "validating" ||
-      entry.status === "publishing"
+      entry.status === "validating"
     ) {
       // Still in flight as of the last session -- resume live tracking.
       // `websocket.py` sends the job's current status as soon as this
       // connects, so this also self-corrects if it actually finished (or
       // failed, or the server restarted and 404s) while the app was closed.
-      // A reload mid-"validating"/mid-"publishing" lands here too: the
-      // socket re-pushes "succeeded", which re-runs validation, the Hub
-      // publish, and the download from scratch.
+      // A reload mid-"validating" lands here too: the socket re-pushes
+      // "succeeded", which re-runs validation and the download from scratch.
       if (entry.wsPath) trackJob(entry.id, entry.jobId, entry.wsPath)
     } else if (entry.status === "ready") {
       void reconcileReady(entry.id, entry.jobId)

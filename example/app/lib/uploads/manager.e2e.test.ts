@@ -2,16 +2,16 @@ import { expect, test } from "bun:test"
 import { getDefaultStore } from "jotai"
 import { uploadAtom, type UploadEntry } from "~/lib/atoms/upload-atom"
 import { API_URL } from "~/lib/types/socket"
-import { deleteUpload, uploadFile } from "./manager"
+import { deleteUpload, publishUpload, uploadFile } from "./manager"
 
 /**
- * Live integration test of the requirement: once upload/conversion/
- * validation are done, the archive is published to Hugging Face and the Hub
- * download URL comes back on the entry, with the publish visible in the
- * tracked state. Runs the REAL manager flow (fetch + WebSocket + jotai, no
- * mocks) against a locally running `corpora-api`; skipped automatically
- * when the server (or its Hub storage config) isn't up, so `bun test`
- * stays green offline.
+ * Live integration test of the requirement: the conversion pipeline
+ * finishes WITHOUT touching Hugging Face, and only an explicit
+ * `publishUpload` call (the "Publish to Hugging Face" button) pushes the
+ * archive to the Hub and puts the download URL on the entry. Runs the REAL
+ * manager flow (fetch + WebSocket + jotai, no mocks) against a locally
+ * running `corpora-api`; skipped automatically when the server (or its Hub
+ * storage config) isn't up, so `bun test` stays green offline.
  */
 
 const serverUp = await fetch(`${API_URL}/health`)
@@ -45,7 +45,7 @@ const waitForTerminal = async (id: string): Promise<UploadEntry> => {
 }
 
 test.skipIf(!serverUp || !storageUp)(
-  "converted corpus is published to Hugging Face with a download URL",
+  "converted corpus is only published to Hugging Face on explicit request",
   async () => {
     const file = new File(
       [
@@ -66,21 +66,27 @@ test.skipIf(!serverUp || !storageUp)(
       expect(entry.validation?.status).toBe("valid")
       expect(entry.corpusName).toBe(`${JOB_NAME}.corpus`)
 
-      // The requirement under test: the finished archive landed on the Hub
-      // and the entry carries its download URL.
-      expect(entry.storage?.status).toBe("stored")
-      expect(entry.storage?.filename).toBe(`${JOB_NAME}.corpus`)
-      expect(entry.storage?.repoId).toBeTruthy()
-      expect(entry.storage?.url).toMatch(
+      // The requirement under test, part 1: finishing the pipeline did NOT
+      // publish anything -- the Hub push is manual.
+      expect(entry.storage).toBeUndefined()
+
+      // Part 2: the explicit publish (what the "Publish to Hugging Face"
+      // button calls) pushes the archive and records the download URL.
+      await publishUpload(id)
+      const published = getDefaultStore().get(uploadAtom)[id]!
+      expect(published.storage?.status).toBe("stored")
+      expect(published.storage?.filename).toBe(`${JOB_NAME}.corpus`)
+      expect(published.storage?.repoId).toBeTruthy()
+      expect(published.storage?.url).toMatch(
         new RegExp(
           `^https://huggingface\\.co/.+/resolve/main/${JOB_NAME}\\.corpus$`
         )
       )
-      expect(entry.storage?.sizeBytes).toBeGreaterThan(0)
+      expect(published.storage?.sizeBytes).toBeGreaterThan(0)
 
       // The publish is observable in the logged pipeline state the console
       // renders from (server logs + the storage outcome itself).
-      expect(entry.logs?.length).toBeGreaterThan(0)
+      expect(published.logs?.length).toBeGreaterThan(0)
 
       // And the URL the server returned matches what GET /storage lists.
       const listed = (await fetch(`${API_URL}/storage`).then((response) =>
@@ -89,7 +95,7 @@ test.skipIf(!serverUp || !storageUp)(
       const stored = listed.find(
         (candidate) => candidate.filename === `${JOB_NAME}.corpus`
       )
-      expect(stored?.url).toBe(entry.storage?.url)
+      expect(stored?.url).toBe(published.storage?.url)
     } finally {
       // Leave neither the Hub artifact nor local tracking state behind.
       await fetch(`${API_URL}/storage/${JOB_NAME}.corpus`, {

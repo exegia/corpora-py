@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { getDefaultStore } from "jotai"
+import { uploadAtom, type UploadEntry } from "~/lib/atoms/upload-atom"
 import { API_URL } from "~/lib/types/socket"
-import { publishConversion } from "./manager"
+import { publishConversion, publishUpload } from "./manager"
 
 /**
- * `publishConversion` contract: one `POST /storage {job_id}` round-trip to
- * `admin.services.storage_api`, mapped to a `StorageOutcome` without ever
- * throwing -- a publish problem must annotate the conversion, not break the
- * job-succeeded handler that also drives the local download.
+ * The manual Hugging Face publish contract:
+ *
+ * - `publishConversion`: one `POST /storage {job_id}` round-trip to
+ *   `admin.services.storage_api`, mapped to a `StorageOutcome` without ever
+ *   throwing -- a publish problem must annotate the entry, not crash the UI.
+ * - `publishUpload`: the user-triggered wrapper -- it only ever runs when
+ *   explicitly called (never as part of the conversion pipeline), tracks
+ *   the outcome on the entry, and refuses to double-publish.
  */
 
 const realFetch = globalThis.fetch
@@ -104,5 +110,105 @@ describe("publishConversion", () => {
     const outcome = await publishConversion("job-123")
     expect(outcome.status).toBe("skipped")
     expect(outcome.reasons?.[0]).toContain("Unable to connect")
+  })
+})
+
+describe("publishUpload", () => {
+  const store = getDefaultStore()
+
+  const seedEntry = (overrides: Partial<UploadEntry> = {}): string => {
+    const id = `test-${Math.random().toString(16).slice(2)}`
+    store.set(uploadAtom, (draft) => {
+      draft[id] = {
+        id,
+        name: "book.txt",
+        size: 1024,
+        type: "text/plain",
+        status: "ready",
+        progress: 100,
+        error: null,
+        jobId: "job-123",
+        corpusName: "book.corpus",
+        ...overrides,
+      }
+    })
+    seededIds.push(id)
+    return id
+  }
+
+  const seededIds: string[] = []
+  afterEach(() => {
+    store.set(uploadAtom, (draft) => {
+      for (const id of seededIds) delete draft[id]
+    })
+    seededIds.length = 0
+  })
+
+  test("publishes the entry's job and records the stored outcome", async () => {
+    const requests = stubFetch(() =>
+      Response.json(
+        {
+          filename: "book.corpus",
+          size_bytes: 57609,
+          repo_id: "user/archives",
+          url: "https://huggingface.co/datasets/user/archives/resolve/main/book.corpus",
+        },
+        { status: 201 }
+      )
+    )
+    const id = seedEntry()
+
+    await publishUpload(id)
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.url).toBe(`${API_URL}/storage`)
+    const entry = store.get(uploadAtom)[id]
+    expect(entry?.storage?.status).toBe("stored")
+    expect(entry?.storage?.repoId).toBe("user/archives")
+    // The rest of the entry -- including the local download state -- is
+    // untouched by the publish.
+    expect(entry?.status).toBe("ready")
+  })
+
+  test("records a failed attempt as skipped without touching the entry status", async () => {
+    stubFetch(() =>
+      Response.json(
+        { detail: "Hub storage is not configured: set HF_STORAGE_REPO" },
+        { status: 503 }
+      )
+    )
+    const id = seedEntry()
+
+    await publishUpload(id)
+
+    const entry = store.get(uploadAtom)[id]
+    expect(entry?.storage?.status).toBe("skipped")
+    expect(entry?.storage?.reasons?.[0]).toContain("HF_STORAGE_REPO")
+    expect(entry?.status).toBe("ready")
+  })
+
+  test("is a no-op for an entry without a server-side job", async () => {
+    const requests = stubFetch(() => Response.json({}, { status: 201 }))
+    const id = seedEntry({ jobId: undefined })
+
+    await publishUpload(id)
+
+    expect(requests).toHaveLength(0)
+    expect(store.get(uploadAtom)[id]?.storage).toBeUndefined()
+  })
+
+  test("refuses to double-publish while an attempt is already running", async () => {
+    const requests = stubFetch(() => Response.json({}, { status: 201 }))
+    const id = seedEntry({ storage: { status: "running" } })
+
+    await publishUpload(id)
+
+    expect(requests).toHaveLength(0)
+  })
+
+  test("is a no-op for an unknown id", async () => {
+    const requests = stubFetch(() => Response.json({}, { status: 201 }))
+    await publishUpload("nope")
+    expect(requests).toHaveLength(0)
   })
 })

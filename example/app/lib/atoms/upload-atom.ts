@@ -10,16 +10,15 @@ import { atomWithImmer } from "jotai-immer"
 // the local save-to-disk step hasn't completed yet (either still in flight
 // or failed and awaiting a manual retry via `useUpload().saveUpload`) --
 // deliberately distinct from "error", since a save-dialog failure doesn't
-// mean the conversion itself needs to be redone. "publishing" covers the
-// POST /storage round-trip after validation (pushing the finished archive
-// to the Hugging Face Hub storage repo) -- like validation, it annotates
-// the conversion and never gates the download/save flow.
+// mean the conversion itself needs to be redone. Publishing to the Hugging
+// Face Hub is NOT a pipeline status: it's a manual, user-triggered action
+// on a finished conversion (see `publishUpload` in the manager), tracked in
+// `UploadEntry.storage` instead.
 export type UploadStatus =
   | "uploading"
   | "queued"
   | "converting"
   | "validating"
-  | "publishing"
   | "ready"
   | "success"
   | "error"
@@ -42,12 +41,14 @@ export type ValidationOutcome = {
 }
 
 /**
- * Verdict of the post-validation `POST /storage` round-trip (see
+ * Verdict of the manual `POST /storage` round-trip (see
  * `admin.services.storage_api`): the finished `.corpus` archive pushed to
- * the Hugging Face Hub storage repo (`HF_STORAGE_REPO`). "skipped" means
- * the archive could not be published (storage not configured on the
- * server, network error, Hub rejection) -- like validation, a publish
- * problem never blocks the local download/save flow.
+ * the Hugging Face Hub storage repo (`HF_STORAGE_REPO`) when the user
+ * clicks "Publish to Hugging Face" on a completed conversion (see
+ * `publishUpload` in the manager). "skipped" means the archive could not
+ * be published (storage not configured on the server, network error, Hub
+ * rejection) -- the local download/save flow is unaffected either way, and
+ * a skipped publish can simply be retried.
  */
 export type StorageOutcome = {
   status: "running" | "stored" | "skipped"
@@ -93,8 +94,8 @@ export type UploadEntry = {
    */
   validation?: ValidationOutcome
   /**
-   * Hugging Face Hub publish outcome, set by the manager after validation
-   * completes (absent on entries converted before Hub storage existed).
+   * Hugging Face Hub publish outcome, set by `publishUpload` when the user
+   * manually publishes a completed conversion (absent until they do).
    * Serializable, so it persists with the rest of the entry -- the Hub URL
    * stays usable across reloads even after the local blob cache is gone.
    */
