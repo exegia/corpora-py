@@ -1,0 +1,228 @@
+"""Tests for the corpus-detail HTTP endpoints (`admin.services.corpus_detail_api`).
+
+The router contract is exercised with `corpus_detail.corpus_storage` monkeypatched
+to a fake that serves a real, tiny `.corpus` archive built once via the converters
+(`convert_text_to_tf` + `convert_to_corpus`) -- so index/content exercise a genuine
+cfabric-loadable payload. The real Hub wrapper is covered by `test_storage.py`, and
+auth gating is the combined app's `AuthMiddleware` concern (see
+`tests/corpora_py/test_auth_middleware.py`), so the router is mounted bare here.
+
+`corpus_detail`'s module-level `_cache`/`_HUB_CACHE_ROOT` persist across calls, so an
+autouse fixture resets both per test (otherwise a cache hit skips `download` and the
+suite becomes order-dependent -- e.g. the 404/503 cases would silently pass).
+"""
+
+from pathlib import Path
+
+import pytest
+from admin.converters._text_to_tf import convert_text_to_tf
+from admin.converters.convert_to_corpus import convert_to_corpus
+from admin.services import corpus_detail, corpus_detail_api
+from admin.services.storage import CorpusNotFoundError, StorageNotConfiguredError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+ARCHIVE_NAME = "mini.corpus"
+
+
+@pytest.fixture(scope="session")
+def corpus_archive_bytes(tmp_path_factory) -> bytes:
+    """Build a real 5-paragraph `.corpus` archive once and return its bytes."""
+    work = tmp_path_factory.mktemp("corpus-detail-archive")
+    src = work / "mini.txt"
+    src.write_text(
+        "\n\n".join(f"Paragraph number {i} has some words here." for i in range(1, 6))
+    )
+    tf_dir = convert_text_to_tf(str(src), work / "tf")
+    archive = convert_to_corpus(
+        tf_dir,
+        work / ARCHIVE_NAME,
+        name="Mini Corpus",
+        description="Original description",
+        language="English",
+        language_code="en",
+    )
+    return archive.read_bytes()
+
+
+class FakeStorage:
+    """Serves the prebuilt archive for `mini.corpus`; records uploads."""
+
+    def __init__(self, archive_bytes: bytes):
+        self._bytes = archive_bytes
+        self.uploads: list[tuple[Path, str | None]] = []
+
+    def download(self, filename, dest_dir):
+        if filename != ARCHIVE_NAME:
+            raise CorpusNotFoundError(f"No corpus named {filename!r}")
+        dest = Path(dest_dir) / filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(self._bytes)
+        return dest
+
+    def upload(self, local_path, filename=None):
+        self.uploads.append((Path(local_path), filename))
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _isolate(monkeypatch, tmp_path):
+    """Reset the module-level cache + cache root so tests don't cross-contaminate."""
+    monkeypatch.setattr(corpus_detail, "_cache", {})
+    monkeypatch.setattr(corpus_detail, "_HUB_CACHE_ROOT", tmp_path / "cache")
+
+
+@pytest.fixture
+def fake_storage(monkeypatch, corpus_archive_bytes) -> FakeStorage:
+    fake = FakeStorage(corpus_archive_bytes)
+    monkeypatch.setattr(corpus_detail, "corpus_storage", fake)
+    return fake
+
+
+@pytest.fixture
+def client(fake_storage) -> TestClient:
+    app = FastAPI()
+    app.include_router(corpus_detail_api.router)
+    return TestClient(app)
+
+
+# ── Manifest (GET) ─────────────────────────────────────────────────────────────
+
+
+def test_get_manifest_passes_through_all_keys(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/manifest")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Mini Corpus"
+    assert body["description"] == "Original description"
+    # Non-editable keys the PATCH surface never touches are preserved verbatim.
+    assert body["format"] == "corpus"
+    assert body["tocFile"] == "toc.yml"
+    assert "uid" in body
+
+
+def test_get_manifest_unknown_filename_is_404(client):
+    assert client.get("/storage/absent.corpus/manifest").status_code == 404
+
+
+def test_get_manifest_storage_not_configured_is_503(client, fake_storage, monkeypatch):
+    def boom(filename, dest_dir):
+        raise StorageNotConfiguredError("set HF_STORAGE_REPO")
+
+    monkeypatch.setattr(fake_storage, "download", boom)
+    assert client.get(f"/storage/{ARCHIVE_NAME}/manifest").status_code == 503
+
+
+# ── Manifest (PATCH) ───────────────────────────────────────────────────────────
+
+
+def test_patch_manifest_updates_subset_and_preserves_rest(client, fake_storage):
+    resp = client.patch(
+        f"/storage/{ARCHIVE_NAME}/manifest",
+        json={"description": "Edited description", "category": "poetry"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    # Changed fields land...
+    assert body["description"] == "Edited description"
+    assert body["category"] == "poetry"
+    # ...untouched editable + non-editable keys survive.
+    assert body["name"] == "Mini Corpus"
+    assert body["language"] == "English"
+    assert body["format"] == "corpus"
+    assert "uid" in body
+
+    # The archive was re-uploaded under its own name...
+    assert fake_storage.uploads
+    assert fake_storage.uploads[-1][1] == ARCHIVE_NAME
+    # ...and the local cache was invalidated so the next read re-fetches.
+    assert ARCHIVE_NAME not in corpus_detail._cache
+
+
+def test_patch_manifest_empty_body_is_422(client):
+    assert client.patch(f"/storage/{ARCHIVE_NAME}/manifest", json={}).status_code == 422
+
+
+# ── Index ──────────────────────────────────────────────────────────────────────
+
+
+def test_get_index_shape(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/index")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    # toc.yml passthrough (a dict, not None, for a real archive).
+    assert isinstance(body["toc"], dict)
+
+    sections = body["sections"]
+    assert sections["levels"] == ["book"]
+    assert len(sections["items"]) == 1
+    item = sections["items"][0]
+    assert set(item) >= {"title", "ref", "children"}
+    # Single-level corpus: top items have no child sections.
+    assert item["children"] == []
+
+    node_types = body["node_types"]
+    assert all(set(nt) == {"type", "count"} for nt in node_types)
+    counts = {nt["type"]: nt["count"] for nt in node_types}
+    assert counts["book"] == 1
+    assert counts["paragraph"] == 5
+
+
+# ── Content ────────────────────────────────────────────────────────────────────
+
+
+def test_get_content_whole_corpus_paginates(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/content", params={"limit": 2})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ref"] is None
+    assert body["total"] == 5
+    assert body["offset"] == 0
+    assert body["limit"] == 2
+    assert body["next_offset"] == 2
+    assert len(body["passages"]) == 2
+    assert all(set(p) == {"ref", "text"} for p in body["passages"])
+    assert body["passages"][0]["text"]  # non-empty
+
+
+def test_get_content_last_page_has_no_next_offset(client):
+    resp = client.get(
+        f"/storage/{ARCHIVE_NAME}/content", params={"offset": 4, "limit": 2}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["passages"]) == 1
+    assert body["next_offset"] is None
+
+
+def test_get_content_limit_is_clamped_to_200(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/content", params={"limit": 1000})
+    assert resp.status_code == 200
+    assert resp.json()["limit"] == 200
+
+
+def test_get_content_limit_is_clamped_up_to_1(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/content", params={"limit": 0})
+    assert resp.status_code == 200
+    assert resp.json()["limit"] == 1
+
+
+def test_get_content_bad_ref_is_404(client):
+    resp = client.get(
+        f"/storage/{ARCHIVE_NAME}/content", params={"ref": "Nonexistent 999"}
+    )
+    assert resp.status_code == 404
+
+
+def test_index_ref_round_trips_into_content(client):
+    """The ref the index emits must resolve back to real passages in content."""
+    index = client.get(f"/storage/{ARCHIVE_NAME}/index").json()
+    ref = index["sections"]["items"][0]["ref"]
+
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/content", params={"ref": ref})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ref"] == ref
+    assert body["total"] == 5
+    assert body["passages"]

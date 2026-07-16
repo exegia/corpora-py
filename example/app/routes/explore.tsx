@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { type MetaDescriptor, useNavigate } from "react-router"
 import {
+  ArrowRight,
   Check,
   Download,
   ExternalLink,
@@ -310,6 +311,19 @@ export default function Explore() {
                           className="flex animate-in flex-wrap items-center gap-2 duration-200 fade-in motion-reduce:animate-none"
                           onClick={(event) => event.stopPropagation()}
                         >
+                          <Button
+                            onClick={() =>
+                              navigate(
+                                `/corpus/${encodeURIComponent(displayName(corpus.filename))}`
+                              )
+                            }
+                            className="gap-1.5"
+                            data-cuelume-press
+                            data-cuelume-release
+                          >
+                            Details
+                            <ArrowRight className="size-4" aria-hidden="true" />
+                          </Button>
                           <a
                             href={`${API_URL}/storage/${encodeURIComponent(corpus.filename)}/download`}
                             download={corpus.filename}

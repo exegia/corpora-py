@@ -136,7 +136,9 @@ lives here. **`corpora_mcp.corpus`** holds the singleton `CorpusManager` that lo
 **`admin.services`** — HTTP surface over the conversion pipeline: `api.py` (upload/poll/download via
 `POST/GET /convert`), `websocket.py` (`/convert/{id}/ws` coarse status push), `jobs.py`
 (`JobManager` — in-process `ThreadPoolExecutor`-backed job registry; explicitly **not** safe for a
-multi-worker/multi-process deployment, since job state lives in memory in one process).
+multi-worker/multi-process deployment, since job state lives in memory in one process). Also hosts the stored-`.corpus`
+surfaces — Hub storage (`/storage`) and its detail layer (read/patch manifest, section index, paginated content at
+`/storage/{filename}/...`, plus matching `corpus_*` MCP tools); see `packages/admin/CLAUDE.md`.
 
 **`corpora_py.app`** — Combines the above into one FastAPI app. Mounting a FastMCP ASGI app requires forwarding its
 `lifespan` into the parent app or its session manager never starts; see that module's docstring.
@@ -245,7 +247,8 @@ The demo integrates with `corpora-api` (the FastAPI sidecar) via WebSocket for f
 
 ## UI Components (shadcn)
 
-The demo app uses [shadcn/ui](https://ui.shadcn.com) for React components — a collection of copy-paste component primitives built on Radix UI and Tailwind CSS.
+The demo app uses [shadcn/ui](https://ui.shadcn.com) for React components — a collection of copy-paste component
+primitives built on Radix UI and Tailwind CSS.
 
 ### Adding components
 
@@ -254,7 +257,8 @@ cd demo
 npx shadcn-ui@latest add <component-name>
 ```
 
-Popular components used in this project: `button`, `card`, `dialog`, `input`, `label`, `select`, `toast`, `dropdown-menu`, etc.
+Popular components used in this project: `button`, `card`, `dialog`, `input`, `label`, `select`, `toast`,
+`dropdown-menu`, etc.
 
 ### Setup
 
