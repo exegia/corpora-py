@@ -46,7 +46,7 @@ function MenuCard({
 
   return (
     <Card
-      className="h-full transform cursor-pointer rounded-2xl border border-neutral-100 shadow shadow-neutral-300 transition-all hover:-translate-y-1 hover:bg-neutral-100 hover:shadow-2xl dark:border-neutral-800 dark:hover:bg-neutral-950"
+      className="h-full transform cursor-pointer rounded-2xl border border-neutral-100 shadow shadow-neutral-300 transition-all hover:-translate-y-1 hover:bg-neutral-100 hover:shadow-2xl dark:border-neutral-800 dark:shadow-black dark:hover:bg-neutral-950"
       onClick={() => navigate(item.to)}
     >
       <CardContent>

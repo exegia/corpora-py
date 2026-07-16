@@ -54,6 +54,27 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
           },
         ]
       : []
+  // The Hub publish is a manual, optional step (see `publishUpload` in
+  // manager.ts): once the user triggers it, a stored archive gets its
+  // download URL in the completion block and a failed attempt gets a caveat
+  // -- neither changes the local success message, and an entry that was
+  // never published gets no line at all.
+  const storageLines: LogLine[] =
+    entry.storage?.status === "stored" && entry.storage.url
+      ? [
+          {
+            text: `Published to Hugging Face — download URL: ${entry.storage.url}`,
+            tone: "success",
+          },
+        ]
+      : entry.storage?.status === "skipped"
+        ? [
+            {
+              text: "Warning: the archive was not published to Hugging Face — see the “Published to Hugging Face” step for the reason, then retry.",
+              tone: "warning",
+            },
+          ]
+        : []
   switch (entry.status) {
     case "error":
       return [
@@ -67,6 +88,7 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
     case "ready":
       return [
         ...validationCaveat,
+        ...storageLines,
         {
           text: `Conversion complete`,
           description: `${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
@@ -76,6 +98,7 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
     case "success":
       return [
         ...validationCaveat,
+        ...storageLines,
         {
           text: `Conversion complete`,
           description: `${entry.corpusName ?? "archive"} saved to disk.`,
@@ -106,8 +129,14 @@ const buildCopyText = (stages: Stage[], completion: LogLine[]): string =>
 export default function CorpusConvert() {
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
   const [rejection, setRejection] = useState<string | null>(null)
-  const { uploads, uploadFile, deleteUpload, retryUpload, saveUpload } =
-    useUpload()
+  const {
+    uploads,
+    uploadFile,
+    deleteUpload,
+    retryUpload,
+    saveUpload,
+    publishUpload,
+  } = useUpload()
 
   const entry = currentUploadId ? uploads[currentUploadId] : undefined
 
@@ -253,9 +282,12 @@ export default function CorpusConvert() {
             {view === "empty" ? (
               <>
                 <GithubRepoInput onFile={(file) => void handleFile(file)} />
+                <h2 className="mt-4 ml-3 text-xl font-medium">
+                  Upload from your computer
+                </h2>
                 <UploadDropzone
                   extensions={ACCEPTED_EXTENSIONS}
-                  className="rounded-xl"
+                  className="rounded-2xl"
                   hint="Drag and drop, or browse"
                   error={rejection}
                   onFile={(file) => void handleFile(file)}
@@ -275,6 +307,8 @@ export default function CorpusConvert() {
                       corpusName={entry.corpusName}
                       corpusSize={entry.corpusSize}
                       saved={entry.status === "success"}
+                      storage={entry.storage}
+                      onPublish={() => void publishUpload(entry.id)}
                       onSave={() => void saveUpload(entry.id)}
                       onReset={handleReset}
                     />

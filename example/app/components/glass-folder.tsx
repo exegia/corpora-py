@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { motion, type Variants } from "framer-motion"
 import { cn } from "~/lib/utils"
 
@@ -116,13 +116,17 @@ function PaperContent({ index }: { index: number }) {
 
 export default function GlassFolder({
   open,
+  onHover,
+  isHovered,
   className,
 }: {
+  onHover?: (value: boolean) => void
   className?: string
+  isHovered: boolean
   open: boolean
 }) {
   const [isOpen, setOpen] = useState(open)
-  const [hover, setHover] = useState(false)
+  const [hover, setHover] = useState(isHovered)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -135,7 +139,18 @@ export default function GlassFolder({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    if (hover === isHovered) return
+    setHover(isHovered)
+  }, [isHovered])
+
   const state = isOpen ? "open" : hover ? "hover" : "closed"
+
+  const handleOnHover = (value: boolean) =>
+    useCallback(() => {
+      setHover(value)
+      if (onHover) onHover(value)
+    }, [value, onHover])
 
   return (
     <div
@@ -154,8 +169,8 @@ export default function GlassFolder({
         variants={folderVariants}
         initial="closed"
         animate={state}
-        onHoverStart={() => setHover(true)}
-        onHoverEnd={() => setHover(false)}
+        onHoverStart={() => handleOnHover(true)}
+        onHoverEnd={() => handleOnHover(false)}
         onClick={() => setOpen((o) => !o)}
         style={{ transformStyle: "preserve-3d" }}
       >
@@ -246,7 +261,7 @@ export default function GlassFolder({
               borderTop: "1px solid rgba(255,255,255,0.4)",
             }}
           >
-            <div className="pointer-events-none absolute -inset-full translate-y-1/3 rotate-0 transform bg-gradient-to-tr from-transparent via-white/5 to-transparent transition-transform duration-700 group-hover:translate-y-0" />
+            <div className="pointer-events-none absolute -inset-full translate-y-1/3 rotate-0 transform bg-linear-to-tr from-transparent via-white/5 to-transparent transition-transform duration-700 group-hover:translate-y-0" />
             <div
               className="pointer-events-none absolute inset-0 opacity-[0.5] mix-blend-overlay"
               style={{ backgroundImage: noiseBg }}

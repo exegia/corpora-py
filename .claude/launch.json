@@ -4,20 +4,35 @@
     {
       "name": "corpora-api",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "corpora-api"],
+      "runtimeArgs": [
+        "run",
+        "corpora-api"
+      ],
       "port": 8000
     },
     {
       "name": "corpora-api-noauth",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["AUTH_REQUIRED=false", "uv", "run", "corpora-api"],
+      "runtimeArgs": [
+        "AUTH_REQUIRED=false",
+        "HF_STORAGE_REPO=philagora/corpora-archives",
+        "uv",
+        "run",
+        "corpora-api"
+      ],
       "port": 8000
     },
     {
       "name": "example-app",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "--cwd", "example", "vite:dev"],
-      "port": 5173
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "example",
+        "vite:dev"
+      ],
+      "port": 5173,
+      "autoPort": true
     },
     {
       "name": "cf-mcp-sse",

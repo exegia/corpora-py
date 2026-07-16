@@ -8,7 +8,7 @@ import {
   TriangleAlert,
 } from "lucide-react"
 import { cn } from "~/lib/utils"
-import { TONE_CLASSES, TONE_PREFIX } from "./log-console"
+import { TONE_CLASSES, TONE_PREFIX, TONE_TEXT_CLASSES } from "./log-console"
 import type { Stage, StageState } from "./state-model"
 
 const STATE_META: Record<
@@ -64,14 +64,12 @@ export function ProcessingStages({
         const isLast = index === stages.length - 1
         return (
           <li key={stage.id} className="relative flex gap-3 pb-4 last:pb-0">
+            {/* Connector rail: neutral in every state -- the icon + state
+                label carry the status color; a green rail for every finished
+                stage made the whole console read green. */}
             {!isLast && (
               <span
-                className={cn(
-                  "absolute top-5 left-2.25 h-[calc(100%-1.25rem)] w-px",
-                  stage.state === "completed" || stage.state === "warning"
-                    ? "bg-emerald-600/40 dark:bg-emerald-400/40"
-                    : "bg-border"
-                )}
+                className="absolute top-5 left-[9px] h-[calc(100%-1.25rem)] w-px bg-border"
                 aria-hidden="true"
               />
             )}
@@ -91,9 +89,7 @@ export function ProcessingStages({
               )}
             >
               <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                <span className="font-medium text-foreground!">
-                  {stage.label}
-                </span>
+                <span className="font-medium">{stage.label}</span>
                 <span className={cn("text-xs", meta.className)}>
                   {meta.label}
                 </span>
@@ -121,9 +117,7 @@ export function ProcessingStages({
                       <span
                         className={cn(
                           "whitespace-pre-wrap",
-                          line.tone === "info"
-                            ? "text-muted-foreground"
-                            : TONE_CLASSES[line.tone]
+                          TONE_TEXT_CLASSES[line.tone]
                         )}
                       >
                         {line.text}

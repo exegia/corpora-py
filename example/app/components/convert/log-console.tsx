@@ -13,11 +13,29 @@ export type LogLine = {
   tone: LogTone
 }
 
+/**
+ * Colors for the tone prefix glyph (>, ✓, !, ✗). Theme-aware -- the console
+ * body uses the app background, so dark-only zinc/emerald shades would be
+ * unreadable in light mode.
+ */
 export const TONE_CLASSES: Record<LogTone, string> = {
-  info: "text-zinc-400",
-  success: "text-emerald-400",
-  warning: "text-amber-400",
-  error: "text-red-400",
+  info: "text-muted-foreground",
+  success: "text-emerald-600 dark:text-emerald-400",
+  warning: "text-amber-600 dark:text-amber-400",
+  error: "text-red-600 dark:text-red-400",
+}
+
+/**
+ * Colors for the line text itself. Deliberately quieter than the prefix:
+ * success/info lines stay neutral (the ✓ glyph and the stage heading carry
+ * the green), so color is reserved for text that needs attention --
+ * warnings and errors.
+ */
+export const TONE_TEXT_CLASSES: Record<LogTone, string> = {
+  info: "text-muted-foreground",
+  success: "text-foreground",
+  warning: "text-amber-600 dark:text-amber-400",
+  error: "text-red-600 dark:text-red-400",
 }
 
 export const TONE_PREFIX: Record<LogTone, string> = {
@@ -138,10 +156,10 @@ export function LogConsole({
           role="log"
           aria-label="Processing log"
         >
-          {header && <div className="px-4 py-3 text-zinc-100">{header}</div>}
+          {header && <div className="px-4 py-3 text-foreground">{header}</div>}
 
           {lines.length > 0 && (
-            <div className="border-t border-zinc-300 p-4 font-mono text-xs leading-relaxed md:text-sm">
+            <div className="border-t border-border p-4 font-mono text-xs leading-relaxed md:text-sm">
               {lines.map((line, index) => (
                 <p
                   key={`${index}-${line.text}`}
@@ -163,9 +181,7 @@ export function LogConsole({
                   <div
                     className={cn(
                       "whitespace-pre-wrap",
-                      line.tone === "info"
-                        ? "text-zinc-300"
-                        : TONE_CLASSES[line.tone]
+                      TONE_TEXT_CLASSES[line.tone]
                     )}
                   >
                     <span className="font-bold">{line.text}</span>
@@ -198,7 +214,7 @@ export function LogConsole({
 
       {status && (
         <div
-          className="border-t border-zinc-200 px-4 py-2 text-xs text-zinc-400"
+          className="border-t border-border px-4 py-2 text-xs text-muted-foreground"
           role="status"
           aria-live="polite"
         >
