@@ -45,7 +45,7 @@ def generate_ssl_cert() -> tuple[Path, Path]:
         ]
     )
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)

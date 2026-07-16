@@ -68,10 +68,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastmcp.utilities.lifespan import combine_lifespans
-
 from admin.services.api import router as conversion_router
 from admin.services.corpus_detail_api import router as corpus_detail_router
 from admin.services.corpus_detail_mcp import register_corpus_detail_tools
@@ -81,6 +77,10 @@ from admin.services.storage_mcp import register_storage_tools
 from admin.services.validation_api import router as validation_router
 from admin.services.websocket import router as conversion_ws_router
 from corpora_mcp import mcp
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastmcp.utilities.lifespan import combine_lifespans
+
 from .auth import AuthMiddleware
 
 # The `storage_*` MCP tools live in `admin.services.storage_mcp` (admin owns
