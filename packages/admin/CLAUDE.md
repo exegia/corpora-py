@@ -4,6 +4,13 @@ This file provides guidance to Claude Code when working in `packages/admin/`
 (the `corpora-admin` package). See the workspace root `CLAUDE.md` for the overall repo; this file only covers what's
 specific to this package.
 
+Two subsystems have their own directory-scoped guides (auto-loaded when you work in them):
+
+- **`src/admin/services/CLAUDE.md`** — the `/convert`, `/validate`, and `/storage` HTTP surfaces, Hub storage, corpus
+  detail, the `JobManager`, and their known gaps.
+- **`src/admin/converters/CLAUDE.md`** — the Text-Fabric walker gotchas, Context-Fabric (`cfabric`) notes, the `.corpus`
+  archive contract, and converter-side gaps.
+
 ## Commands
 
 ```bash
@@ -35,13 +42,13 @@ packages/admin/
       schema.py               # the shared schema + Parser ABC (read this first)
       _epub.py, _html.py, _xml.py, _tei.py, _pdf.py, _plain.py
       __init__.py              # PARSERS: dict[SourceFormat, Parser]
-    converters/               # Document/Unit tree -> Text-Fabric -> .cfm -> .corpus
+    converters/               # Document/Unit tree -> Text-Fabric -> .cfm -> .corpus  (see converters/CLAUDE.md)
       _walker.py                # shared TF-walking logic (read this second)
       _epub_to_tf.py, _html_to_tf.py, _tei_to_tf.py, _pdf_to_tf.py, _text_to_tf.py
       convert_to_cfm.py         # .tf -> .cfm (Context-Fabric compile)
       convert_to_corpus.py      # .tf + .cfm -> .corpus archive
       __init__.py               # CONVERTERS: dict[SourceFormat, converter fn]
-    services/                 # HTTP surface over the pipeline above (FastAPI routers)
+    services/                 # HTTP surface over the pipeline above (FastAPI routers)  (see services/CLAUDE.md)
       api.py                    # POST/GET /convert (upload, poll, download)
       websocket.py              # /convert/{id}/ws (status push)
       validation_api.py         # POST /validate (corpus integrity checks)
@@ -74,61 +81,8 @@ Do not add new HTTP routers to `src/corpora_py/` — add them to `admin.services
 `admin.services/__init__.py`, then import into `corpora_py.app` and mount them. This preserves the invariant that the
 umbrella package has zero business logic and exists only to glue the other three together.
 
-### Hub storage (`services/storage*.py`)
-
-`storage.py` wraps `huggingface_hub.HfApi` to list/inspect/upload/download/delete finished `.corpus`
-archives in one Hub repo (`HF_STORAGE_REPO`, dataset type by default; `HF_TOKEN` for auth — both in
-`common.utils.config.Settings`). An unconfigured repo raises `StorageNotConfiguredError` per call (→ HTTP 503), never at
-import time. Two surfaces share it: `storage_api.py` (REST `/storage`, job-first uploads with the same job-visibility
-404 rule as `/convert/{id}`) and `storage_mcp.py`
-(`storage_*` MCP tools). **`storage_mcp.py` imports `fastmcp`, which is not a `corpora-admin`
-dependency** — it is deliberately excluded from `admin.services.__init__` and only imported by
-`corpora_py.app`, which calls `register_storage_tools(mcp)` before building the MCP ASGI app. Registering the tools
-inside `corpora_mcp` instead would force the slim MCP package to depend on admin — don't. All `CorpusStorage` calls are
-blocking network I/O; both surfaces must go through
-`asyncio.to_thread`.
-
-### Corpus detail (`services/corpus_detail*.py`)
-
-A *detail* layer over Hub storage for the desktop app's reader: read/patch a stored archive's
-`manifest.yml`, list its section structure, and read its text by reference — things flat `/storage`
-doesn't give. Same one-implementation/two-surfaces shape as storage:
-
-- **`corpus_detail.py`** — all the logic. `get_manifest`/`update_manifest`/`get_index`/`get_content`. It normalizes the
-  filename with `_safe_name` (mirrors `storage._safe_archive_name`), downloads the archive via `CorpusStorage`, extracts
-  it with `_safe_extract` (rejects any zip member escaping the target dir), and for index/content loads the Text-Fabric
-  payload under `corpora/` with
-  `cfabric.Fabric` (imported locally inside `_load_api`, keeping the module import `cfabric`-free). Everything is
-  blocking.
-- **`corpus_detail_api.py`** — REST router (`prefix="/storage"`): `GET`/`PATCH
-  /storage/{filename}/manifest`, `GET /storage/{filename}/index`, `GET /storage/{filename}/content`
-  (`ref`/`fmt`/`offset`/`limit` query params). Shares the `/storage/{filename}` path space with
-  `storage_api` — the extra segment keeps every route distinct, so router inclusion order is irrelevant. `_run` maps
-  errors identically to `storage_api._run`: **503** (storage never configured), **404** (missing archive *or*
-  unresolvable section reference), **502** (Hub rejected it). Unlike `/convert` and job-first `/storage` uploads, these
-  routes have **no per-resource ownership check** — only the app-wide `AuthMiddleware` gates them.
-- **`corpus_detail_mcp.py`** — MCP tools `corpus_manifest_get`, `corpus_manifest_update`,
-  `corpus_index`, `corpus_content`. **Imports `fastmcp`, so — exactly like `storage_mcp` — it is deliberately excluded
-  from `admin.services.__init__`** and only imported by `corpora_py.app`, which calls
-  `register_corpus_detail_tools(mcp)` alongside `register_storage_tools(mcp)`.
-  `corpus_detail_api` (no fastmcp) *is* re-exported from `__init__`. A standalone `cf-mcp` process never registers
-  these — it has no Hub storage to read from.
-
-**In-process cache + invalidation.** `corpus_detail._cache` (filename → extracted dir + lazily loaded api, guarded by
-`_lock`) keeps a downloaded/extracted archive around so repeated manifest/index/content reads don't re-fetch.
-`update_manifest` re-zips the extracted archive, re-uploads it to the Hub, then calls `invalidate(filename)` so the next
-read re-fetches the updated bytes — **a PATCH is the only writer, and it always invalidates.** `corpus_storage`,
-`_HUB_CACHE_ROOT`, and `_cache` are module-level so a test can monkeypatch one fake `corpus_storage`
-and cover the REST router and MCP tools alike.
-
-**Section-ref fallback gotcha (`_resolve_section_node`).** Turning a human ref (`"Genesis 1"`) back into a TF node tries
-`T.nodeFromSection` first (works for language-aware multi-level corpora like BHSA), then **falls back to string-matching
-each candidate node's `T.sectionFromNode` ref against the target.** The fallback is not optional here: this repo's
-converters emit **single-section-level**
-corpora (one root node whose section feature is `title`, carrying no language), so `nodeFromSection`
-can't resolve them and only the string match guarantees the index → content round-trip. `_passage_nodes`
-similarly special-cases the single-level case (paginate the finest slot-bearing type, not the lone root section). Keep
-this in sync with `corpora_mcp.server`'s ref parsing, which it was adapted from.
+See **`src/admin/services/CLAUDE.md`** for the details of each surface (Hub storage, corpus detail, the `fastmcp`
+exclusion rule, and the service-side known gaps).
 
 ## Architecture
 
@@ -149,90 +103,5 @@ generic `"element"`; EPUB keeps
 module's docstring for its documented Node Types/Features contract before changing what it emits; those contracts are
 what downstream consumers query against.
 
-### Text-Fabric walker gotchas (all handled in `_walker.py` — read it before
-
-### touching feature/node creation logic)
-
-- **Every feature name must have metadata**, or `cv.walk()` fails validation with `"node feature has no metadata"`.
-  Feature names here vary per document (HTML attributes, TEI `@type`, ...) so they can't be declared upfront in
-  `featureMeta=`; `set_features()` registers each one dynamically via `cv.meta(name, valueType="str")` right before
-  setting it. If you add a
-  `cv.feature()` call anywhere, route it through `set_features()`, not
-  `cv.feature()` directly, or you'll reintroduce this failure.
-- **Dynamically-registered features need an explicit `valueType`** or the exporter warns `"Missing @valueType"`
-  (non-fatal, but avoidable — that's why `set_features()` always passes `valueType="str"`).
-- **A node covering zero slots gets silently deleted** by Text-Fabric's
-  "remove unlinked nodes" pass. A leaf `Unit` with no tokens and no children (a blank PDF page, an `<img>`, an `<hr>`)
-  would otherwise vanish along with its attributes — `_walk_unit()` gives genuinely empty leaves one placeholder
-  empty-text slot so they survive.
-- **`otext.sectionTypes`/`sectionFeatures` can't be empty**, but also don't need to be elaborate: every converter uses a
-  single section level (the root `book`/`document`/`text` node, with `title` as its section feature). Finer structure
-  (chapters, pages, divs) is still expressed as ordinary node types via `otype_for` — it just isn't declared as TF
-  "sections", which would require strict, consistent nesting we can't guarantee across arbitrary source documents.
-- **`SKIP_TAGS` in `parsers/_html.py` is scoped to tags that only make sense to drop when nested inside `<body>`**
-  (script/style/noscript/svg/math). It used to include `"head"` for HTML's metadata tag, which silently ate TEI's
-  `<head>` (a heading element, reused by the shared walker) — don't add HTML-specific tag names back to that set without
-  checking what they mean in TEI/XML first.
-
-## Context-Fabric (`cfabric`) notes
-
-- There is **no separate compile API**. `.cfm` compilation happens automatically the first time a dataset is loaded via
-  `cfabric.Fabric(locations=...).loadAll()`. `convert_to_cfm()` exists only to trigger that load on purpose and hand
-  back the resulting `.cfm` path.
-- `Fabric(...).loadAll()` returns `Api | bool` (`False` on failure) — always narrow with `isinstance(result, bool)`
-  before touching `.F`/`.T`/`.Fall()`; those are dynamically populated at load time so mypy can't see their attributes
-  either (hence the `type: ignore[attr-defined]` in
-  `convert_to_corpus.py`).
-
-## `.corpus` archive
-
-The archive format (`manifest.yml`, `toc.yml`, `assets/`, `.git/`,
-`corpora/{*.tf, .cfm/}`) is the contract both the Corpora and Exegia apps parse. The canonical spec is maintained in an
-external vault by the Corpora team. Before changing manifest/toc shape in `convert_to_corpus.py`, consult the current
-schema definition with the team or check the app's schema loader to understand the expected format.
-
-## Known gaps
-
-**TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no
-cross-process job registry, no archive cleanup, no test coverage for HTTP API.
-
-- **`ConversionJob.logs`/`last_log` (`services/jobs.py`) are fixed checkpoint strings, not real progress.**
-  `_run_conversion` (`services/api.py`) calls
-  `job_manager.log()` three times per job (parse start, TF-dataset-built, done) so `/convert/{id}/ws` clients have
-  *something* to show besides a status stuck on `"running"` for minutes. `converter()` and
-  `convert_to_corpus()` still have no mid-call progress hook — adding real per-unit progress needs threading a callback
-  through every
-  `_{format}_to_tf.py` converter and `_walker.convert_document()`, not just more log calls here.
-- **No `_xml_to_tf.py`.** `XmlParser` exists (`admin.parsers`) but there's no matching Text-Fabric converter — generic
-  XML has no fixed node-type vocabulary to map onto, unlike TEI's `<div>`/`<p>` convention. Add one the same way as the
-  others (pick an `otype_for`, wire it into
-  `converters/__init__.py`'s `CONVERTERS`) if a concrete need shows up; don't add it speculatively.
-- `dataset_id`/`project_id`/`publisher_id`/`author_ids` in
-  `convert_to_corpus()` are caller-supplied and default to `""` — this package has no way to know them; they're assigned
-  by whatever backend calls it (the Corpora/Exegia app, not this converter).
-- **`services/` (the `/convert` HTTP API) has no test coverage.** A deliberate scope cut, not an oversight — see the
-  root `CLAUDE.md`'s CI/CD section for context. Test strategy (mocking `cfabric`, exercising
-  `JobManager` without real conversions) needs its own design pass. (Auth *is* covered now — see `corpora_py.auth` and
-  the root `CLAUDE.md`.)
-- **`_RESULTS_ROOT` (finished `.corpus` archives, in `services/api.py`) is never cleaned up.** `_WORK_ROOT` (uploads +
-  intermediate Text-Fabric output) *is* deleted once a job reaches a terminal state, but there's no
-  "client downloaded it, safe to delete" signal for the final archive, and a naive delete-on-download would break
-  retries. Needs a TTL-based reap (a periodic task deleting files older than N hours) — not implemented yet.
-  `JobManager._jobs` has the same problem: terminal job entries are never pruned from the in-memory registry, so it
-  grows for the lifetime of the process. `_HUB_CACHE_ROOT` (`services/storage_api.py` — archives fetched from the Hub
-  for `GET /storage/{filename}/download`) shares the same missing-TTL-reap gap, as does
-  `corpus_detail._HUB_CACHE_ROOT` (and its in-process `_cache`) — the extracted archives it caches per filename are only
-  ever dropped by a manifest PATCH's `invalidate()`, never reaped by age.
-- **`JobManager`'s stall watchdog (`_check_stall`) cannot actually stop a hung conversion.** It marks a job `FAILED`
-  after `stall_timeout_seconds`
-  of wall-clock `RUNNING` time so clients stop waiting on it, but a
-  `ThreadPoolExecutor` has no way to kill a thread that's already running — the underlying worker thread keeps executing
-  the stuck call (e.g. a malformed PDF looping in `pypdf`) indefinitely, permanently occupying one of the pool's
-  `max_workers` slots. A real fix needs process-isolated execution (subprocess or `ProcessPoolExecutor`), which in turn
-  requires
-  `JobManager.submit()` to accept a picklable job spec instead of an arbitrary closure (`api.py` currently passes a
-  `lambda` closing over
-  `source_path`/`work_dir`/etc., which cannot cross a process boundary).
-- **No cross-process job registry.** `JobManager` is an in-memory, per-process singleton (see its class docstring and
-  `corpora_py.app.main()`, which hardcodes `workers=1` specifically because of this). Scaling this service beyond one
-  process needs a shared backend (Redis, Celery, or similar) instead of — or in front of — `JobManager`.
+The Text-Fabric / Context-Fabric mechanics of that walk, and the `.corpus` archive it produces, are documented in
+**`src/admin/converters/CLAUDE.md`**.
