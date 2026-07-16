@@ -10,12 +10,16 @@ import { atomWithImmer } from "jotai-immer"
 // the local save-to-disk step hasn't completed yet (either still in flight
 // or failed and awaiting a manual retry via `useUpload().saveUpload`) --
 // deliberately distinct from "error", since a save-dialog failure doesn't
-// mean the conversion itself needs to be redone.
+// mean the conversion itself needs to be redone. "publishing" covers the
+// POST /storage round-trip after validation (pushing the finished archive
+// to the Hugging Face Hub storage repo) -- like validation, it annotates
+// the conversion and never gates the download/save flow.
 export type UploadStatus =
   | "uploading"
   | "queued"
   | "converting"
   | "validating"
+  | "publishing"
   | "ready"
   | "success"
   | "error"
@@ -35,6 +39,27 @@ export type ValidationOutcome = {
   reasons?: string[]
   /** Corpus stats from a successful validation (see CorpusStats server-side). */
   stats?: Record<string, number>
+}
+
+/**
+ * Verdict of the post-validation `POST /storage` round-trip (see
+ * `admin.services.storage_api`): the finished `.corpus` archive pushed to
+ * the Hugging Face Hub storage repo (`HF_STORAGE_REPO`). "skipped" means
+ * the archive could not be published (storage not configured on the
+ * server, network error, Hub rejection) -- like validation, a publish
+ * problem never blocks the local download/save flow.
+ */
+export type StorageOutcome = {
+  status: "running" | "stored" | "skipped"
+  /** `resolve/main` download URL of the archive in the Hub repo. */
+  url?: string
+  /** The Hub repo the archive was stored in (e.g. "user/corpora-archives"). */
+  repoId?: string
+  /** Name of the archive inside the repo. */
+  filename?: string
+  sizeBytes?: number
+  /** Why publishing was skipped. */
+  reasons?: string[]
 }
 
 export type UploadEntry = {
@@ -67,6 +92,13 @@ export type UploadEntry = {
    * existed). Serializable, so it persists with the rest of the entry.
    */
   validation?: ValidationOutcome
+  /**
+   * Hugging Face Hub publish outcome, set by the manager after validation
+   * completes (absent on entries converted before Hub storage existed).
+   * Serializable, so it persists with the rest of the entry -- the Hub URL
+   * stays usable across reloads even after the local blob cache is gone.
+   */
+  storage?: StorageOutcome
   /** Set once conversion succeeds -- the resulting `.corpus` archive's name/size. */
   corpusName?: string
   corpusSize?: number

@@ -1,6 +1,6 @@
 "use client"
 
-import { CircleAlert, CircleCheck, Download, RefreshCw, Undo2 } from "lucide-react"
+import { CircleAlert, CircleCheck, CloudUpload, Download, RefreshCw, Undo2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
 import { Button } from "~/components/ui/button"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
@@ -12,6 +12,14 @@ interface CompletedResultProps {
   corpusSize?: number
   /** Already saved to disk ("success") vs. downloaded and awaiting save ("ready"). */
   saved: boolean
+  /**
+   * Hugging Face Hub download URL of the published archive, when the
+   * post-conversion publish succeeded (see `StorageOutcome` in
+   * upload-atom.ts). Absent when publishing was skipped or never ran.
+   */
+  storageUrl?: string
+  /** The Hub repo the archive was stored in, shown next to the link. */
+  storageRepoId?: string
   onSave: () => void
   onReset: () => void
   className?: string
@@ -22,6 +30,8 @@ export function CompletedResult({
                                   corpusName,
                                   corpusSize,
                                   saved,
+                                  storageUrl,
+                                  storageRepoId,
                                   onSave,
                                   onReset,
                                   className
@@ -54,6 +64,30 @@ export function CompletedResult({
           )}
         </div>
       </div>
+
+      {storageUrl && (
+        <div className="flex items-center gap-3 rounded-lg border-border border-2 bg-background p-3">
+          <CloudUpload
+            className="size-5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              Published to Hugging Face
+              {storageRepoId ? ` — ${storageRepoId}` : ""}
+            </p>
+            <a
+              href={storageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block truncate text-xs text-blue-600 underline underline-offset-2 dark:text-blue-400"
+              title={storageUrl}
+            >
+              {storageUrl}
+            </a>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

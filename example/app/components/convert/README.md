@@ -25,7 +25,7 @@ module-level manager (`~/lib/uploads/manager`); everything in this directory
 | View         | `UploadEntry.status`                  | Left column                          | Right column (console)      |
 |--------------|---------------------------------------|--------------------------------------|-----------------------------|
 | `empty`      | *(no entry)*                          | `UploadDropzone` (+ inline rejection)| hidden                      |
-| `processing` | `uploading` / `queued` / `converting` / `validating` | `FileSummary`         | `ProcessingStages` + logs   |
+| `processing` | `uploading` / `queued` / `converting` / `validating` / `publishing` | `FileSummary` | `ProcessingStages` + logs   |
 | `completed`  | `ready` / `success`                   | `FileSummary` + `CompletedResult`    | stages (all done) + logs    |
 | `failed`     | `error`                               | `FileSummary` + `FailedResult`       | stages (failure marked) + logs |
 
@@ -72,7 +72,16 @@ message.
    NOT blocked — the verdict annotates the conversion, it doesn't gate it. An
    unreachable `/validate` (network error) shows as a `warning` ("skipped"),
    as do history entries converted before this stage existed.
-7. **Archive downloaded** — the `.corpus` blob fetched into memory (`ready`).
+7. **Published to Hugging Face** — the client POSTs `/storage` with the job
+   id (`admin.services.storage_api`) and the server pushes the finished
+   archive to the Hub storage repo (`HF_STORAGE_REPO`). `stored` → completed
+   with the archive's `resolve/main` download URL logged (and shown as a link
+   in `CompletedResult`); anything else — storage not configured (503), Hub
+   rejection (502), network error — shows as a `warning` ("skipped") with the
+   reason. Same rule as validation: the outcome annotates the conversion and
+   never blocks the local download/save flow. An invalid corpus is still
+   published — the validation verdict travels alongside it in the UI.
+8. **Archive downloaded** — the `.corpus` blob fetched into memory (`ready`).
 
 Stage states: `pending → active → completed | warning | failed`. Completed
 stages stay visible. A failure marks the stage it happened in (`upload` when

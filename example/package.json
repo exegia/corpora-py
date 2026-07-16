@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "react-router typegen && tsc",
+    "test": "bun test",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "desktop:dev": "electrobun dev --watch",
     "vite:build": "react-router build",

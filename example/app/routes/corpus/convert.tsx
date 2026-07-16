@@ -42,6 +42,25 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
         }
       ]
       : []
+  // The Hub copy is an annotation like validation (see manager.ts): a
+  // stored archive gets its download URL in the completion block, a skipped
+  // publish gets a caveat -- neither changes the local success message.
+  const storageLines: LogLine[] =
+    entry.storage?.status === "stored" && entry.storage.url
+      ? [
+        {
+          text: `Published to Hugging Face — download URL: ${entry.storage.url}`,
+          tone: "success"
+        }
+      ]
+      : entry.storage?.status === "skipped"
+        ? [
+          {
+            text: "Warning: the archive was not published to Hugging Face — see the “Published to Hugging Face” step above.",
+            tone: "warning"
+          }
+        ]
+        : []
   switch (entry.status) {
     case "error":
       return [
@@ -53,6 +72,7 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
     case "ready":
       return [
         ...validationCaveat,
+        ...storageLines,
         {
           text: `Conversion complete — ${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
           tone: "success"
@@ -61,6 +81,7 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
     case "success":
       return [
         ...validationCaveat,
+        ...storageLines,
         {
           text: `Conversion complete — ${entry.corpusName ?? "archive"} saved to disk.`,
           tone: "success"
@@ -76,6 +97,7 @@ const STATUS_TEXT: Record<UploadEntry["status"], string> = {
   queued: "Queued — waiting for the conversion worker…",
   converting: "Converting — this can take a while for large documents.",
   validating: "Validating — checking the dataset loads through the .tf → .cfm cycle…",
+  publishing: "Publishing — uploading the archive to the Hugging Face Hub…",
   ready: "Conversion completed. Archive ready to save.",
   success: "Conversion completed and saved to disk.",
   error: "Conversion failed. See the failed step above."
@@ -258,6 +280,12 @@ export default function CorpusConvert() {
                       corpusName={entry.corpusName}
                       corpusSize={entry.corpusSize}
                       saved={entry.status === "success"}
+                      storageUrl={
+                        entry.storage?.status === "stored"
+                          ? entry.storage.url
+                          : undefined
+                      }
+                      storageRepoId={entry.storage?.repoId}
                       onSave={() => void saveUpload(entry.id)}
                       onReset={handleReset}
                     />

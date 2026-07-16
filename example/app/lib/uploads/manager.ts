@@ -1,6 +1,11 @@
 import { getDefaultStore } from "jotai"
 import { API_URL } from "~/lib/types/socket"
-import { uploadAtom, type UploadEntry, type ValidationOutcome } from "~/lib/atoms/upload-atom"
+import {
+  uploadAtom,
+  type StorageOutcome,
+  type UploadEntry,
+  type ValidationOutcome,
+} from "~/lib/atoms/upload-atom"
 import { type JobStatusMessage, subscribeJobStatus } from "~/lib/hooks/use-socket"
 import { loadPersistedUploads, savePersistedUploads } from "./persistence"
 import { detectSourceFormat } from "./source-format"
@@ -34,7 +39,8 @@ const PROGRESS = {
   started: 0,
   queued: 20,
   converting: 60,
-  validating: 85,
+  validating: 80,
+  publishing: 90,
   done: 100,
 } as const
 
@@ -126,6 +132,55 @@ const validateConversion = async (
   }
 }
 
+/**
+ * Publishes the converted archive to the Hugging Face Hub storage repo
+ * (`POST /storage` by job id -- see `admin.services.storage_api`), mapping
+ * every outcome to a `StorageOutcome` instead of throwing. A 201 is
+ * "stored" (with the archive's `resolve/main` download URL); anything else
+ * -- storage not configured on the server (503), the Hub rejecting the
+ * upload (502), a network error -- is "skipped" with the reason. Like
+ * validation, publishing never blocks the download -- see
+ * `handleJobSucceeded`. Exported for unit tests only -- app code goes
+ * through `uploadFile`'s tracking flow.
+ */
+export const publishConversion = async (
+  jobId: string
+): Promise<StorageOutcome> => {
+  try {
+    const response = await fetch(`${API_URL}/storage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId }),
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        detail?: string
+      }
+      throw new Error(
+        body.detail ?? `Publish request failed (${response.status})`
+      )
+    }
+    const stored = (await response.json()) as {
+      filename: string
+      size_bytes: number | null
+      repo_id: string
+      url: string
+    }
+    return {
+      status: "stored",
+      url: stored.url,
+      repoId: stored.repo_id,
+      filename: stored.filename,
+      sizeBytes: stored.size_bytes ?? undefined,
+    }
+  } catch (error) {
+    return {
+      status: "skipped",
+      reasons: [error instanceof Error ? error.message : String(error)],
+    }
+  }
+}
+
 const handleJobSucceeded = async (
   id: string,
   jobId: string,
@@ -144,6 +199,22 @@ const handleJobSucceeded = async (
   const validation = await validateConversion(jobId)
   updateEntry(id, (draft) => {
     draft.validation = validation
+  })
+
+  // Publish to the Hugging Face Hub storage repo after validation: the
+  // outcome (including the Hub download URL) annotates the conversion in
+  // the "Published to Hugging Face" stage, but a skipped/failed publish
+  // never blocks the local download/save flow -- same rule as validation.
+  // An invalid corpus is still published: the archive is the source of
+  // truth and the validation verdict travels alongside it in the UI.
+  updateEntry(id, (draft) => {
+    draft.status = "publishing"
+    draft.progress = PROGRESS.publishing
+    draft.storage = { status: "running" }
+  })
+  const storage = await publishConversion(jobId)
+  updateEntry(id, (draft) => {
+    draft.storage = storage
   })
 
   try {
@@ -437,14 +508,16 @@ export const initUploadManager = (): void => {
     if (
       entry.status === "queued" ||
       entry.status === "converting" ||
-      entry.status === "validating"
+      entry.status === "validating" ||
+      entry.status === "publishing"
     ) {
       // Still in flight as of the last session -- resume live tracking.
       // `websocket.py` sends the job's current status as soon as this
       // connects, so this also self-corrects if it actually finished (or
       // failed, or the server restarted and 404s) while the app was closed.
-      // A reload mid-"validating" lands here too: the socket re-pushes
-      // "succeeded", which re-runs validation and the download from scratch.
+      // A reload mid-"validating"/mid-"publishing" lands here too: the
+      // socket re-pushes "succeeded", which re-runs validation, the Hub
+      // publish, and the download from scratch.
       if (entry.wsPath) trackJob(entry.id, entry.jobId, entry.wsPath)
     } else if (entry.status === "ready") {
       void reconcileReady(entry.id, entry.jobId)
