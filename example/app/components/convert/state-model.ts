@@ -14,7 +14,7 @@ import type { LogLine } from "./log-console"
  *                 inline error.
  * - "processing": a valid file was accepted and the upload/conversion
  *                 pipeline is running ("uploading" | "queued" | "converting"
- *                 | "validating" | "publishing").
+ *                 | "validating").
  * - "completed":  the `.corpus` bytes are downloaded ("ready") or already
  *                 saved to disk ("success").
  * - "failed":     the upload or conversion errored ("error").
@@ -29,11 +29,7 @@ export const deriveView = (entry: UploadEntry | undefined): ConvertView => {
 }
 
 export type StageState =
-  | "pending"
-  | "active"
-  | "completed"
-  | "warning"
-  | "failed"
+  "pending" | "active" | "completed" | "warning" | "failed"
 
 export type Stage = {
   id: string
@@ -57,9 +53,10 @@ const serverLineTone = (line: string): LogLine["tone"] =>
  * Maps a tracked upload onto the visible stage-by-stage pipeline. Every
  * stage corresponds to a real observable event (client-side validation, the
  * POST /convert round-trip, the server's coarse queued/running/succeeded/
- * failed states, the post-conversion POST /validate verdict, the Hugging
- * Face Hub publish via POST /storage, and the archive download) and carries
- * that event's log lines -- nothing here is simulated.
+ * failed states, the post-conversion POST /validate verdict, the archive
+ * download, and the user-triggered Hugging Face Hub publish via POST
+ * /storage) and carries that event's log lines -- nothing here is
+ * simulated.
  *
  * The server has no progress hook (see use-socket.ts), so the "Converting"
  * stage carries the server's own coarse log checkpoints rather than a fake
@@ -74,11 +71,9 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
   // the server never accepted the file.
   const failedBeforeServer = failed && !jobId
   const done = status === "ready" || status === "success"
-  // "validating"/"publishing" mean the server-side conversion already
-  // succeeded -- the stages before validation should render as completed,
-  // not stuck.
-  const conversionDone =
-    done || status === "validating" || status === "publishing"
+  // "validating" means the server-side conversion already succeeded -- the
+  // stages before validation should render as completed, not stuck.
+  const conversionDone = done || status === "validating"
   const serverLogs = logs ?? []
   const serverLogsHaveWarning = serverLogs.some((line) =>
     WARNING_PATTERN.test(line)
@@ -91,14 +86,14 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       : "completed"
 
   const uploadLogs: LogLine[] = [
-    { text: "Uploading to POST /convert…", tone: "info" }
+    { text: "Uploading to POST /convert…", tone: "info" },
   ]
   if (failedBeforeServer) {
     uploadLogs.push(
       { text: `Error: ${error ?? "Upload failed"}`, tone: "error" },
       {
         text: "Suggested action: check that the conversion API is running, then retry.",
-        tone: "info"
+        tone: "info",
       }
     )
   }
@@ -126,14 +121,14 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
 
   const convertingLogs: LogLine[] = serverLogs.map((line) => ({
     text: line,
-    tone: serverLineTone(line)
+    tone: serverLineTone(line),
   }))
   if (failed && jobId) {
     convertingLogs.push(
       { text: `Error: ${error ?? "Conversion failed"}`, tone: "error" },
       {
         text: "Suggested action: retry the conversion, or replace the file.",
-        tone: "info"
+        tone: "info",
       }
     )
   }
@@ -160,7 +155,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
   if (status === "validating" || validation) {
     validationLogs.push({
       text: "Validating dataset — POST /validate (full .tf → .cfm load cycle)…",
-      tone: "info"
+      tone: "info",
     })
   }
   switch (validation?.status) {
@@ -169,24 +164,25 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       validationLogs.push({
         text: stats
           ? `Corpus validated — ${(stats.max_slot ?? 0).toLocaleString()} slots, ${
-            stats.node_types ?? 0
-          } node types, ${
-            (stats.node_features ?? 0) + (stats.edge_features ?? 0)
-          } features`
+              stats.node_types ?? 0
+            } node types, ${
+              (stats.node_features ?? 0) + (stats.edge_features ?? 0)
+            } features`
           : "Corpus validated.",
-        tone: "success"
+        tone: "success",
       })
       break
     }
     case "invalid":
       validationLogs.push(
         { text: "Corpus failed validation:", tone: "error" },
-        ...(validation.reasons ?? []).map(
-          (reason): LogLine => ({ text: reason, tone: "error" })
-        ),
+        ...(validation.reasons ?? []).map((reason): LogLine => ({
+          text: reason,
+          tone: "error",
+        })),
         {
           text: "Suggested action: the archive can still be saved, but apps may fail to load it — retry the conversion or check the source document.",
-          tone: "info"
+          tone: "info",
         }
       )
       break
@@ -195,38 +191,37 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
         text: `Validation could not run: ${
           validation.reasons?.[0] ?? "unknown error"
         }. The archive is still downloadable.`,
-        tone: "warning"
+        tone: "warning",
       })
       break
   }
   if (!validation && done) {
     validationLogs.push({
       text: "No validation recorded for this run (converted before validation was added).",
-      tone: "warning"
+      tone: "warning",
     })
   }
 
-  // Hugging Face Hub publish (POST /storage by job id): "skipped" marks the
-  // stage with a warning but never blocks the download/save flow -- the Hub
-  // copy is an extra durable home for the archive, not a gate (see
-  // manager.ts). Entries converted before Hub storage existed have no
-  // `storage` at all and get an honest warning rather than a pretend pass.
+  // Hugging Face Hub publish (POST /storage by job id): a MANUAL step the
+  // user triggers from the result panel (`publishUpload` in manager.ts),
+  // never run automatically. Until they do, the stage simply stays pending
+  // -- an unpublished archive is the normal resting state, not a warning.
+  // "skipped" (the attempt failed) marks the stage with a warning but never
+  // blocks the local download/save flow, and can be retried.
   const storageState: StageState =
-    status === "publishing" || storage?.status === "running"
+    storage?.status === "running"
       ? "active"
       : storage?.status === "stored"
         ? "completed"
         : storage?.status === "skipped"
           ? "warning"
-          : done
-            ? "warning"
-            : "pending"
+          : "pending"
 
   const storageLogs: LogLine[] = []
-  if (status === "publishing" || storage) {
+  if (storage) {
     storageLogs.push({
       text: "Publishing to Hugging Face Hub — POST /storage (uploading the .corpus archive)…",
-      tone: "info"
+      tone: "info",
     })
   }
   switch (storage?.status) {
@@ -238,31 +233,31 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
               ? ` (${formatBytes(storage.sizeBytes)})`
               : ""
           } in ${storage.repoId ?? "the Hub storage repo"}`,
-          tone: "success"
+          tone: "success",
         },
         ...(storage.url
           ? [
-            {
-              text: `Download URL: ${storage.url}`,
-              tone: "success"
-            } satisfies LogLine
-          ]
+              {
+                text: `Download URL: ${storage.url}`,
+                tone: "success",
+              } satisfies LogLine,
+            ]
           : [])
       )
       break
     case "skipped":
       storageLogs.push({
-        text: `Publish could not run: ${
+        text: `Publish failed: ${
           storage.reasons?.[0] ?? "unknown error"
-        }. The archive is still downloadable locally.`,
-        tone: "warning"
+        }. The archive is still downloadable locally — use “Publish to Hugging Face” to retry.`,
+        tone: "warning",
       })
       break
   }
   if (!storage && done) {
     storageLogs.push({
-      text: "No Hub publish recorded for this run (converted before Hub storage was added).",
-      tone: "warning"
+      text: "Not published — use “Publish to Hugging Face” in the result panel to push the archive to the Hub.",
+      tone: "info",
     })
   }
 
@@ -274,35 +269,40 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       logs: [
         {
           text: `File received: ${entry.name} (${formatBytes(entry.size)})`,
-          tone: "info"
-        }
-      ]
+          tone: "info",
+        },
+      ],
     },
     {
       id: "validated",
       label: "File type validated",
-      state: sourceFormat ? "completed" : failedBeforeServer ? "failed" : "completed",
+      state: sourceFormat
+        ? "completed"
+        : failedBeforeServer
+          ? "failed"
+          : "completed",
       logs: [
         // ZIP inspection findings (contents inventory, extraction notes)
         // happen as part of validating what the upload actually is.
-        ...(entry.inspection ?? []).map(
-          (text): LogLine => ({ text, tone: "info" })
-        ),
+        ...(entry.inspection ?? []).map((text): LogLine => ({
+          text,
+          tone: "info",
+        })),
         ...(sourceFormat
           ? [
-            {
-              text: `File type validated — source format "${sourceFormat}"`,
-              tone: "success"
-            } satisfies LogLine
-          ]
-          : [])
-      ]
+              {
+                text: `File type validated — source format "${sourceFormat}"`,
+                tone: "success",
+              } satisfies LogLine,
+            ]
+          : []),
+      ],
     },
     {
       id: "upload",
       label: "Uploaded to conversion service",
       state: uploadState,
-      logs: uploadLogs
+      logs: uploadLogs,
     },
     {
       id: "queued",
@@ -310,30 +310,24 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       state: queuedState,
       logs: jobId
         ? [
-          {
-            text: `Job ${jobId} created — tracking status over WebSocket`,
-            tone: "success"
-          }
-        ]
-        : []
+            {
+              text: `Job ${jobId} created — tracking status over WebSocket`,
+              tone: "success",
+            },
+          ]
+        : [],
     },
     {
       id: "converting",
       label: "Converting to .corpus",
       state: convertingState,
-      logs: convertingLogs
+      logs: convertingLogs,
     },
     {
       id: "validation",
       label: "Dataset validated",
       state: validationState,
-      logs: validationLogs
-    },
-    {
-      id: "storage",
-      label: "Published to Hugging Face",
-      state: storageState,
-      logs: storageLogs
+      logs: validationLogs,
     },
     {
       id: "download",
@@ -341,17 +335,26 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       state: done ? "completed" : "pending",
       logs: done
         ? [
-          {
-            text: `Downloaded ${entry.corpusName ?? "archive"}${
-              entry.corpusSize !== undefined
-                ? ` (${formatBytes(entry.corpusSize)})`
-                : ""
-            }`,
-            tone: "success"
-          }
-        ]
-        : []
-    }
+            {
+              text: `Downloaded ${entry.corpusName ?? "archive"}${
+                entry.corpusSize !== undefined
+                  ? ` (${formatBytes(entry.corpusSize)})`
+                  : ""
+              }`,
+              tone: "success",
+            },
+          ]
+        : [],
+    },
+    // Last because it's a manual, post-completion action -- the pipeline is
+    // done at "download"; this stage tracks the optional Hub publish the
+    // user can trigger (and retry) from the result panel.
+    {
+      id: "storage",
+      label: "Published to Hugging Face",
+      state: storageState,
+      logs: storageLogs,
+    },
   ]
 }
 

@@ -1,11 +1,25 @@
 "use client"
 
-import { CircleAlert, CircleCheck, CloudUpload, Download, RefreshCw, Undo2 } from "lucide-react"
+import { CircleAlert, CircleCheck, Download, LoaderCircle, RefreshCw, Undo2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
 import { Button } from "~/components/ui/button"
+import type { StorageOutcome } from "~/lib/atoms/upload-atom"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
 import { cn } from "~/lib/utils"
 import { FileTypeIcon } from "./file-icon"
+
+/** The Hugging Face brand mark (served from /public), used wherever the
+ * Hub publish surfaces so the destination is recognizable at a glance. */
+function HuggingFaceIcon({ className }: { className?: string }) {
+  return (
+    <img
+      src="/hugging-face-icon.svg"
+      alt=""
+      aria-hidden="true"
+      className={cn("shrink-0", className)}
+    />
+  )
+}
 
 interface CompletedResultProps {
   corpusName: string
@@ -13,13 +27,13 @@ interface CompletedResultProps {
   /** Already saved to disk ("success") vs. downloaded and awaiting save ("ready"). */
   saved: boolean
   /**
-   * Hugging Face Hub download URL of the published archive, when the
-   * post-conversion publish succeeded (see `StorageOutcome` in
-   * upload-atom.ts). Absent when publishing was skipped or never ran.
+   * Outcome of the manual Hugging Face Hub publish (see `StorageOutcome`
+   * in upload-atom.ts). Absent until the user clicks "Publish to Hugging
+   * Face" -- publishing never happens automatically.
    */
-  storageUrl?: string
-  /** The Hub repo the archive was stored in, shown next to the link. */
-  storageRepoId?: string
+  storage?: StorageOutcome
+  /** Starts (or retries) the manual Hub publish -- see `publishUpload`. */
+  onPublish: () => void
   onSave: () => void
   onReset: () => void
   className?: string
@@ -27,24 +41,29 @@ interface CompletedResultProps {
 
 /** Completion state: success message, output file, and next actions. */
 export function CompletedResult({
-                                  corpusName,
-                                  corpusSize,
-                                  saved,
-                                  storageUrl,
-                                  storageRepoId,
-                                  onSave,
-                                  onReset,
-                                  className
-                                }: CompletedResultProps) {
+  corpusName,
+  corpusSize,
+  saved,
+  storage,
+  onPublish,
+  onSave,
+  onReset,
+  className,
+}: CompletedResultProps) {
+  const publishing = storage?.status === "running"
+  const published = storage?.status === "stored"
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 animate-in duration-300 fade-in slide-in-from-bottom-2 motion-reduce:animate-none",
+        "flex animate-in flex-col gap-3 duration-300 fade-in slide-in-from-bottom-2 motion-reduce:animate-none",
         className
       )}
     >
-      <Alert role="status" className="bg-background border-2 p-3">
-        <CircleCheck className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+      <Alert role="status" className="border-2 bg-background p-3">
+        <CircleCheck
+          className="size-4 text-emerald-600 dark:text-emerald-400"
+          aria-hidden="true"
+        />
         <AlertTitle>Conversion completed</AlertTitle>
         <AlertDescription>
           {saved
@@ -53,40 +72,57 @@ export function CompletedResult({
         </AlertDescription>
       </Alert>
 
-      <div className="flex items-center gap-3 rounded-lg border-border border-2 bg-background p-3">
-        <FileTypeIcon filename={corpusName} className="size-10 rounded-lg" iconClassName="size-5" />
+      <div className="flex items-center gap-3 rounded-lg border-2 border-border bg-background p-3">
+        <FileTypeIcon
+          filename={corpusName}
+          className="size-10 rounded-lg"
+          iconClassName="size-5"
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium" title={corpusName}>
             {corpusName}
           </p>
           {corpusSize !== undefined && (
-            <p className="text-xs text-muted-foreground">{formatBytes(corpusSize)}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatBytes(corpusSize)}
+            </p>
           )}
         </div>
       </div>
 
-      {storageUrl && (
-        <div className="flex items-center gap-3 rounded-lg border-border border-2 bg-background p-3">
-          <CloudUpload
-            className="size-5 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
+      {published && storage?.url && (
+        <div className="flex items-center gap-3 rounded-lg border-2 border-border bg-background p-3">
+          <HuggingFaceIcon className="size-6" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
               Published to Hugging Face
-              {storageRepoId ? ` — ${storageRepoId}` : ""}
+              {storage.repoId ? ` — ${storage.repoId}` : ""}
             </p>
             <a
-              href={storageUrl}
+              href={storage.url}
               target="_blank"
               rel="noreferrer"
               className="block truncate text-xs text-blue-600 underline underline-offset-2 dark:text-blue-400"
-              title={storageUrl}
+              title={storage.url}
             >
-              {storageUrl}
+              {storage.url}
             </a>
           </div>
         </div>
+      )}
+
+      {storage?.status === "skipped" && (
+        <Alert role="alert" className="border-2 bg-background p-3">
+          <CircleAlert
+            className="size-4 text-amber-600 dark:text-amber-400"
+            aria-hidden="true"
+          />
+          <AlertTitle>Publish to Hugging Face failed</AlertTitle>
+          <AlertDescription>
+            {storage.reasons?.[0] ?? "Unknown error."} The archive is still
+            available locally — you can retry the publish.
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -99,6 +135,30 @@ export function CompletedResult({
           <Download className="size-4" aria-hidden="true" />
           {saved ? "Saved" : "Download"}
         </Button>
+        {!published && (
+          <Button
+            variant="outline"
+            onClick={onPublish}
+            disabled={publishing}
+            className="gap-2"
+            data-cuelume-press
+            data-cuelume-release
+          >
+            {publishing ? (
+              <LoaderCircle
+                className="size-4 animate-spin"
+                aria-hidden="true"
+              />
+            ) : (
+              <HuggingFaceIcon className="size-4" />
+            )}
+            {publishing
+              ? "Publishing…"
+              : storage?.status === "skipped"
+                ? "Retry publish"
+                : "Publish to Hugging Face"}
+          </Button>
+        )}
         <Button
           variant="outline"
           onClick={onReset}
@@ -126,16 +186,16 @@ interface FailedResultProps {
 
 /** Failure state: names the failed stage, explains the error, offers recovery. */
 export function FailedResult({
-                               error,
-                               stageLabel,
-                               onRetry,
-                               onReplace,
-                               className
-                             }: FailedResultProps) {
+  error,
+  stageLabel,
+  onRetry,
+  onReplace,
+  className,
+}: FailedResultProps) {
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 animate-in duration-300 fade-in slide-in-from-bottom-2 motion-reduce:animate-none",
+        "flex animate-in flex-col gap-3 duration-300 fade-in slide-in-from-bottom-2 motion-reduce:animate-none",
         className
       )}
     >

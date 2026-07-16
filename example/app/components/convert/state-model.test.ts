@@ -4,10 +4,10 @@ import { deriveStages, deriveView } from "./state-model"
 
 /**
  * Requirements under test (see README.md in this directory):
- * after conversion + validation, the finished archive is published to the
- * Hugging Face Hub (`POST /storage`), the publish process shows up in the
- * console logs, the Hub download URL is surfaced, and a failed/skipped
- * publish never blocks the local download/save flow.
+ * publishing to the Hugging Face Hub is a MANUAL step on a completed
+ * conversion (`POST /storage` via `publishUpload`), the publish process
+ * shows up in the console logs, the Hub download URL is surfaced, and a
+ * failed publish never blocks the local download/save flow.
  */
 
 const baseEntry = (overrides: Partial<UploadEntry> = {}): UploadEntry => ({
@@ -15,8 +15,8 @@ const baseEntry = (overrides: Partial<UploadEntry> = {}): UploadEntry => ({
   name: "book.txt",
   size: 1024,
   type: "text/plain",
-  status: "publishing",
-  progress: 90,
+  status: "ready",
+  progress: 100,
   error: null,
   sourceFormat: "plain",
   jobId: "job-123",
@@ -39,32 +39,30 @@ const STORED: StorageOutcome = {
   sizeBytes: 57609,
 }
 
-describe("publishing status", () => {
-  test("is a processing view, not completed or failed", () => {
-    expect(deriveView(baseEntry())).toBe("processing")
+describe("manual publish in flight", () => {
+  const entry = baseEntry({ storage: { status: "running" } })
+
+  test("keeps the completed view — publishing is post-pipeline", () => {
+    expect(deriveView(entry)).toBe("completed")
   })
 
   test("marks the storage stage active while the upload to the Hub runs", () => {
-    const stage = stageById(
-      baseEntry({ storage: { status: "running" } }),
-      "storage"
-    )
+    const stage = stageById(entry, "storage")
     expect(stage.state).toBe("active")
     expect(stage.logs.map((line) => line.text).join("\n")).toContain(
       "POST /storage"
     )
   })
 
-  test("renders conversion and queue stages as completed, not stuck", () => {
-    const entry = baseEntry({ storage: { status: "running" } })
+  test("leaves the finished pipeline stages completed", () => {
     expect(stageById(entry, "converting").state).toBe("completed")
-    expect(stageById(entry, "queued").state).toBe("completed")
-    expect(stageById(entry, "upload").state).toBe("completed")
+    expect(stageById(entry, "validation").state).toBe("completed")
+    expect(stageById(entry, "download").state).toBe("completed")
   })
 })
 
 describe("stored outcome", () => {
-  const entry = baseEntry({ status: "ready", storage: STORED })
+  const entry = baseEntry({ storage: STORED })
 
   test("completes the stage", () => {
     expect(stageById(entry, "storage").state).toBe("completed")
@@ -85,21 +83,21 @@ describe("stored outcome", () => {
   })
 })
 
-describe("skipped outcome never blocks the local flow", () => {
+describe("failed publish never blocks the local flow", () => {
   const entry = baseEntry({
-    status: "ready",
     storage: {
       status: "skipped",
       reasons: ["Hub storage is not configured: set HF_STORAGE_REPO"],
     },
   })
 
-  test("marks the stage as a warning (not failed) with the reason", () => {
+  test("marks the stage as a warning (not failed) with the reason and a retry hint", () => {
     const stage = stageById(entry, "storage")
     expect(stage.state).toBe("warning")
     const text = stage.logs.map((line) => line.text).join("\n")
     expect(text).toContain("HF_STORAGE_REPO")
     expect(text).toContain("still downloadable")
+    expect(text).toContain("retry")
   })
 
   test("the run still derives as completed and downloadable", () => {
@@ -108,25 +106,25 @@ describe("skipped outcome never blocks the local flow", () => {
   })
 })
 
-describe("history entries from before Hub storage existed", () => {
-  test("get an honest warning instead of a pretend pass", () => {
+describe("entries the user has not published", () => {
+  test("stay pending with a hint at the manual action, not a warning", () => {
     const entry = baseEntry({ status: "success", storage: undefined })
     const stage = stageById(entry, "storage")
-    expect(stage.state).toBe("warning")
+    expect(stage.state).toBe("pending")
     expect(stage.logs.map((line) => line.text).join("\n")).toContain(
-      "No Hub publish recorded"
+      "Publish to Hugging Face"
     )
   })
 
-  test("stay pending while the pipeline has not reached publishing yet", () => {
+  test("stay pending and silent while the pipeline is still running", () => {
     const entry = baseEntry({ status: "converting", storage: undefined })
     expect(stageById(entry, "storage").state).toBe("pending")
     expect(stageById(entry, "storage").logs).toHaveLength(0)
   })
 })
 
-describe("regressions around the new stage", () => {
-  test("stage order places publishing between validation and download", () => {
+describe("regressions around the storage stage", () => {
+  test("stage order places the manual publish after download", () => {
     const ids = deriveStages(baseEntry()).map((stage) => stage.id)
     expect(ids).toEqual([
       "received",
@@ -135,8 +133,8 @@ describe("regressions around the new stage", () => {
       "queued",
       "converting",
       "validation",
-      "storage",
       "download",
+      "storage",
     ])
   })
 
@@ -152,9 +150,8 @@ describe("regressions around the new stage", () => {
     expect(stageById(entry, "storage").state).toBe("pending")
   })
 
-  test("an invalid corpus is still published (verdict does not gate storage)", () => {
+  test("an invalid corpus can still be published (verdict does not gate storage)", () => {
     const entry = baseEntry({
-      status: "ready",
       validation: { status: "invalid", reasons: ["stats mismatch"] },
       storage: STORED,
     })
