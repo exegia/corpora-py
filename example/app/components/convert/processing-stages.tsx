@@ -75,7 +75,7 @@ export function ProcessingStages({
             )}
             <Icon
               className={cn(
-                "relative z-10 mt-0.5 size-[18px] shrink-0 bg-inherit",
+                "relative z-10 mt-0.5 size-4.5 shrink-0 bg-inherit",
                 meta.className,
                 stage.state === "active" &&
                   "animate-spin motion-reduce:animate-none"

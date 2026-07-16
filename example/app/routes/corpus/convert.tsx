@@ -80,6 +80,8 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
       return [
         {
           text: `Conversion failed: ${entry.error ?? "unknown error"}`,
+
+          description: `${entry.error ?? "unknown error"}`,
           tone: "error",
         },
       ]
@@ -88,7 +90,8 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
         ...validationCaveat,
         ...storageLines,
         {
-          text: `Conversion complete — ${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
+          text: `Conversion complete`,
+          description: `${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
           tone: "success",
         },
       ]
@@ -97,7 +100,8 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
         ...validationCaveat,
         ...storageLines,
         {
-          text: `Conversion complete — ${entry.corpusName ?? "archive"} saved to disk.`,
+          text: `Conversion complete`,
+          description: `${entry.corpusName ?? "archive"} saved to disk.`,
           tone: "success",
         },
       ]
@@ -325,7 +329,7 @@ export default function CorpusConvert() {
           {view !== "empty" && entry && (
             <div className="animate-in duration-500 fade-in slide-in-from-bottom-3 motion-reduce:animate-none">
               <LogConsole
-                title="Console"
+                title="Logs"
                 header={<ProcessingStages stages={stages} />}
                 lines={completionLines}
                 status={STATUS_TEXT[entry.status]}

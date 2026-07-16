@@ -9,6 +9,7 @@ export type LogTone = "info" | "success" | "warning" | "error"
 
 export type LogLine = {
   text: string
+  description?: string
   tone: LogTone
 }
 
@@ -124,8 +125,10 @@ export function LogConsole({
       )}
       aria-label={title}
     >
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-2.5">
-        <span className="text-sm font-medium text-zinc-400">{title}</span>
+      <div className="flex items-center justify-between border-b border-neutral-300 bg-neutral-100 px-4 py-2.5 dark:border-neutral-700 dark:bg-neutral-800">
+        <span className="text-sm font-medium text-muted-foreground">
+          {title}
+        </span>
         <Button
           variant="ghost"
           size="icon"
@@ -175,14 +178,18 @@ export function LogConsole({
                   <span className="sr-only">
                     {line.tone !== "info" ? `${line.tone}: ` : ""}
                   </span>
-                  <span
+                  <div
                     className={cn(
                       "whitespace-pre-wrap",
                       TONE_TEXT_CLASSES[line.tone]
                     )}
                   >
-                    {line.text}
-                  </span>
+                    <span className="font-bold">{line.text}</span>
+                    <br />
+                    <span className="text-xs text-neutral-500">
+                      {line.description}
+                    </span>
+                  </div>
                 </p>
               ))}
             </div>

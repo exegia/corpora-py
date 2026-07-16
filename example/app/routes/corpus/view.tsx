@@ -141,6 +141,19 @@ export default function CorpusView() {
 
   return (
     <div className="flex w-full flex-col gap-4">
+      {/* Search uses Form method="get" so the query lives in the URL. */}
+      <Form method="get" className="w-full">
+        <label htmlFor="q" className="sr-only">{`Search ${id}`}</label>
+        <Input
+          aria-label="placeholder="
+          id="q"
+          name="q"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${id}…`}
+        />
+      </Form>
+
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-end justify-between gap-3">
