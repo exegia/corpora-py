@@ -97,12 +97,14 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # enforced function-size limit is 225 MB): .vercelignore is an ALLOWLIST of
 # build inputs (pyproject/uv.lock/src/packages/README/LICENSE), vercel.json's
 # functions.excludeFiles trims the bundle further, and the installCommand is
-# `uv sync --frozen --no-dev --no-editable` plus `--no-install-package` for
-# runtime-unreachable weight: the docling-core chain (docling-core, pandas,
-# python-dateutil, pillow — /ingest 503s on Vercel anyway; admin/__init__.py
-# and services/ingest_api.py import it lazily/guarded specifically so this
-# exclusion is safe) and REPL/serving extras (jedi, parso, uvloop,
-# watchfiles). Verified: 174 MB site-packages, app imports, full suite green.
+# `uv sync --frozen --no-dev --no-editable && uv pip uninstall <heavy pkgs>`
+# (uninstall, not --no-install-package flags: vercel.json caps installCommand
+# at 256 chars). Removed as runtime-unreachable weight: the docling-core
+# chain (docling-core, pandas, python-dateutil, pillow — /ingest 503s on
+# Vercel anyway; admin/__init__.py and services/ingest_api.py import it
+# lazily/guarded specifically so this is safe) and REPL/serving extras
+# (jedi, parso, uvloop, watchfiles). Verified: 145 MB site-packages, app
+# imports, full suite green.
 # Caveats on Vercel Functions: no WebSockets (/convert/{id}/ws — poll instead)
 # and the in-memory JobManager is per-instance; the container image (above)
 # remains the deployment for heavy/long-running conversion work.

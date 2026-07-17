@@ -6,24 +6,16 @@ name: Demo App - Docker Image
 # root scripts/ (see scripts/build_embedded_python.py and scripts/setup.py).
 # The dev container sets up a venv shim + DEV_PYTHON_BIN override on start.
 #
-# - Builds on changes under example/app/ or the Python source
-# - Uses cache for fast rebuilds
-# - Pushes to GHCR when on dev / main (or manually via workflow_dispatch)
+# MANUAL-ONLY until example/Dockerfile is rewritten: the Dockerfile is a
+# stale npm/react-router template from before the example-app restructure —
+# it COPYs a `corpora/` directory that no longer exists and runs `npm ci`
+# against a package-lock.json that isn't there (the example app is a
+# bun/ElectroBun project with bun.lock). Every push/PR-triggered run failed
+# on that for months, so the automatic triggers are disabled rather than
+# left red; re-add push/pull_request triggers once the Dockerfile actually
+# builds.
 
 on:
-  push:
-    branches: [ dev, next, main ]
-    paths:
-      - "example/app/**"
-      - "src/corpora-py/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/example-app-docker.yml"
-  pull_request:
-    paths:
-      - "example/app/**"
-      - "src/corpora-py/**"
-      - "pyproject.toml"
   workflow_dispatch:
     inputs:
       push:
