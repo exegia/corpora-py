@@ -1,0 +1,23 @@
+# BuildKit per-Dockerfile ignore for example/Dockerfile (build context = repo
+# root, so paths are relative to the repo root).
+.git
+.github
+.claude
+docs
+dist
+build
+dockerfiles
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+example/node_modules
+example/dist
+example/build
+example/.react-router
+example/Dockerfile
+example/Dockerfile.dockerignore
+*.corpus
+.env*
