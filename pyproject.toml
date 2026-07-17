@@ -27,6 +27,11 @@ dependencies = [
     "uvicorn[standard]>=0.49.0",
 ]
 
+[project.optional-dependencies]
+# Full Docling converter for /ingest (admin.ingest) — heavy (torch). Enable
+# with `uv sync --extra docling` in dev, or install `corpora-py[docling]`.
+docling = ["corpora-admin[docling]"]
+
 [project.scripts]
 # Re-exported from corpora-mcp for convenience
 cf-mcp = "corpora_mcp.server:main"

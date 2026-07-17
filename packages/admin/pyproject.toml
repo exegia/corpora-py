@@ -18,7 +18,19 @@ dependencies = [
     "context-fabric>=0.5.7",
     "pyyaml>=6.0.3",
     "huggingface-hub>=1.0",
+    # Docling data model (lightweight) + Context Fabric schema validation
+    # for admin.ingest -- the heavy Docling converter itself is the
+    # [docling] extra below.
+    "docling-core>=2.30",
+    "jsonschema>=4.25",
+    "referencing>=0.36",
 ]
+
+[project.optional-dependencies]
+# The full Docling converter (layout models, OCR, table structure -- pulls
+# torch). Needed at runtime by `admin.ingest.parse_file` / `POST /ingest`;
+# everything else in admin.ingest works with docling-core alone.
+docling = ["docling>=2.0"]
 
 [tool.uv.sources]
 # Resolve corpora-shared-py from the local workspace during development

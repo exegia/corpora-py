@@ -81,6 +81,35 @@ printf '%s' "$VERCEL_OIDC_TOKEN" | docker login vcr.vercel.com --username oidc -
 docker buildx build --platform linux/amd64,linux/arm64 \
   --output "type=image,name=vcr.vercel.com/team-slug/project-slug/corpora-py:latest,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" .
 # Without buildx (no zstd): docker build -t vcr.vercel.com/.../corpora-py:latest . && docker push vcr.vercel.com/.../corpora-py:latest
+
+# ── Deploy to Vercel (Python runtime / Vercel Functions) ─────────────────────
+# Automatic deploys: Vercel's Git integration (repo linked to the
+# corpora-apps/corpora-py project) — every push → preview, production branch →
+# production. No repo secrets needed. Do NOT set a Build Command in the Vercel
+# dashboard: vercel.json pins "buildCommand": "" because the dashboard's old
+# `make build-wheel` broke every deploy (the makefile is deliberately not
+# uploaded — see .vercelignore).
+# Manual redeploys: .github/workflows/vercel.yml (workflow_dispatch only, with
+# a preview/production picker) — needs repo secrets VERCEL_TOKEN /
+# VERCEL_ORG_ID / VERCEL_PROJECT_ID (from `vercel link`).
+# Entrypoint: [tool.vercel] entrypoint in pyproject.toml → src/corpora_py/app.py.
+# Bundle hygiene (Python functions have no tree-shaking; this project's
+# enforced function-size limit is 225 MB): .vercelignore is an ALLOWLIST of
+# build inputs (pyproject/uv.lock/src/packages/README/LICENSE), vercel.json's
+# functions.excludeFiles trims the bundle further, and the installCommand is
+# `uv sync --frozen --no-dev --no-editable && uv pip uninstall <heavy pkgs>`
+# (uninstall, not --no-install-package flags: vercel.json caps installCommand
+# at 256 chars). Removed as runtime-unreachable weight: the docling-core
+# chain (docling-core, pandas, python-dateutil, pillow — /ingest 503s on
+# Vercel anyway; admin/__init__.py and services/ingest_api.py import it
+# lazily/guarded specifically so this is safe) and REPL/serving extras
+# (jedi, parso, uvloop, watchfiles). Verified: 145 MB site-packages, app
+# imports, full suite green.
+# Caveats on Vercel Functions: no WebSockets (/convert/{id}/ws — poll instead)
+# and the in-memory JobManager is per-instance; the container image (above)
+# remains the deployment for heavy/long-running conversion work.
+vercel deploy          # manual preview deploy from a linked checkout
+vercel deploy --prod   # manual production deploy
 ```
 
 ## Architecture
@@ -112,6 +141,8 @@ Code is organized into decoupled workspace packages under `packages/`:
   itself depends on; `import mcp` inside this workspace will resolve to the SDK, not this package.
 - `packages/admin/src/admin/` — admin / full-feature tooling: `parsers/` (source format → shared `Document`/`Unit`
   schema), `converters/` (schema → Text-Fabric → `.cfm` → `.corpus`),
+  `ingest/` (Docling → Context Fabric v1 canonical graph — a second pipeline, separate from `Unit`; heavy converter
+  behind the `[docling]` extra),
   `services/` (FastAPI router + WebSocket + background job manager exposing conversion over HTTP — see
   `packages/admin/CLAUDE.md`).
 - `src/corpora_py/` — umbrella package. `app.py` builds the combined FastAPI app that mounts the MCP server at `/mcp`

@@ -7,28 +7,16 @@ name: Demo App - Docker Image
 # (example/bun/python-bridge.ts) uses that venv — no frozen/embedded Python
 # runtime is bundled (that bundling belongs to the build-sidecar workflow).
 #
-# - Builds on changes under example/ or the Python source
-# - Uses cache for fast rebuilds
-# - Pushes to GHCR when on dev / next / main (or manually via workflow_dispatch)
+# MANUAL-ONLY until example/Dockerfile is rewritten: the Dockerfile is a
+# stale npm/react-router template from before the example-app restructure —
+# it COPYs a `corpora/` directory that no longer exists and runs `npm ci`
+# against a package-lock.json that isn't there (the example app is a
+# bun/ElectroBun project with bun.lock). Every push/PR-triggered run failed
+# on that for months, so the automatic triggers are disabled rather than
+# left red; re-add push/pull_request triggers once the Dockerfile actually
+# builds.
 
 on:
-  push:
-    branches: [ dev, next, main ]
-    paths:
-      - "example/**"
-      - "packages/**"
-      - "src/corpora_py/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/demo-app-docker.yml"
-  pull_request:
-    paths:
-      - "example/**"
-      - "packages/**"
-      - "src/corpora_py/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/demo-app-docker.yml"
   workflow_dispatch:
     inputs:
       push:
@@ -79,8 +67,11 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
+          # The example app's Dockerfile lives at example/Dockerfile (the old
+          # example/docker/ path predates a restructure and broke every run).
           file: example/Dockerfile
-          push: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+          push: |
+            ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.push == 'true') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

@@ -2,6 +2,7 @@
 
 import pytest
 from admin.services import api as api_module
+from admin.services import ingest_api as ingest_module
 from admin.services import websocket as ws_module
 from admin.services.jobs import JobManager
 from fastapi import FastAPI
@@ -46,6 +47,7 @@ def manager(monkeypatch):
     mgr._executor = DeferredExecutor()
     monkeypatch.setattr(api_module, "job_manager", mgr)
     monkeypatch.setattr(ws_module, "job_manager", mgr)
+    monkeypatch.setattr(ingest_module, "job_manager", mgr)
     return mgr
 
 
@@ -58,8 +60,13 @@ def claims_holder():
 def client(manager, claims_holder, tmp_path, monkeypatch):
     monkeypatch.setattr(api_module, "_WORK_ROOT", tmp_path / "work")
     monkeypatch.setattr(api_module, "_RESULTS_ROOT", tmp_path / "results")
+    # ingest_api binds the same roots by `from .api import ...`, so its module
+    # globals need patching separately from api_module's.
+    monkeypatch.setattr(ingest_module, "_WORK_ROOT", tmp_path / "work")
+    monkeypatch.setattr(ingest_module, "_RESULTS_ROOT", tmp_path / "results")
     app = FastAPI()
     app.include_router(api_module.router)
     app.include_router(ws_module.router)
+    app.include_router(ingest_module.router)
     app.add_middleware(ClaimsMiddleware, claims_holder=claims_holder)
     return TestClient(app)

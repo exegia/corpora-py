@@ -1,4 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "uv sync --active"
+  "installCommand": "uv sync --active --frozen --no-dev --no-editable && uv pip uninstall docling-core pandas python-dateutil pillow jedi parso uvloop watchfiles",
+  "buildCommand": "echo 'No build step: Python runtime bundles after uv sync (overrides the dashboard make build-wheel)'",
+  "functions": {
+    "src/corpora_py/app.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{tests/**,docs/**,example/**,dockerfiles/**,bin/**,scripts/**,daily/**,dist/**,.github/**,**/CLAUDE.md,**/*.md,**/__pycache__/**,**/*.pyc,uv.lock,makefile,skills-lock.json,LICENSE,SECURITY.md}"
+    }
+  }
 }

@@ -16,6 +16,12 @@ Layout:
                    watch a WebSocket for status, download the `.corpus`
                    result. See `admin/services/api.py` for why conversion is
                    job-based rather than synchronous.
+    /ingest/*   -- Docling ingestion (`admin.services.ingest_api`): upload a
+                   document (PDF/DOCX/PPTX/HTML/...), extract it to the
+                   Context Fabric v1 canonical graph, download the
+                   schema-validated `graph.json`. Same job-based pattern as
+                   /convert; 503s unless the `corpora-admin[docling]` extra
+                   is installed.
     /validate   -- corpus validation (`admin.services.validation_api`): confirm a
                    dataset round-trips the `.tf -> .cfm -> mmap` cycle. Shares
                    the validation logic with the `validate_corpus` MCP tool.
@@ -71,6 +77,7 @@ from contextlib import asynccontextmanager
 from admin.services.api import router as conversion_router
 from admin.services.corpus_detail_api import router as corpus_detail_router
 from admin.services.corpus_detail_mcp import register_corpus_detail_tools
+from admin.services.ingest_api import router as ingest_router
 from admin.services.jobs import job_manager
 from admin.services.storage_api import router as storage_router
 from admin.services.storage_mcp import register_storage_tools
@@ -130,6 +137,7 @@ app.add_middleware(
 app.mount("/mcp", _mcp_app)
 app.include_router(conversion_router)
 app.include_router(conversion_ws_router)
+app.include_router(ingest_router)
 app.include_router(validation_router)
 app.include_router(storage_router)
 app.include_router(corpus_detail_router)
