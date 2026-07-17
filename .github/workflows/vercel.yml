@@ -1,0 +1,131 @@
+name: Vercel
+
+# Deploys the combined FastAPI app (corpora_py.app, entrypoint declared via
+# [tool.vercel] in pyproject.toml) to Vercel's Python runtime (Fluid compute).
+#
+#   - Push to dev  → preview deployment
+#   - Push to main → production deployment
+#   - workflow_dispatch → manual run with a target picker
+#
+# The build runs remotely on Vercel (`vercel deploy`, no --prebuilt): the
+# Python builder needs uv + the project's Python toolchain, which Vercel's
+# build image provides — the runner only uploads sources. What gets uploaded
+# is allowlisted by .vercelignore, and the function bundle is trimmed further
+# by functions.excludeFiles in vercel.json, per
+# https://vercel.com/docs/functions/runtimes/python#controlling-what-gets-bundled
+#
+# Deliberately NOT installed on Vercel: dev dependencies and the [docling]
+# extra (installCommand pins `uv sync --frozen --no-dev`); torch alone would
+# blow the 500 MB Python bundle limit. POST /ingest degrades to 503 there by
+# design — heavy Docling ingestion belongs on the container deployment
+# (dockerfiles/, GHCR/VCR targets in the makefile).
+#
+# Known serverless caveats (fine for the sidecar's API surface, listed so
+# nobody debugs them as regressions): /convert/{id}/ws WebSockets are not
+# supported by Vercel Functions (poll GET /convert/{id} instead), and the
+# in-memory JobManager assumes one process — Fluid compute reuses instances
+# but does not guarantee a poll lands on the instance that owns the job.
+#
+# Required repo secrets (from `vercel link` → .vercel/project.json, plus an
+# account/team token): VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - "packages/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "vercel.json"
+      - ".vercelignore"
+      - ".python-version"
+      - ".github/workflows/vercel.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy target"
+        required: true
+        type: choice
+        options: [preview, production]
+        default: preview
+
+permissions:
+  contents: read
+
+# One deploy per ref at a time; a newer push supersedes an in-flight deploy.
+concurrency:
+  group: vercel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Fail fast on missing secrets
+        run: |
+          missing=""
+          [ -z "${{ secrets.VERCEL_TOKEN }}" ] && missing="$missing VERCEL_TOKEN"
+          [ -z "$VERCEL_ORG_ID" ] && missing="$missing VERCEL_ORG_ID"
+          [ -z "$VERCEL_PROJECT_ID" ] && missing="$missing VERCEL_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo secret(s):$missing — create them from 'vercel link' output and a Vercel token."
+            exit 1
+          fi
+
+      - name: Determine target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            target="${{ inputs.target }}"
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            target="production"
+          else
+            target="preview"
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "Deploy target: $target"
+
+      # Pinned to the major the Python/FastAPI preset requires (>= 48.1.8);
+      # `vercel@latest` can break CI unexpectedly.
+      - name: Install Vercel CLI
+        run: npm install -g vercel@48
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=${{ steps.target.outputs.target }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        run: |
+          if [ "${{ steps.target.outputs.target }}" = "production" ]; then
+            url=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }})
+          else
+            url=$(vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }})
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Deploy Result"
+            echo "- **URL**: $url"
+            echo "- **Target**: ${{ steps.target.outputs.target }}"
+            echo "- **Commit**: ${GITHUB_SHA::7}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke-check /health
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          # Preview deployments may sit behind Deployment Protection (401 with
+          # a Vercel SSO page) — treat that as reachable, not a failure.
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$url/health")
+          echo "GET $url/health → $code"
+          case "$code" in
+            200|401) exit 0 ;;
+            *) echo "::error::Unexpected status $code from $url/health"; exit 1 ;;
+          esac
