@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/relationship.schema.json",
+  "title": "Relationship",
+  "description": "A typed directed edge between any two Context Fabric entities: edition supersedes edition, edition translation-of edition, node aligned-with node (versification mapping), node cites work, annotation derived-from asset.",
+  "allOf": [{ "$ref": "#/$defs/Relationship" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "Relationship": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*(:[a-z][a-z0-9_-]*)?$",
+          "description": "Well-known kinds: 'supersedes', 'translation-of', 'aligned-with', 'cites', 'derived-from', 'cross-reference'. Custom kinds must be namespaced ('myapp:parallel-passage')."
+        },
+        "from": { "$ref": "common.defs.schema.json#/$defs/EntityRef" },
+        "to": { "$ref": "common.defs.schema.json#/$defs/EntityRef" },
+        "confidence": { "$ref": "common.defs.schema.json#/$defs/Confidence" },
+        "note": { "type": "string" },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "kind", "from", "to"]
+    }
+  }
+}

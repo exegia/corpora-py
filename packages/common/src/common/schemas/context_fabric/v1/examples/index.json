@@ -1,0 +1,11 @@
+{
+  "$comment": "Maps each example payload to the schema $ref it must validate against. tests/common/test_context_fabric_schemas.py enforces this and rejects fixture files not listed here.",
+  "examples": {
+    "scripture-node.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
+    "book-chapter.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
+    "letter-page.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
+    "academic-paper.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
+    "speech.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
+    "transcript.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/RangeResponse"
+  }
+}

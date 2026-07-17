@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/content-node.schema.json",
+  "title": "ContentNode",
+  "description": "One addressable typed node in an Edition's ordered hierarchy: a book, chapter, verse, surah, page-independent paragraph, table, figure, utterance… Hierarchy depth is unconstrained. Text lives in TextFragments, never on the node itself; non-text-bearing nodes simply have no fragments.",
+  "allOf": [{ "$ref": "#/$defs/ContentNode" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "ContentNode": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "editionId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "parentId": {
+          "anyOf": [{ "$ref": "common.defs.schema.json#/$defs/Id" }, { "type": "null" }],
+          "description": "null only for the edition's single root node."
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based position among siblings; defines document order together with the ancestor chain."
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 for the root. Derivable; included for cheap client rendering."
+        },
+        "category": { "$ref": "common.defs.schema.json#/$defs/NodeCategory" },
+        "type": { "$ref": "common.defs.schema.json#/$defs/NamespacedType" },
+        "code": {
+          "$ref": "common.defs.schema.json#/$defs/Code",
+          "description": "Stable canonical code when this node is a code-addressed reference level (e.g. 'JHN'). Language-independent."
+        },
+        "refOrdinal": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based canonical number when this node is an ordinal-addressed reference level (chapter 3, verse 16, page 2). Independent of 'ordinal': canonical numbering may skip or repeat positions."
+        },
+        "label": {
+          "type": "string",
+          "description": "Display label ('John', '3', 'Chapter IV', 'Interviewer'). NEVER used for reference resolution."
+        },
+        "heading": {
+          "type": "string",
+          "description": "Heading text associated with the node (e.g. a section title), when not modeled as a child heading node."
+        },
+        "language": {
+          "$ref": "common.defs.schema.json#/$defs/LangTag",
+          "description": "Override of the edition language for this subtree."
+        },
+        "script": { "$ref": "common.defs.schema.json#/$defs/ScriptCode" },
+        "childCount": { "type": "integer", "minimum": 0 },
+        "sourceLocalId": {
+          "type": "string",
+          "description": "The node's id in the source document (EPUB anchor, TEI xml:id, parser Unit.id). Not globally unique."
+        },
+        "locators": {
+          "type": "array",
+          "items": { "$ref": "physical-locator.schema.json#/$defs/PhysicalLocator" },
+          "description": "Physical location(s) of the whole node. A node spanning pages carries one locator per page region; fragment-level locators are preferred when finer granularity exists."
+        },
+        "provenance": { "$ref": "common.defs.schema.json#/$defs/Provenance" },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "editionId", "ordinal", "category", "type"]
+    }
+  }
+}

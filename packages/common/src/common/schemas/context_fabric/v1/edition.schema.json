@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/edition.schema.json",
+  "title": "Edition",
+  "description": "A concrete realization of a Work in one language/script/versification: KJV of John, Hafs recension of the Quran, the 1994 critical edition of a letter. All ContentNodes belong to exactly one Edition. Re-parses produce a NEW Edition revision linked via Relationship(kind: supersedes) — node ids are never mutated.",
+  "allOf": [{ "$ref": "#/$defs/Edition" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "StructureLevel": {
+      "type": "object",
+      "description": "One level of the edition's canonical reference hierarchy, outermost first.",
+      "properties": {
+        "levelType": { "$ref": "common.defs.schema.json#/$defs/NamespacedType" },
+        "label": { "type": "string", "description": "Display name for the level ('Chapter', 'Surah', 'Page')." },
+        "addressedBy": {
+          "type": "string",
+          "enum": ["code", "ordinal"],
+          "default": "ordinal",
+          "description": "Whether references address this level by stable code (e.g. book 'JHN') or by 1-based canonical ordinal (e.g. chapter 3)."
+        }
+      },
+      "required": ["levelType"],
+      "additionalProperties": false
+    },
+    "Edition": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "workId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "slug": { "$ref": "common.defs.schema.json#/$defs/Slug" },
+        "title": { "type": "string", "minLength": 1 },
+        "language": { "$ref": "common.defs.schema.json#/$defs/LangTag" },
+        "script": { "$ref": "common.defs.schema.json#/$defs/ScriptCode" },
+        "isTranslation": { "type": "boolean", "default": false },
+        "publisher": { "type": "string" },
+        "date": { "type": "string", "description": "Publication date, free-form." },
+        "rights": { "type": "string" },
+        "version": {
+          "$ref": "common.defs.schema.json#/$defs/SemVer",
+          "description": "Revision of THIS edition's converted content (bumped on re-parse), unrelated to schemaVersion."
+        },
+        "supersedesEditionId": {
+          "$ref": "common.defs.schema.json#/$defs/Id",
+          "description": "Convenience mirror of the Relationship(kind: supersedes) edge to the prior revision."
+        },
+        "refScheme": {
+          "$ref": "common.defs.schema.json#/$defs/Slug",
+          "description": "Canonical reference scheme; overrides Work.refScheme."
+        },
+        "structureProfile": {
+          "type": "object",
+          "description": "The declared reference hierarchy of this edition. Only node types listed here participate in canonical references; all other node types are ordinary structure.",
+          "properties": {
+            "levels": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/StructureLevel" },
+              "minItems": 1
+            }
+          },
+          "required": ["levels"],
+          "additionalProperties": false
+        },
+        "sourceAssetIds": {
+          "type": "array",
+          "items": { "$ref": "common.defs.schema.json#/$defs/Id" }
+        },
+        "provenance": { "$ref": "common.defs.schema.json#/$defs/Provenance" },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "workId", "slug", "title", "language"]
+    }
+  }
+}
