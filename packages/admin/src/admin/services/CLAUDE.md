@@ -11,9 +11,13 @@ router from `admin.services/__init__.py`, then import + mount it in `corpora_py.
 ## Hub storage (`storage*.py`)
 
 `storage.py` wraps `huggingface_hub.HfApi` to list/inspect/upload/download/delete finished `.corpus`
-archives in one Hub repo (`HF_STORAGE_REPO`, dataset type by default; `HF_TOKEN` for auth — both in
-`common.utils.config.Settings`). An unconfigured repo raises `StorageNotConfiguredError` per call (→ HTTP 503), never at
-import time. Two surfaces share it: `storage_api.py` (REST `/storage`, job-first uploads with the same job-visibility
+archives in one Hub location (`HF_STORAGE_REPO`; `HF_TOKEN` for auth — both in
+`common.utils.config.Settings`). `HF_STORAGE_REPO_TYPE` picks the backend: a **bucket** (Xet object
+storage, `hf://buckets/<owner>/<name>/...`, the default — a `.corpus` archive is opaque, not a
+browsable dataset) or a classic repo (`model`/`dataset`/`space`). `CorpusStorage` routes every
+operation to the matching `huggingface_hub` API (`*_bucket_*` vs `*_repo_*`/`upload_file`) and
+presents the same `StoredCorpus` regardless, so both surfaces below are backend-agnostic. An
+unconfigured location raises `StorageNotConfiguredError` per call (→ HTTP 503), never at import time. Two surfaces share it: `storage_api.py` (REST `/storage`, job-first uploads with the same job-visibility
 404 rule as `/convert/{id}`) and `storage_mcp.py`
 (`storage_*` MCP tools). **`storage_mcp.py` imports `fastmcp`, which is not a `corpora-admin`
 dependency** — it is deliberately excluded from `admin.services.__init__` and only imported by

@@ -34,15 +34,22 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str = "authenticated"
 
     # Hugging Face Hub storage for converted .corpus archives (see
-    # admin.services.storage). All archives live in the single Hub repo named
-    # by hf_storage_repo (e.g. "exegia/corpora-archives"); leaving it unset
-    # keeps the /storage surface importable but every call fails with a clear
-    # "not configured" error rather than a crash at import time. hf_token may
-    # stay None -- huggingface_hub then falls back to the HF_TOKEN env var or
-    # a cached `hf auth login` token.
+    # admin.services.storage). All archives live in the single Hub location
+    # named by hf_storage_repo (e.g. "exegia/corpora-archives"); leaving it
+    # unset keeps the /storage surface importable but every call fails with a
+    # clear "not configured" error rather than a crash at import time. hf_token
+    # may stay None -- huggingface_hub then falls back to the HF_TOKEN env var
+    # or a cached `hf auth login` token.
+    #
+    # hf_storage_repo_type selects the backing Hub primitive: a classic repo
+    # ("model"/"dataset"/"space") or a "bucket" (Xet-backed object storage,
+    # addressed as hf://buckets/<owner>/<name>/...). Buckets are the default:
+    # a converted corpus is an opaque .corpus archive, not a browsable dataset,
+    # so bucket object storage fits it better than a dataset repo. CorpusStorage
+    # routes every operation to the matching huggingface_hub API for the type.
     hf_token: str | None = os.getenv("HF_TOKEN")
     hf_storage_repo: str | None = os.getenv("HF_STORAGE_REPO")
-    hf_storage_repo_type: Literal["model", "dataset", "space"] = "dataset"
+    hf_storage_repo_type: Literal["model", "dataset", "space", "bucket"] = "bucket"
     hf_storage_private: bool = True
 
     PROJECT_NAME: ClassVar[str] = "Corpora API"
