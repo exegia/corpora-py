@@ -5,6 +5,6 @@ and other heavy or privileged operations. These typically require the
 [full] extra (text-fabric) and are not needed in the slim client runtime.
 """
 
-from . import converters, parsers, services
+from . import converters, ingest, parsers, services
 
-__all__ = ["converters", "parsers", "services"]
+__all__ = ["converters", "ingest", "parsers", "services"]

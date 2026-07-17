@@ -112,6 +112,8 @@ Code is organized into decoupled workspace packages under `packages/`:
   itself depends on; `import mcp` inside this workspace will resolve to the SDK, not this package.
 - `packages/admin/src/admin/` — admin / full-feature tooling: `parsers/` (source format → shared `Document`/`Unit`
   schema), `converters/` (schema → Text-Fabric → `.cfm` → `.corpus`),
+  `ingest/` (Docling → Context Fabric v1 canonical graph — a second pipeline, separate from `Unit`; heavy converter
+  behind the `[docling]` extra),
   `services/` (FastAPI router + WebSocket + background job manager exposing conversion over HTTP — see
   `packages/admin/CLAUDE.md`).
 - `src/corpora_py/` — umbrella package. `app.py` builds the combined FastAPI app that mounts the MCP server at `/mcp`

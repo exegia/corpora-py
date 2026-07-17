@@ -63,7 +63,10 @@ class JobQueueFullError(Exception):
 @dataclass
 class ConversionJob:
     id: str
-    source_format: SourceFormat
+    # A `SourceFormat` for /convert jobs; a bare string (the detected file
+    # suffix, e.g. "docx") for /ingest jobs, whose Docling pipeline accepts
+    # formats the parser enum doesn't enumerate.
+    source_format: SourceFormat | str
     name: str
     status: JobStatus = JobStatus.QUEUED
     created_at: float = field(default_factory=time.time)
@@ -87,7 +90,9 @@ class ConversionJob:
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
-            "source_format": self.source_format.value,
+            "source_format": self.source_format.value
+            if isinstance(self.source_format, SourceFormat)
+            else self.source_format,
             "name": self.name,
             "status": self.status.value,
             "created_at": self.created_at,
@@ -168,7 +173,7 @@ class JobManager:
     def submit(
         self,
         *,
-        source_format: SourceFormat,
+        source_format: SourceFormat | str,
         name: str,
         fn: Callable[[], Path],
         owner: str | None = None,

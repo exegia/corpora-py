@@ -42,6 +42,10 @@ packages/admin/
       schema.py               # the shared schema + Parser ABC (read this first)
       _epub.py, _html.py, _xml.py, _tei.py, _pdf.py, _plain.py
       __init__.py              # PARSERS: dict[SourceFormat, Parser]
+    ingest/                   # Docling -> Context Fabric v1 canonical graph (NOT the Unit pipeline)
+      docling_graph.py          # DoclingDocument -> Corpus/Work/Edition/SourceAsset + nodes/fragments
+      validation.py             # validates emitted graphs against the schemas shipped in corpora-common
+      _ids.py                   # UUIDv7 minting (stdlib uuid7 arrives in 3.14; we support 3.13)
     converters/               # Document/Unit tree -> Text-Fabric -> .cfm -> .corpus  (see converters/CLAUDE.md)
       _walker.py                # shared TF-walking logic (read this second)
       _epub_to_tf.py, _html_to_tf.py, _tei_to_tf.py, _pdf_to_tf.py, _text_to_tf.py
@@ -50,6 +54,7 @@ packages/admin/
       __init__.py               # CONVERTERS: dict[SourceFormat, converter fn]
     services/                 # HTTP surface over the pipeline above (FastAPI routers)  (see services/CLAUDE.md)
       api.py                    # POST/GET /convert (upload, poll, download)
+      ingest_api.py             # POST/GET /ingest (Docling -> canonical graph.json; needs [docling] extra)
       websocket.py              # /convert/{id}/ws (status push)
       validation_api.py         # POST /validate (corpus integrity checks)
       storage.py                # CorpusStorage: .corpus archives on the Hugging Face Hub
@@ -105,3 +110,14 @@ what downstream consumers query against.
 
 The Text-Fabric / Context-Fabric mechanics of that walk, and the `.corpus` archive it produces, are documented in
 **`src/admin/converters/CLAUDE.md`**.
+
+**`admin.ingest` is a second, separate pipeline — do not reduce it to `Unit`/`Token`.** It parses uploaded documents
+with [Docling](https://www.docling.ai) and emits the **Context Fabric v1 canonical graph** (the JSON Schemas shipped in
+`corpora-common` under `common/schemas/context_fabric/v1/`; spec in `docs/architecture/context-fabric/`) — ContentNode
+trees, TextFragments, and PhysicalLocators carrying Docling's page/bbox provenance, which the `Unit` schema has no
+place for. The mapping (`extract_graph`) depends only on `docling-core` (lightweight pydantic models, a regular dep)
+and is fully unit-tested without models; the heavy converter (`parse_file`, torch-based layout/OCR models) is the
+optional `corpora-admin[docling]` extra, imported lazily. Emitted graphs are validated against the shipped schemas at
+conversion time (`ingest/validation.py`) — keep that invariant when extending the mapper. The per-label mapping table
+is registered as the `docling` profile in `docs/architecture/context-fabric/02-node-taxonomy.md` §5; update both
+together.

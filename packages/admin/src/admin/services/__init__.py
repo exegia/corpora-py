@@ -13,6 +13,12 @@ storage of finished `.corpus` archives; `storage_api` (REST `/storage...`) and
 stored `.corpus` archive) adds a detail surface over `storage`; `corpus_detail_api`
 exposes it as REST under `/storage/{filename}/...`.
 
+`ingest_api` exposes `POST/GET /ingest...` — Docling-based extraction of an
+uploaded document into the Context Fabric v1 canonical graph
+(`admin.ingest`), the fire-and-poll sibling of `/convert` for the
+canonical-graph pipeline. It 503s unless the `corpora-admin[docling]` extra
+is installed.
+
 `storage_mcp` and `corpus_detail_mcp` are deliberately NOT imported here: they
 import `fastmcp`, which is a dependency of `corpora-mcp`/the umbrella app, not of
 `corpora-admin` itself -- eagerly importing them would make bare `import admin`
@@ -23,6 +29,7 @@ from . import (
     api,
     corpus_detail,
     corpus_detail_api,
+    ingest_api,
     jobs,
     storage,
     storage_api,
@@ -34,6 +41,7 @@ __all__ = [
     "api",
     "corpus_detail",
     "corpus_detail_api",
+    "ingest_api",
     "jobs",
     "storage",
     "storage_api",

@@ -196,6 +196,34 @@ Today's converters (`packages/admin/src/admin/converters/`) map parser `Unit.typ
 | `book` (root) | `generic:book` | `root` | |
 | `paragraph` | `generic:paragraph` | `block` | Blank-line-separated paragraphs |
 
+### `docling` (`admin.ingest.docling_graph` — emits the canonical graph directly, no TF otype step)
+
+The first phase-2 producer ([07-migration-mapping.md](07-migration-mapping.md) §4): Docling parses
+PDF/DOCX/PPTX/XLSX/HTML/Markdown/images into a `DoclingDocument`, and `admin.ingest` maps its item
+labels straight to canonical nodes. Raw Docling labels, self-refs, list markers, and heading levels
+survive in `ext["src/docling"]`; Docling page/bbox provenance lands as `PhysicalLocator`s
+(`pageIndex` 0-based, bbox normalized to top-left-origin points) — pages are locators, never nodes.
+
+| Docling item label | Canonical type | Category | Notes |
+|---|---|---|---|
+| (document root) | `generic:document` | `root` | |
+| `title` | `generic:title` | `heading` | Also becomes the Work/Edition title |
+| `section_header` | `generic:section` + `generic:heading` | `section` + `heading` | Headers **fold** into nesting `generic:section` containers by their level; the header text survives as a child heading node |
+| `text` / `paragraph` / `handwritten_text` | `generic:paragraph` | `block` | Ordinal-addressed reference level (`monograph` scheme) |
+| `list_item` | `generic:list-item` | `block` | Marker/enumerated in `ext` |
+| list / ordered-list groups | `generic:list` | `list` | |
+| inline groups | `generic:inline` | `inline` | |
+| chapter / section / sheet / slide groups | `generic:chapter` / `generic:section` / `generic:sheet` / `generic:slide` | `division`/`section` | Sheets/slides are ordinal reference levels when present |
+| `table` / `document_index` | `generic:table` / `generic:index` | `table` | Grid preserved as `generic:table-row` → `generic:table-cell` child nodes (cell text stays searchable) |
+| `picture` / `chart` | `generic:figure` / `generic:chart` | `figure` | Captions become child `generic:caption` nodes |
+| `caption` | `generic:caption` | `block` | |
+| `footnote` | `generic:footnote` | `note` | |
+| `code` / `formula` | `generic:code` / `generic:formula` | `block` | Code language in `ext` |
+| `reference` | `generic:reference` | `block` | Bibliography entries |
+| `page_header` / `page_footer` | `generic:page-header` / `generic:page-footer` | `note` | Furniture layer; skipped unless requested |
+| `checkbox_*` | `generic:checkbox` | `block` | |
+| anything else | `generic:element` / `generic:group` | `block`/`division` | Raw label always in `ext["src/docling"]` |
+
 ## 6. Unknown-type behavior
 
 The open `type` axis only works if unknown values are harmless everywhere:

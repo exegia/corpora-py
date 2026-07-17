@@ -68,6 +68,20 @@ can't resolve them and only the string match guarantees the index → content ro
 similarly special-cases the single-level case (paginate the finest slot-bearing type, not the lone root section). Keep
 this in sync with `corpora_mcp.server`'s ref parsing, which it was adapted from.
 
+## Docling ingestion (`ingest_api.py`)
+
+`POST /ingest` is the fire-and-poll sibling of `POST /convert` for the **canonical-graph pipeline**
+(`admin.ingest`, see `packages/admin/CLAUDE.md`): upload a document (PDF/DOCX/PPTX/HTML/MD/images —
+Docling auto-detects, no `source_format` field), a `JobManager` worker runs Docling + the graph
+mapper, and `GET /ingest/{id}/download` serves the schema-validated `graph.json`. It shares
+`api.py`'s `_WORK_ROOT`/`_RESULTS_ROOT`/`_save_upload` and the same job-visibility 404 rule, and
+503s when the `corpora-admin[docling]` extra isn't installed (checked up front, not mid-job).
+`ConversionJob.source_format` is `SourceFormat | str` because ingest jobs record the detected file
+suffix (e.g. `"docx"`) — formats the parser enum doesn't enumerate. The shared Docling
+`DocumentConverter` is held behind a lock in `admin.ingest.docling_graph` (model warm-up is
+expensive; concurrent `convert()` is not documented as safe), so parallel ingest jobs serialize on
+the parse step.
+
 ## Known gaps (service-side)
 
 **TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no
