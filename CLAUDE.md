@@ -83,9 +83,15 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # Without buildx (no zstd): docker build -t vcr.vercel.com/.../corpora-py:latest . && docker push vcr.vercel.com/.../corpora-py:latest
 
 # ── Deploy to Vercel (Python runtime / Vercel Functions) ─────────────────────
-# CI: .github/workflows/vercel.yml — push to dev → preview, push to main →
-# production, or workflow_dispatch with a target picker. Needs repo secrets
-# VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID (from `vercel link`).
+# Automatic deploys: Vercel's Git integration (repo linked to the
+# corpora-apps/corpora-py project) — every push → preview, production branch →
+# production. No repo secrets needed. Do NOT set a Build Command in the Vercel
+# dashboard: vercel.json pins "buildCommand": "" because the dashboard's old
+# `make build-wheel` broke every deploy (the makefile is deliberately not
+# uploaded — see .vercelignore).
+# Manual redeploys: .github/workflows/vercel.yml (workflow_dispatch only, with
+# a preview/production picker) — needs repo secrets VERCEL_TOKEN /
+# VERCEL_ORG_ID / VERCEL_PROJECT_ID (from `vercel link`).
 # Entrypoint: [tool.vercel] entrypoint in pyproject.toml → src/corpora_py/app.py.
 # Bundle hygiene (Python functions have no tree-shaking): .vercelignore is an
 # ALLOWLIST of build inputs (pyproject/uv.lock/src/packages/README/LICENSE),

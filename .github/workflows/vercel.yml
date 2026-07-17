@@ -1,11 +1,15 @@
 name: Vercel
 
-# Deploys the combined FastAPI app (corpora_py.app, entrypoint declared via
-# [tool.vercel] in pyproject.toml) to Vercel's Python runtime (Fluid compute).
+# MANUAL deploy lever for the combined FastAPI app (corpora_py.app, entrypoint
+# declared via [tool.vercel] in pyproject.toml) on Vercel's Python runtime.
 #
-#   - Push to dev  → preview deployment
-#   - Push to main → production deployment
-#   - workflow_dispatch → manual run with a target picker
+# Automatic deploys are owned by Vercel's Git integration (the repo is linked
+# to the corpora-apps/corpora-py project): every push deploys a preview, and
+# pushes to the production branch deploy production — no repo secrets needed.
+# This workflow exists only for out-of-band redeploys (config-only changes,
+# re-priming after an incident) via workflow_dispatch, and is the reason it
+# has no push trigger: with the integration active, push triggers here would
+# double-deploy every commit and require secrets the integration doesn't need.
 #
 # The build runs remotely on Vercel (`vercel deploy`, no --prebuilt): the
 # Python builder needs uv + the project's Python toolchain, which Vercel's
@@ -30,17 +34,6 @@ name: Vercel
 # account/team token): VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
 
 on:
-  push:
-    branches: [dev, main]
-    paths:
-      - "packages/**"
-      - "src/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "vercel.json"
-      - ".vercelignore"
-      - ".python-version"
-      - ".github/workflows/vercel.yml"
   workflow_dispatch:
     inputs:
       target:
@@ -84,15 +77,8 @@ jobs:
       - name: Determine target
         id: target
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            target="${{ inputs.target }}"
-          elif [ "${{ github.ref_name }}" = "main" ]; then
-            target="production"
-          else
-            target="preview"
-          fi
-          echo "target=$target" >> "$GITHUB_OUTPUT"
-          echo "Deploy target: $target"
+          echo "target=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+          echo "Deploy target: ${{ inputs.target }}"
 
       # Pinned to the major the Python/FastAPI preset requires (>= 48.1.8);
       # `vercel@latest` can break CI unexpectedly.

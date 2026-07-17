@@ -2,10 +2,13 @@ name: Dependabot auto-merge
 
 on: pull_request
 
+# NOTE: "workflows" is not a valid permission scope — its presence made this
+# file unparseable, so GitHub reported a failed run on EVERY push. Dependabot
+# PRs that modify workflow files can't be auto-merged by GITHUB_TOKEN anyway
+# (that needs the `workflow` OAuth scope, which isn't grantable here).
 permissions:
   contents: write
   pull-requests: write
-  workflows: write
 jobs:
   dependabot:
     runs-on: ubuntu-latest
