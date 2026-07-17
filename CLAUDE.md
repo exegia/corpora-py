@@ -81,6 +81,22 @@ printf '%s' "$VERCEL_OIDC_TOKEN" | docker login vcr.vercel.com --username oidc -
 docker buildx build --platform linux/amd64,linux/arm64 \
   --output "type=image,name=vcr.vercel.com/team-slug/project-slug/corpora-py:latest,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" .
 # Without buildx (no zstd): docker build -t vcr.vercel.com/.../corpora-py:latest . && docker push vcr.vercel.com/.../corpora-py:latest
+
+# ── Deploy to Vercel (Python runtime / Vercel Functions) ─────────────────────
+# CI: .github/workflows/vercel.yml — push to dev → preview, push to main →
+# production, or workflow_dispatch with a target picker. Needs repo secrets
+# VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID (from `vercel link`).
+# Entrypoint: [tool.vercel] entrypoint in pyproject.toml → src/corpora_py/app.py.
+# Bundle hygiene (Python functions have no tree-shaking): .vercelignore is an
+# ALLOWLIST of build inputs (pyproject/uv.lock/src/packages/README/LICENSE),
+# and vercel.json's functions.excludeFiles trims the bundle further; the
+# install is `uv sync --frozen --no-dev --no-editable` — no dev deps, no heavy
+# extras (torch-sized deps exceed the 500 MB Python bundle limit).
+# Caveats on Vercel Functions: no WebSockets (/convert/{id}/ws — poll instead)
+# and the in-memory JobManager is per-instance; the container image (above)
+# remains the deployment for heavy/long-running conversion work.
+vercel deploy          # manual preview deploy from a linked checkout
+vercel deploy --prod   # manual production deploy
 ```
 
 ## Architecture
