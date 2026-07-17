@@ -1,29 +1,34 @@
 name: Demo App - Docker Image
 
-# Builds and (optionally) publishes a dev container image for the ElectroBun "example.
-# The image contains Bun + the local Python library (editable venv inside container).
-# Bundling of the "frozen" embedded Python (wheel + standalone) is driven from
-# root scripts/ (see scripts/build_embedded_python.py and scripts/setup.py).
-# The dev container sets up a venv shim + DEV_PYTHON_BIN override on start.
+# Builds and (optionally) publishes a dev container image for the ElectroBun
+# example app (example/Dockerfile, built from the repo root).
+# The image contains Bun + the local Python library (editable uv venv inside
+# the container) and sets DEV_PYTHON_BIN so the app's PythonBridge
+# (example/bun/python-bridge.ts) uses that venv — no frozen/embedded Python
+# runtime is bundled (that bundling belongs to the build-sidecar workflow).
 #
-# - Builds on changes under example/app/ or the Python source
+# - Builds on changes under example/ or the Python source
 # - Uses cache for fast rebuilds
-# - Pushes to GHCR when on dev / main (or manually via workflow_dispatch)
+# - Pushes to GHCR when on dev / next / main (or manually via workflow_dispatch)
 
 on:
   push:
     branches: [ dev, next, main ]
     paths:
-      - "example/app/**"
-      - "src/corpora-py/**"
+      - "example/**"
+      - "packages/**"
+      - "src/corpora_py/**"
       - "pyproject.toml"
       - "uv.lock"
-      - ".github/workflows/example-app-docker.yml"
+      - ".github/workflows/demo-app-docker.yml"
   pull_request:
     paths:
-      - "example/app/**"
-      - "src/corpora-py/**"
+      - "example/**"
+      - "packages/**"
+      - "src/corpora_py/**"
       - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/demo-app-docker.yml"
   workflow_dispatch:
     inputs:
       push:
@@ -45,16 +50,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -62,7 +67,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -71,12 +76,11 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: example/docker/Dockerfile
-          push: |
-            ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.push == 'true') }}
+          file: example/Dockerfile
+          push: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
