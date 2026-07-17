@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "uv sync --active --frozen --no-dev --no-editable",
+  "installCommand": "uv sync --active --frozen --no-dev --no-editable --no-install-package docling-core --no-install-package pandas --no-install-package python-dateutil --no-install-package pillow --no-install-package jedi --no-install-package parso --no-install-package uvloop --no-install-package watchfiles",
   "buildCommand": "echo 'No build step: Python runtime bundles after uv sync (overrides the dashboard make build-wheel)'",
   "functions": {
     "src/corpora_py/app.py": {

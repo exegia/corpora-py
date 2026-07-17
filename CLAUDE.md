@@ -93,11 +93,16 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # a preview/production picker) — needs repo secrets VERCEL_TOKEN /
 # VERCEL_ORG_ID / VERCEL_PROJECT_ID (from `vercel link`).
 # Entrypoint: [tool.vercel] entrypoint in pyproject.toml → src/corpora_py/app.py.
-# Bundle hygiene (Python functions have no tree-shaking): .vercelignore is an
-# ALLOWLIST of build inputs (pyproject/uv.lock/src/packages/README/LICENSE),
-# and vercel.json's functions.excludeFiles trims the bundle further; the
-# install is `uv sync --frozen --no-dev --no-editable` — no dev deps, no heavy
-# extras (torch-sized deps exceed the 500 MB Python bundle limit).
+# Bundle hygiene (Python functions have no tree-shaking; this project's
+# enforced function-size limit is 225 MB): .vercelignore is an ALLOWLIST of
+# build inputs (pyproject/uv.lock/src/packages/README/LICENSE), vercel.json's
+# functions.excludeFiles trims the bundle further, and the installCommand is
+# `uv sync --frozen --no-dev --no-editable` plus `--no-install-package` for
+# runtime-unreachable weight: the docling-core chain (docling-core, pandas,
+# python-dateutil, pillow — /ingest 503s on Vercel anyway; admin/__init__.py
+# and services/ingest_api.py import it lazily/guarded specifically so this
+# exclusion is safe) and REPL/serving extras (jedi, parso, uvloop,
+# watchfiles). Verified: 174 MB site-packages, app imports, full suite green.
 # Caveats on Vercel Functions: no WebSockets (/convert/{id}/ws — poll instead)
 # and the in-memory JobManager is per-instance; the container image (above)
 # remains the deployment for heavy/long-running conversion work.

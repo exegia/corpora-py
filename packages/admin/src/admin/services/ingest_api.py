@@ -18,23 +18,45 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import tempfile
 import uuid
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from ..ingest import parse_file
-from ..ingest.docling_graph import _LANG_TAG_RE
 from .api import _RESULTS_ROOT, _WORK_ROOT, _claims, _not_found_unless_visible, _save_upload
 from .jobs import JobQueueFullError, JobStatus, job_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ingest", tags=["Ingestion"])
+
+# Mirrors LangTag in common.defs.schema.json (and _LANG_TAG_RE in
+# admin.ingest.docling_graph — deliberately NOT imported from there: this
+# module must stay importable without `docling-core`, which slim serverless
+# deployments exclude from the bundle; see `parse_file` below).
+_LANG_TAG_RE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$")
+
+
+def parse_file(source: Path, **kwargs: Any) -> Any:
+    """Lazy indirection to `admin.ingest.parse_file`.
+
+    `admin.ingest` imports `docling-core` (which pulls pandas + pillow) at
+    module import time. Deferring that import to first use keeps this router
+    — and therefore `corpora_py.app` — importable on slim deployments that
+    exclude the whole docling-core chain from the bundle (Vercel; see
+    vercel.json's installCommand). Requests still fail cleanly there:
+    `create_ingestion` 503s on the missing `docling` package before any job
+    is submitted. Tests monkeypatch THIS name to stub the parse.
+    """
+    from ..ingest import parse_file as _parse_file
+
+    return _parse_file(source, **kwargs)
 
 
 def _run_ingestion(
