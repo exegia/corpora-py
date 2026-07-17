@@ -73,7 +73,8 @@ const MenuIconComponent = ({
   icon: FC<SVGProps<SVGSVGElement>> | undefined
 }) => {
   if (!icon) return
-  return icon
+  const Component = icon
+  return <Component className="h-4 w-auto" />
 }
 
 function Header() {
@@ -83,11 +84,11 @@ function Header() {
     <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur supports-backdrop-filter:bg-white/60 dark:bg-neutral-900/60">
       <div className="container mx-auto flex h-14 items-center justify-between gap-4 px-4">
         <button
-          className={cn("flex cursor-pointer items-center gap-2", active.key)}
+          className="flex cursor-pointer items-center gap-2"
           onClick={() => navigate(MENU_ITEMS[0].to)}
         >
-          <NavHeaderIcon className="h-5 w-5 fill-amber-400" />
-          <span className="text-sm font-semibold">Corpora</span>
+          <NavHeaderIcon className="h-6 w-6 fill-amber-400" />
+          <span className="font-serif text-base font-semibold">Corpora</span>
         </button>
         <nav className="anim flex items-center gap-1">
           {MENU_ITEMS.map((item) => (
@@ -95,7 +96,9 @@ function Header() {
               key={item.label}
               onClick={() => navigate(item.to)}
               className={cn(
-                "bg-opacity-0 cursor-pointer rounded-md px-3 py-1.5 text-sm animate-delay-100 animate-duration-slow" +
+                "bg-opacity-0 flex cursor-pointer flex-row items-center gap-1.5 rounded-md px-3 py-1.5 text-sm" +
+                  " animate-delay-100" +
+                  " animate-duration-slow" +
                   " hover:bg-neutral-100" +
                   " transition-colors dark:hover:bg-neutral-800",
                 active.pathname == item.to
@@ -103,9 +106,7 @@ function Header() {
                   : ""
               )}
             >
-              {item.icon && (
-                <MenuIconComponent icon={undefined} {...item.icon} />
-              )}
+              {item.icon && <MenuIconComponent icon={item.icon} />}
               {item.label}
             </button>
           ))}
@@ -127,8 +128,8 @@ export function Layout({ children }: { children: ReactNode }) {
         <Links />
         <title>Corpora | Example</title>
       </head>
-      <body className="min-h-svh bg-neutral-200 text-foreground dark:bg-neutral-950">
-        {/* The provider lives here (not in App) so the Header's ThemeToggle is
+      <body className="min-h-svh bg-neutral-100 text-foreground dark:bg-neutral-950">
+        {/* The provider lives here (not in App), so the Header's ThemeToggle is
         inside it — Layout renders above App in the framework-mode tree. */}
         <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
           <Header />

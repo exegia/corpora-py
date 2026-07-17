@@ -17,6 +17,7 @@ dependencies = [
     # Context-Fabric compilation (.cfm) and .corpus packaging
     "context-fabric>=0.5.7",
     "pyyaml>=6.0.3",
+    "huggingface-hub>=1.0",
 ]
 
 [tool.uv.sources]

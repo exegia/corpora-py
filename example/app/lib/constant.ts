@@ -33,7 +33,7 @@ export const MENU_ITEMS: MenuItem[] = [
     to: "/",
   },
   {
-    label: "Convert",
+    label: "Upload",
     description: "Turn a source document into a Text-Fabric dataset.",
     illustration: BoardIllustration,
     icon: LucideUploadCloud,
@@ -43,7 +43,7 @@ export const MENU_ITEMS: MenuItem[] = [
     label: "Explore",
     description: "View and download corpora that are ready to go.",
     illustration: NodesIllustration,
-    to: "/browse",
+    to: "/explore",
     icon: ListIcon,
   },
   {
