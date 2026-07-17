@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # build.sh
-# Shell equivalent of the main build in scripts/build/__init__.py
 #
 # Builds the sidecar / Tauri resource bundle:
 #   - build wheels

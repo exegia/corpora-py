@@ -14,7 +14,7 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPTS_DIR/.." && pwd)"
 ENV_FILE="$ROOT/.env.development"
-DEMO_APP_DIR="$ROOT/demo"
+DEMO_APP_DIR="$ROOT/example"
 VITE_URL="http://localhost:5173"
 
 # ── Tooling helpers ───────────────────────────────────────────────────────────

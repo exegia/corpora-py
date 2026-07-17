@@ -18,7 +18,7 @@ STANDALONE_VERSION="20260623"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist"
-DEMO_RESOURCES="$REPO_ROOT/demo/build/lib/python"
+DEMO_RESOURCES="$REPO_ROOT/example/build/lib/python"
 
 # For client opt-in downloads (override via env)
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-https://your-cdn.example.com/corpora-runtimes}"
@@ -197,7 +197,7 @@ EOF
 
 # Download + extract prebuilt runtime for client apps
 ensure_python_runtime() {
-  local target_dir="${1:-demo/build/lib}"
+  local target_dir="${1:-example/build/lib}"
   local force="${2:-false}"
 
   local python_dir="$target_dir/python"

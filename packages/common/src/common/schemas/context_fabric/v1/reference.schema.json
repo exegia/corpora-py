@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/reference.schema.json",
+  "title": "Reference",
+  "description": "A canonical or edition-specific address for content: an ordered list of typed segments scoped to (scheme, work, edition?). Resolution uses ONLY segment codes and ordinals via the scheme's alias registry — display labels are never resolution inputs. 'Bible/KJV/John/3/16' normalizes to scheme=bible, edition=kjv, segments [book JHN, chapter 3, verse 16].",
+  "allOf": [{ "$ref": "#/$defs/Reference" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "Segment": {
+      "type": "object",
+      "description": "One reference level. Requires a code (code-addressed levels like bible books) or a 1-based ordinal (chapter/verse/page numbers); both may be present.",
+      "properties": {
+        "levelType": { "$ref": "common.defs.schema.json#/$defs/NamespacedType" },
+        "ordinal": { "type": "integer", "minimum": 1 },
+        "code": { "$ref": "common.defs.schema.json#/$defs/Code" }
+      },
+      "required": ["levelType"],
+      "anyOf": [{ "required": ["ordinal"] }, { "required": ["code"] }],
+      "additionalProperties": false
+    },
+    "Reference": {
+      "type": "object",
+      "properties": {
+        "scheme": {
+          "$ref": "common.defs.schema.json#/$defs/Slug",
+          "description": "Reference scheme id from the scheme registry ('bible', 'quran', 'monograph', 'epistolary', …)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["canonical", "edition"],
+          "default": "canonical",
+          "description": "'canonical' addresses are edition-independent within the scheme; 'edition' addresses depend on one edition's structure (page-based refs, edition-specific versification)."
+        },
+        "workId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "workSlug": { "$ref": "common.defs.schema.json#/$defs/Slug" },
+        "editionId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "editionSlug": { "$ref": "common.defs.schema.json#/$defs/Slug" },
+        "segments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Segment" },
+          "minItems": 1
+        },
+        "canonical": {
+          "type": "string",
+          "description": "Serialized machine form: scheme + '/' + one token per segment, where a token is the segment's code, its bare ordinal, or '<level>-<ordinal>' when the level is ambiguous (e.g. 'bible/JHN/3/16', 'letter/page-2/paragraph-1'). Deterministically regenerable from the structured fields."
+        },
+        "display": {
+          "type": "string",
+          "description": "Human-readable label ('John 3:16 (KJV)'). Informative only."
+        },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["scheme", "segments"]
+    }
+  }
+}

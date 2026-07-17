@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json",
+  "title": "Context Fabric API payloads",
+  "description": "Response envelopes served to client apps. NodePayload is a ContentNode denormalized for display: inline fragments, optionally inline children (recursive), its canonical Reference, and attached annotations. A document validates against exactly one envelope.",
+  "oneOf": [
+    { "$ref": "#/$defs/NodeResponse" },
+    { "$ref": "#/$defs/RangeResponse" },
+    { "$ref": "#/$defs/ResolveResponse" },
+    { "$ref": "#/$defs/SearchResponse" }
+  ],
+  "$defs": {
+    "NodePayload": {
+      "allOf": [
+        { "$ref": "content-node.schema.json#/$defs/ContentNode" },
+        {
+          "type": "object",
+          "properties": {
+            "fragments": {
+              "type": "array",
+              "items": { "$ref": "text-fragment.schema.json#/$defs/TextFragment" },
+              "description": "Inline text of this node, in order. Absent/empty for non-text-bearing nodes and for container nodes served shallow."
+            },
+            "text": {
+              "type": "string",
+              "description": "Convenience concatenation of fragments (text + after). Redundant with fragments; provided for simple clients."
+            },
+            "children": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/NodePayload" },
+              "description": "Inline child payloads when the request asked for expansion. Otherwise omitted; use childCount + a descendants query."
+            },
+            "ref": { "$ref": "reference.schema.json#/$defs/Reference" },
+            "annotations": {
+              "type": "array",
+              "items": { "$ref": "annotation.schema.json#/$defs/Annotation" }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "NavItem": {
+      "type": "object",
+      "description": "Lightweight pointer used for breadcrumbs and prev/next navigation. Enough to render a link and fetch the node.",
+      "properties": {
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "category": { "$ref": "common.defs.schema.json#/$defs/NodeCategory" },
+        "type": { "$ref": "common.defs.schema.json#/$defs/NamespacedType" },
+        "label": { "type": "string" },
+        "code": { "$ref": "common.defs.schema.json#/$defs/Code" },
+        "refOrdinal": { "type": "integer", "minimum": 1 },
+        "ref": { "$ref": "reference.schema.json#/$defs/Reference" }
+      },
+      "required": ["id", "category", "type"],
+      "additionalProperties": false
+    },
+    "NodeResponse": {
+      "type": "object",
+      "description": "One node in full, with ancestry and adjacent reading units.",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "node": { "$ref": "#/$defs/NodePayload" },
+        "breadcrumbs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NavItem" },
+          "description": "Ancestors from root (exclusive of the node itself), outermost first."
+        },
+        "prev": { "anyOf": [{ "$ref": "#/$defs/NavItem" }, { "type": "null" }] },
+        "next": { "anyOf": [{ "$ref": "#/$defs/NavItem" }, { "type": "null" }] }
+      },
+      "required": ["schemaVersion", "node"],
+      "additionalProperties": false
+    },
+    "RangeResponse": {
+      "type": "object",
+      "description": "An ordered run of nodes: a passage range, a page of reading units, search-result expansion.",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "ref": {
+          "anyOf": [{ "$ref": "reference.schema.json#/$defs/Reference" }, { "type": "null" }],
+          "description": "The range reference that produced this run, when applicable."
+        },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NodePayload" }
+        },
+        "total": { "type": "integer", "minimum": 0 },
+        "offset": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1 },
+        "nextCursor": {
+          "anyOf": [{ "type": "string" }, { "type": "null" }],
+          "description": "Opaque keyset cursor; null when the run is exhausted."
+        }
+      },
+      "required": ["schemaVersion", "nodes", "total"],
+      "additionalProperties": false
+    },
+    "ResolveResponse": {
+      "type": "object",
+      "description": "Result of resolving a canonical reference string to nodes.",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "input": { "type": "string", "description": "The reference string as received." },
+        "status": { "type": "string", "enum": ["resolved", "partial", "ambiguous", "not_found"] },
+        "reference": {
+          "anyOf": [{ "$ref": "reference.schema.json#/$defs/Reference" }, { "type": "null" }],
+          "description": "The normalized reference, when parsing succeeded."
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "nodeId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+              "editionId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+              "ref": { "$ref": "reference.schema.json#/$defs/Reference" }
+            },
+            "required": ["nodeId", "editionId"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["schemaVersion", "input", "status", "matches"],
+      "additionalProperties": false
+    },
+    "SearchResponse": {
+      "type": "object",
+      "description": "Full-text / structural search results.",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "query": { "type": "string" },
+        "hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "nodeId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+              "editionId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+              "score": { "type": "number" },
+              "snippet": { "type": "string", "description": "Highlighted excerpt; highlight syntax is <em>…</em>." },
+              "ref": { "$ref": "reference.schema.json#/$defs/Reference" }
+            },
+            "required": ["nodeId", "editionId"],
+            "additionalProperties": false
+          }
+        },
+        "total": { "type": "integer", "minimum": 0 },
+        "nextCursor": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+      },
+      "required": ["schemaVersion", "query", "hits", "total"],
+      "additionalProperties": false
+    }
+  }
+}

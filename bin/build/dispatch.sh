@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
 # dispatch.sh
-# Shell equivalent of scripts/build/__main__.py
 #
 # Allows similar usage to:
-#   python -m scripts.build
-#   python -m scripts.build bundle ...
-#   python -m scripts.build embedded ...
-#   python -m scripts.build client_runtime
+#   ./scripts/build/dispatch.sh scripts.build
+#   ./scripts/build/dispatch.sh scripts.build bundle ...
+#   ./scripts/build/dispatch.sh scripts.build embedded ...
+#   ./scripts/build/dispatch.sh scripts.build client_runtime
 #
 # Run as:
 #   ./scripts/build/dispatch.sh [bundle|embedded|client|client_runtime] [args...]

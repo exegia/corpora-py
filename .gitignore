@@ -56,3 +56,8 @@ supabase/
 !src/shared/supabase/
 **/resources/
 resources/python/
+/example/build/
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

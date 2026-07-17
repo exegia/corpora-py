@@ -1,0 +1,53 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "corpora-api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "corpora-api"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "corpora-api-noauth",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "AUTH_REQUIRED=false",
+        "HF_STORAGE_REPO=philagora/corpora-archives",
+        "uv",
+        "run",
+        "corpora-api"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "example-app",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "example",
+        "vite:dev"
+      ],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "cf-mcp-sse",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "cf-mcp",
+        "--corpus",
+        "~/.exegia/datasets/bibles/BHSA",
+        "--name",
+        "BHSA",
+        "--sse",
+        "8001"
+      ],
+      "port": 8001
+    }
+  ]
+}

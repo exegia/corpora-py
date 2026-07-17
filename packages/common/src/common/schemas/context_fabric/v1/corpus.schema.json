@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/corpus.schema.json",
+  "title": "Corpus",
+  "description": "A curated collection of works (e.g. 'Bibles', 'Early Church Letters', 'Lecture Archive'). The top-level container and unit of distribution.",
+  "allOf": [{ "$ref": "#/$defs/Corpus" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "Corpus": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "slug": { "$ref": "common.defs.schema.json#/$defs/Slug" },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "languages": {
+          "type": "array",
+          "items": { "$ref": "common.defs.schema.json#/$defs/LangTag" },
+          "description": "Languages present across the corpus's editions."
+        },
+        "publisher": { "type": "string" },
+        "rights": { "type": "string", "description": "License / rights statement for the collection as a whole." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "slug", "title"]
+    }
+  }
+}

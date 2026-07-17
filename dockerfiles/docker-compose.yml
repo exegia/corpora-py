@@ -2,37 +2,19 @@
 # Local orchestration for the Corpora platform services.
 #
 # Services:
-#   client  — MCP server (SSE on 8000). Connect Claude Desktop or any MCP client.
-#   admin   — Admin/conversion tools shell. Run conversion commands interactively.
+#   client — MCP server (SSE on 8000). Connect Claude Desktop or any MCP client.
+#   admin — Admin/conversion tools shell. Run conversion commands interactively.
 #
 # Quick start:
-#   docker compose up client                      # start MCP server
+#   docker compose up client # start MCP server
 #   docker compose --profile admin run --rm admin # admin shell
-#   docker compose up                             # start all default services
+#   docker compose up # start all default services
 #
 # Env vars: copy .env.example → .env and fill in values, or export them in your shell.
 #   Required: PROJECT_REF, SUPABASE_SECRET_KEY
 #   Optional: DATASETS_DIR (default: ~/.exegia/datasets), SOURCES_DIR (default: ~/sources)
 
 services:
-  # NOTE: `api` and `caddy` below don't correspond to anything else in this
-  # repo (there's no `./dockerfiles/python${PYTHON_VERSION}/Dockerfile`, no
-  # Caddyfile at the repo root) — they look like leftover boilerplate from a
-  # template and haven't been touched here; the real combined app is the
-  # `corpora` service further down.
-  # api:
-  #   restart: unless-stopped
-  #   env_file:
-  #     - .env
-  #   build:
-  #     context: ./
-  #     dockerfile: ./dockerfiles/python${PYTHON_VERSION}/Dockerfile
-  #     dockerfile: ./Dockerfile
-  #     labels:
-  #       - fastapi
-  #   ports:
-  #     - "8000:8000"
-
   caddy:
     image: caddy:2-alpine
     container_name: caddy
@@ -41,12 +23,12 @@ services:
       - path: .env.development
         required: false # silently skipped if .env doesn't exist; use shell env instead
     ports:
+      # The Caddyfile only defines a :5002 site, so 80/443 were never served
+      # and only collided with any host process already bound to those ports.
       - "5002:5002"
-      - "80:80"
-      - "443:443"
     volumes:
       - type: bind
-        source: ./Caddyfile
+        source: ./dockerfiles/Caddyfile
         target: /etc/caddy/Caddyfile
       - type: volume
         source: caddy_data
@@ -62,6 +44,9 @@ services:
     build:
       context: .
       dockerfile: ./dockerfiles/Dockerfile
+      # Build on the host network so apt-get can resolve DNS in environments
+      # where the Docker daemon runs with iptables disabled (no bridge NAT).
+      network: host
     image: corpora-py:latest
     container_name: corpora-py
     ports:
@@ -77,7 +62,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       # Defaults to secure (matches common.utils.config.Settings.auth_required's
       # own default). `make docker-up-corpora` sets this to `false` at
-      # invocation time for local/demo use -- without this line, that shell
+      # invocation time for local/example use -- without this line, that shell
       # var never reached the container and auth stayed enforced regardless.
       AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
     restart: unless-stopped

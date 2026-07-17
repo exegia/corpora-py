@@ -10,7 +10,7 @@
 #
 # Options:
 #   --platform <key>
-#   --dest-dir <dir>     (default: demo/build/lib/python)
+#   --dest-dir <dir>     (default: example/build/lib/python)
 #   --cache-dir <dir>
 #   --find-links <dir>
 #
@@ -32,7 +32,7 @@ EOF
 
 WHEEL_SPEC=""
 PLATFORM_KEY=""
-DEST_DIR="demo/build/lib/python"
+DEST_DIR="example/build/lib/python"
 CACHE_DIR=".cache/python-standalone"
 FIND_LINKS=""
 

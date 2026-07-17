@@ -1,0 +1,30 @@
+# Allowlist: upload ONLY what the Vercel Python build needs. Python functions
+# have no tree-shaking — every uploaded file reachable at build time lands in
+# the bundle — so the upload itself is kept minimal, and vercel.json's
+# functions.excludeFiles trims the bundle further. See
+# https://vercel.com/docs/functions/runtimes/python#controlling-what-gets-bundled
+*
+.*
+
+# Build inputs: project metadata + lockfile (installCommand runs `uv sync`)
+!pyproject.toml
+!uv.lock
+!vercel.json
+!.python-version
+# hatchling needs these to build the workspace packages during `uv sync`
+!README.md
+!LICENSE
+
+# The application: umbrella app (entrypoint src/corpora_py/app.py) + the
+# workspace packages it installs (including the Context Fabric JSON schemas
+# under packages/common/src/common/schemas/, needed at runtime)
+!src
+!src/**
+!packages
+!packages/**
+
+# Re-excluded from the allowed trees
+**/__pycache__
+**/*.py[co]
+packages/**/CLAUDE.md
+packages/**/tests

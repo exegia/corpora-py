@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.0.0",
+  "node": {
+    "schemaVersion": "1.0.0",
+    "id": "018f0004-0000-7000-8000-000000000101",
+    "editionId": "018f0004-0000-7000-8000-000000000e01",
+    "parentId": "018f0004-0000-7000-8000-000000000100",
+    "ordinal": 0,
+    "depth": 1,
+    "category": "block",
+    "type": "oratory:paragraph",
+    "refOrdinal": 1,
+    "childCount": 0,
+    "fragments": [
+      {
+        "schemaVersion": "1.0.0",
+        "id": "018f0004-0000-7000-8000-000000000201",
+        "nodeId": "018f0004-0000-7000-8000-000000000101",
+        "ordinal": 0,
+        "text": "Four score and seven years ago our fathers brought forth on this continent, a new nation, conceived in Liberty, and dedicated to the proposition that all men are created equal.",
+        "after": "",
+        "charStart": 0,
+        "charEnd": 176,
+        "locators": [
+          {
+            "sourceAssetId": "018f0004-0000-7000-8000-000000000f01",
+            "charStart": 0,
+            "charEnd": 176
+          },
+          {
+            "sourceAssetId": "018f0004-0000-7000-8000-000000000f02",
+            "timeStart": 0.0,
+            "timeEnd": 21.4
+          }
+        ]
+      }
+    ],
+    "text": "Four score and seven years ago our fathers brought forth on this continent, a new nation, conceived in Liberty, and dedicated to the proposition that all men are created equal.",
+    "ref": {
+      "scheme": "oratory",
+      "kind": "canonical",
+      "workSlug": "gettysburg-address",
+      "segments": [{ "levelType": "oratory:paragraph", "ordinal": 1 }],
+      "canonical": "oratory/paragraph-1",
+      "display": "Gettysburg Address, ¶1"
+    },
+    "provenance": {
+      "parser": { "name": "corpora-admin", "version": "0.1.2", "profile": "plain" },
+      "convertedAt": "2026-07-16T12:30:00Z",
+      "sourceAssetId": "018f0004-0000-7000-8000-000000000f01",
+      "confidence": 1.0,
+      "validationState": "human_validated"
+    },
+    "ext": {
+      "oratory": { "delivered": "1863-11-19", "venue": "Gettysburg, Pennsylvania" }
+    }
+  },
+  "breadcrumbs": [
+    {
+      "id": "018f0004-0000-7000-8000-000000000100",
+      "category": "root",
+      "type": "oratory:speech",
+      "label": "The Gettysburg Address"
+    }
+  ],
+  "prev": null,
+  "next": {
+    "id": "018f0004-0000-7000-8000-000000000102",
+    "category": "block",
+    "type": "oratory:paragraph",
+    "refOrdinal": 2
+  }
+}

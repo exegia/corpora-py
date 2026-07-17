@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "1.0.0",
+  "node": {
+    "schemaVersion": "1.0.0",
+    "id": "018f0002-0000-7000-8000-000000000102",
+    "editionId": "018f0002-0000-7000-8000-000000000e01",
+    "parentId": "018f0002-0000-7000-8000-000000000101",
+    "ordinal": 0,
+    "depth": 2,
+    "category": "block",
+    "type": "letter:paragraph",
+    "refOrdinal": 1,
+    "childCount": 0,
+    "locators": [
+      {
+        "sourceAssetId": "018f0002-0000-7000-8000-000000000f01",
+        "pageIndex": 1,
+        "printedLabel": "2"
+      }
+    ],
+    "fragments": [
+      {
+        "schemaVersion": "1.0.0",
+        "id": "018f0002-0000-7000-8000-000000000201",
+        "nodeId": "018f0002-0000-7000-8000-000000000102",
+        "ordinal": 0,
+        "text": "You ask whether the manuscripts arrived intact. They did, though the crossing was rough, and the smaller crate shows water at one corner; I have set the loose leaves to dry and will send a full accounting by the next post.",
+        "after": "",
+        "charStart": 0,
+        "charEnd": 221,
+        "confidence": 0.91,
+        "locators": [
+          {
+            "sourceAssetId": "018f0002-0000-7000-8000-000000000f01",
+            "pageIndex": 1,
+            "printedLabel": "2",
+            "bbox": { "x": 96.0, "y": 120.5, "width": 402.0, "height": 88.0, "unit": "pt" }
+          }
+        ]
+      }
+    ],
+    "text": "You ask whether the manuscripts arrived intact. They did, though the crossing was rough, and the smaller crate shows water at one corner; I have set the loose leaves to dry and will send a full accounting by the next post.",
+    "ref": {
+      "scheme": "letter",
+      "kind": "edition",
+      "workSlug": "letter-to-harrington-1863",
+      "editionSlug": "scan-1863",
+      "segments": [
+        { "levelType": "phys:page", "ordinal": 2 },
+        { "levelType": "letter:paragraph", "ordinal": 1 }
+      ],
+      "canonical": "letter/page-2/paragraph-1",
+      "display": "Letter, p. 2, ¶1"
+    },
+    "provenance": {
+      "parser": { "name": "corpora-admin", "version": "0.1.2", "profile": "pdf" },
+      "convertedAt": "2026-07-16T12:10:00Z",
+      "sourceAssetId": "018f0002-0000-7000-8000-000000000f01",
+      "confidence": 0.91,
+      "validationState": "flagged",
+      "corrections": [
+        {
+          "correctedAt": "2026-07-16T15:00:00Z",
+          "correctedBy": "editor@exegia.co",
+          "path": "/fragments/0/text",
+          "previousValue": "You ask whether the mannscripts arrived intact.",
+          "note": "OCR misread 'manuscripts'; corrected against the scan."
+        }
+      ]
+    },
+    "ext": {
+      "src/pdf": { "ocrEngine": "tesseract-5.3", "block": "b2.1" }
+    }
+  },
+  "breadcrumbs": [
+    {
+      "id": "018f0002-0000-7000-8000-000000000100",
+      "category": "root",
+      "type": "letter:letter",
+      "label": "Letter to Harrington, 14 March 1863"
+    },
+    {
+      "id": "018f0002-0000-7000-8000-000000000101",
+      "category": "milestone",
+      "type": "phys:page",
+      "label": "Page 2",
+      "refOrdinal": 2
+    }
+  ],
+  "prev": null,
+  "next": {
+    "id": "018f0002-0000-7000-8000-000000000103",
+    "category": "block",
+    "type": "letter:paragraph",
+    "refOrdinal": 2
+  }
+}

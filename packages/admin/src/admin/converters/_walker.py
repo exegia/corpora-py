@@ -119,16 +119,47 @@ def convert_document(
     metadata as features; `otype_for` decides the Text-Fabric node type for
     everything nested inside it.
     """
-    document: Document = parser.parse(source)
+    return convert_documents(
+        [parser.parse(source)],
+        output_dir,
+        root_type=root_type,
+        otype_for=otype_for,
+        format_value=parser.format.value,
+        source_label=source,
+    )
+
+
+def convert_documents(
+    documents: list[Document],
+    output_dir: str | Path,
+    *,
+    root_type: str,
+    otype_for: TypeMapper,
+    format_value: str,
+    source_label: str,
+) -> Path:
+    """
+    Convert one or more already-parsed `Document`s into a single Text-Fabric
+    dataset at `output_dir`.
+
+    Each document becomes its own `root_type` node carrying that document's
+    metadata as features, so a multi-document source (e.g. a ZIP of TEI
+    files, one per book) lands as sibling sections of one dataset rather
+    than one dataset per file. With a single document this is exactly the
+    classic `convert_document` walk.
+    """
+    if not documents:
+        raise ValueError("No documents to convert")
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     def director(cv: CV) -> None:
-        root = cv.node(root_type)
-        set_features(cv, root, **metadata_features(document.metadata))
-        for unit in document.units:
-            _walk_unit(cv, unit, otype_for)
-        cv.terminate(root)
+        for document in documents:
+            root = cv.node(root_type)
+            set_features(cv, root, **metadata_features(document.metadata))
+            for unit in document.units:
+                _walk_unit(cv, unit, otype_for)
+            cv.terminate(root)
 
     tf = Fabric(locations=str(output_path))
     cv = CV(tf)
@@ -136,16 +167,16 @@ def convert_document(
         director,
         "word",
         otext={
-            # A single section level — the whole document — is enough
-            # structure to satisfy Text-Fabric's validation; formats that
-            # want finer-grained sections still expose them as ordinary
-            # node types (e.g. "chapter", "page") via `otype_for`.
+            # A single section level — the document — is enough structure to
+            # satisfy Text-Fabric's validation; formats that want
+            # finer-grained sections still expose them as ordinary node
+            # types (e.g. "chapter", "page") via `otype_for`.
             "sectionTypes": root_type,
             "sectionFeatures": "title",
             "fmt:text-orig-full": "{text}{after}",
         },
-        generic={"converter": "corpora-admin", "format": parser.format.value},
+        generic={"converter": "corpora-admin", "format": format_value},
     )
     if not good:
-        raise RuntimeError(f"Text-Fabric conversion failed for {source!r}")
+        raise RuntimeError(f"Text-Fabric conversion failed for {source_label!r}")
     return output_path

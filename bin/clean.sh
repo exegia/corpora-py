@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 #
 # clean.sh
-# Shell equivalent of scripts/clean.py
 #
 # Clean the project: remove caches, build artifacts, and venv.
 #
 # Usage:
 #   ./scripts/clean.sh
-#   uv run scripts/clean.py   (still works via python)
 #
 
 set -euo pipefail
@@ -21,7 +19,7 @@ GLOB_PATTERNS=(
   "**/__pycache__"
   "**/*.egg-info"
   "**/.temp"
-  "demo/build"
+  "example/build"
   "**/.react-router"
   "**/dist"
   "**/lib/python"
@@ -68,8 +66,8 @@ for pat in "${GLOB_PATTERNS[@]}"; do
     "**/.temp")
       find "$ROOT" -type d -name .temp -prune -print0 2>/dev/null | while IFS= read -r -d '' p; do remove "$p"; done
       ;;
-    "demo/build")
-      remove "$ROOT/demo/build"
+    "example/build")
+      remove "$ROOT/example/build"
       ;;
     "**/.react-router")
       find "$ROOT" -type d -name .react-router -prune -print0 2>/dev/null | while IFS= read -r -d '' p; do remove "$p"; done

@@ -6,11 +6,18 @@ DIST_DIR           ?= dist
 GHCR_REGISTRY      ?= ghcr.io
 GHCR_OWNER         ?= exegia
 CORPORA_IMAGE      ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py
-DEMO_IMAGE         ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py-demo-dev
+GITHUB_TOKEN       ?= $GITHUB_ACCESS_TOKEN
+# Vercel Container Registry (VCR). Image ref is registry/team-slug/project-slug/repository.
+# Override VCR_TEAM/VCR_PROJECT/VCR_REPOSITORY to match your Vercel project.
+VCR_REGISTRY       ?= vcr.vercel.com
+VCR_TEAM           ?= exegia
+VCR_PROJECT        ?= corpora-py
+VCR_REPOSITORY     ?= corpora-py
+VCR_IMAGE          ?= $(VCR_REGISTRY)/$(VCR_TEAM)/$(VCR_PROJECT)/$(VCR_REPOSITORY)
+VCR_PLATFORMS      ?= linux/amd64,linux/arm64
 PYTHON_VERSION     ?= 3.13
 DOCKER_PROJECT     := docker compose --project-directory .
 DOCKER_COMPOSE_CORPORA := $(DOCKER_PROJECT) -f dockerfiles/docker-compose.yml
-DOCKER_COMPOSE_DEMO    := $(DOCKER_PROJECT) -f demo/docker/docker-compose.yml
 
 # Optional args forwarded to bin scripts (e.g. make publish PUBLISH_ARGS=minor)
 PUBLISH_ARGS       ?=
@@ -26,12 +33,13 @@ define Comment
 	- Run `make docker-up-corpora` to start containers.
 	- Run `make publish` to bump version, tag, and trigger PyPI publish via CI.
 	- Run `make docker-publish` to build and push images to GHCR.
+	- Run `make docker-publish-vcr` to build and push the image to Vercel Container Registry.
 endef
 
 # ── Setup & dependencies ──────────────────────────────────────────────────────
 
 .PHONY: setup
-setup: ## Install all dependencies (uv sync, dotenvx, demo deps, embedded Python).
+setup: ## Install all dependencies (uv sync, dotenvx, example deps, embedded Python).
 	@chmod +x $(BIN)/setup.sh $(BIN)/utils.sh
 	@$(BIN)/setup.sh
 
@@ -64,11 +72,6 @@ build-wheel: ## Build all workspace wheels into dist/.
 build-bundle: ## Build sidecar / Tauri resource bundle (wheels + standalone Python).
 	@chmod +x $(BIN)/build/*.sh
 	@$(BIN)/build/build.sh $(BUILD_ARGS)
-
-.PHONY: build-embedded
-build-embedded: ## Build embedded Python runtime for the demo app.
-	@chmod +x $(BIN)/build/embedded.sh $(BIN)/build/common.sh
-	@$(BIN)/build/embedded.sh $(EMBEDDED_ARGS)
 
 .PHONY: generate-dockerfiles
 generate-dockerfiles: ## Regenerate versioned Python Dockerfiles from template.
@@ -112,33 +115,12 @@ test: ## Run pytest.
 # ── Docker — local containers ───────────────────────────────────────────────
 
 .PHONY: docker-up-corpora
-docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=false (local/demo use).
+docker-up-corpora: ## Start corpora-py platform containers with AUTH_REQUIRED=false (local/example use).
 	AUTH_REQUIRED=false PYTHON_VERSION=$(PYTHON_VERSION) $(DOCKER_COMPOSE_CORPORA) up --build -d
 
 .PHONY: docker-down-corpora
 docker-down-corpora: ## Stop corpora-py platform containers.
 	$(DOCKER_COMPOSE_CORPORA) down
-
-.PHONY: docker-up-demo
-docker-up-demo: ## Start demo app dev container (Bun + ElectroBun + SSH on :2222).
-	$(DOCKER_COMPOSE_DEMO) up --build -d
-
-.PHONY: docker-down-demo
-docker-down-demo: ## Stop demo app dev container.
-	$(DOCKER_COMPOSE_DEMO) down
-
-.PHONY: docker-up
-docker-up: docker-up-corpora docker-up-demo ## Start all Docker services (corpora + demo).
-
-.PHONY: docker-down
-docker-down: docker-down-corpora docker-down-demo ## Stop all Docker services.
-
-# Backward-compatible aliases
-.PHONY: run-container
-run-container: docker-up-corpora ## Alias for docker-up-corpora.
-
-.PHONY: kill-container
-kill-container: docker-down-corpora ## Alias for docker-down-corpora.
 
 # ── Docker — build & publish to GHCR ─────────────────────────────────────────
 
@@ -156,24 +138,47 @@ docker-login-ghcr: ## Authenticate Docker with GHCR (uses GITHUB_TOKEN or gh CLI
 	fi; \
 	echo "$$token" | docker login $(GHCR_REGISTRY) -u "$$user" --password-stdin
 
+.PHONY: supabase-pull-image
+supabase-pull-image: docker-login-ghcr ## Authenticate Docker with GHCR (uses GITHUB_TOKEN or gh CLI).
+	@docker pull $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-supabase:latest
+
 .PHONY: docker-build-corpora
 docker-build-corpora: ## Build corpora-py Docker image locally.
 	docker build -f dockerfiles/Dockerfile -t $(CORPORA_IMAGE):$(IMAGE_TAG) .
-
-.PHONY: docker-build-demo
-docker-build-demo: ## Build demo dev Docker image locally.
-	docker build -f demo/docker/Dockerfile -t $(DEMO_IMAGE):$(IMAGE_TAG) .
 
 .PHONY: docker-publish-corpora
 docker-publish-corpora: docker-login-ghcr docker-build-corpora ## Build and push corpora-py image to GHCR.
 	docker push $(CORPORA_IMAGE):$(IMAGE_TAG)
 
-.PHONY: docker-publish-demo
-docker-publish-demo: docker-login-ghcr docker-build-demo ## Build and push demo dev image to GHCR.
-	docker push $(DEMO_IMAGE):$(IMAGE_TAG)
-
 .PHONY: docker-publish
-docker-publish: docker-publish-corpora docker-publish-demo ## Build and push all images to GHCR.
+docker-publish: docker-publish-corpora ## Build and push all images to GHCR.
+
+# ── Docker — build & publish to Vercel Container Registry (VCR) ───────────────
+
+.PHONY: vercel-env
+vercel-env: ## Link the Vercel project and pull env vars into .env.local (provides VERCEL_OIDC_TOKEN).
+	vercel link
+	vercel env pull .env.local
+
+.PHONY: docker-login-vcr
+docker-login-vcr: ## Authenticate Docker with VCR (OIDC via VERCEL_OIDC_TOKEN, or token via VERCEL_TOKEN + VERCEL_TEAM_ID).
+	@set -a; [ -f .env.local ] && . ./.env.local; set +a; \
+	if [ -n "$$VERCEL_OIDC_TOKEN" ]; then \
+		printf '%s' "$$VERCEL_OIDC_TOKEN" | docker login $(VCR_REGISTRY) --username oidc --password-stdin; \
+	elif [ -n "$$VERCEL_TOKEN" ]; then \
+		printf '%s' "$$VERCEL_TOKEN" | docker login $(VCR_REGISTRY) --username "$${VERCEL_TEAM_ID:?set VERCEL_TEAM_ID for token auth}" --password-stdin; \
+	else \
+		echo "error: set VERCEL_OIDC_TOKEN (run 'make vercel-env' then retry) or VERCEL_TOKEN" >&2; \
+		exit 1; \
+	fi
+
+.PHONY: docker-publish-vcr
+docker-publish-vcr: docker-login-vcr ## Build multi-arch image with zstd and push to VCR (requires docker buildx).
+	docker buildx build \
+		--platform $(VCR_PLATFORMS) \
+		-f dockerfiles/Dockerfile \
+		--output "type=image,name=$(VCR_IMAGE):$(IMAGE_TAG),push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" \
+		.
 
 # ── Publish (PyPI via GitHub Actions) ─────────────────────────────────────────
 
@@ -193,11 +198,15 @@ publish-dispatch: ## Dispatch publish workflow without a version bump.
 
 # Run dev servers, but only after ensuring dist/ exists
 dev: dist
-	@bun --cwd=demo concurrently -n vite,electron -c cyan,magenta -k "vite dev" "electrobun dev"
+	@bun --cwd=example concurrently -n vite,electron -c cyan,magenta -k "vite dev" "electrobun dev"
 
 # Build dist/ only if it's missing (real target = file-existence check)
 dist:
-	@bun --cwd=demo run vite:build
+	@bun --cwd=example run vite:build
+
+.PHONY: dev-web
+dev-web: ## Start web-only (vite) server
+	@bun --cwd=example vite dev
 
 .PHONY: dev-stop
 dev-stop: ## Stop dev processes.
@@ -209,3 +218,41 @@ dev-stop: ## Stop dev processes.
 .PHONY: help
 help: ## Show this help message.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: clean-all
+clean-all: ## Delete all caches, generated files, build artifacts, venv, node_modules, and lock files.
+	@echo "Cleaning all caches, generated files, and build artifacts..."
+	@for path in \
+		.venv \
+		.cache \
+		.pytest_cache \
+		.mypy_cache \
+		.ruff_cache \
+		__pycache__ \
+		$(DIST_DIR) \
+		dist \
+		build \
+		*.egg-info \
+		example/node_modules \
+		example/.vite \
+		example/.react-router \
+		example/dist \
+		example/build \
+		node_modules \
+		uv.lock \
+		.dotenvx; do \
+		for match in $$path; do \
+			if [ -e "$$match" ]; then \
+				echo "  removing $$match"; \
+				rm -rf "$$match"; \
+			fi; \
+		done; \
+	done
+	@echo "Searching for nested cache directories and compiled Python files..."
+	@find . -type d \( -name "__pycache__" -o -name ".pytest_cache" -o -name ".mypy_cache" -o -name ".ruff_cache" \) \
+		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./example/node_modules/*" \
+		-print -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f \( -name "*.pyc" -o -name "*.pyo" \) \
+		-not -path "./.venv/*" -not -path "./node_modules/*" -not -path "./example/node_modules/*" \
+		-print -delete 2>/dev/null || true
+	@echo "All caches and generated files have been removed."

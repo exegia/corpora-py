@@ -1,29 +1,22 @@
 name: Demo App - Docker Image
 
-# Builds and (optionally) publishes a dev container image for the ElectroBun demo.
-# The image contains Bun + the local Python library (editable venv inside container).
-# Bundling of the "frozen" embedded Python (wheel + standalone) is driven from
-# root scripts/ (see scripts/build_embedded_python.py and scripts/setup.py).
-# The dev container sets up a venv shim + DEV_PYTHON_BIN override on start.
+# Builds and (optionally) publishes a dev container image for the ElectroBun
+# example app (example/Dockerfile, built from the repo root).
+# The image contains Bun + the local Python library (editable uv venv inside
+# the container) and sets DEV_PYTHON_BIN so the app's PythonBridge
+# (example/bun/python-bridge.ts) uses that venv — no frozen/embedded Python
+# runtime is bundled (that bundling belongs to the build-sidecar workflow).
 #
-# - Builds on changes under demo/app/ or the Python source
-# - Uses cache for fast rebuilds
-# - Pushes to GHCR when on dev / main (or manually via workflow_dispatch)
+# MANUAL-ONLY until example/Dockerfile is rewritten: the Dockerfile is a
+# stale npm/react-router template from before the example-app restructure —
+# it COPYs a `corpora/` directory that no longer exists and runs `npm ci`
+# against a package-lock.json that isn't there (the example app is a
+# bun/ElectroBun project with bun.lock). Every push/PR-triggered run failed
+# on that for months, so the automatic triggers are disabled rather than
+# left red; re-add push/pull_request triggers once the Dockerfile actually
+# builds.
 
 on:
-  push:
-    branches: [dev, next, main]
-    paths:
-      - "demo/app/**"
-      - "src/exegia/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/demo-app-docker.yml"
-  pull_request:
-    paths:
-      - "demo/app/**"
-      - "src/exegia/**"
-      - "pyproject.toml"
   workflow_dispatch:
     inputs:
       push:
@@ -34,7 +27,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-demo-dev
+  IMAGE_NAME: ${{ github.repository }}-example-dev
 
 jobs:
   build:
@@ -45,16 +38,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -62,7 +55,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -71,12 +64,14 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: demo/app/Dockerfile
+          # The example app's Dockerfile lives at example/Dockerfile (the old
+          # example/docker/ path predates a restructure and broke every run).
+          file: example/Dockerfile
           push: |
-            ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' ? inputs.push : true) }}
+            ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.push == 'true') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/source-asset.schema.json",
+  "title": "SourceAsset",
+  "description": "An ingested input file or media object an Edition was parsed from: the EPUB, PDF, TEI/XML, HTML, plaintext, OCR bundle, audio or video recording. PhysicalLocators point back into SourceAssets.",
+  "allOf": [{ "$ref": "#/$defs/SourceAsset" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "SourceAsset": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "editionId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "sourceFormat": {
+          "type": "string",
+          "enum": ["epub", "html", "xml", "tei", "pdf", "plain", "tf_zip", "tei_zip", "audio", "video", "image", "other"],
+          "description": "Superset of the parser SourceFormat enum in admin.parsers.schema."
+        },
+        "mediaType": { "type": "string", "description": "IANA media type ('application/epub+zip', 'audio/mpeg')." },
+        "uri": { "type": "string", "format": "uri", "description": "Where the asset lives (storage URL, hf:// path)." },
+        "filename": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "byteSize": { "type": "integer", "minimum": 0 },
+        "pageCount": { "type": "integer", "minimum": 0 },
+        "durationSeconds": { "type": "number", "minimum": 0 },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "sourceFormat"]
+    }
+  }
+}

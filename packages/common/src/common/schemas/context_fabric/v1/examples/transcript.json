@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "1.0.0",
+  "ref": null,
+  "nodes": [
+    {
+      "schemaVersion": "1.0.0",
+      "id": "018f0005-0000-7000-8000-000000000101",
+      "editionId": "018f0005-0000-7000-8000-000000000e01",
+      "parentId": "018f0005-0000-7000-8000-000000000100",
+      "ordinal": 0,
+      "depth": 1,
+      "category": "block",
+      "type": "transcript:utterance",
+      "refOrdinal": 1,
+      "label": "Interviewer",
+      "childCount": 0,
+      "fragments": [
+        {
+          "schemaVersion": "1.0.0",
+          "id": "018f0005-0000-7000-8000-000000000201",
+          "nodeId": "018f0005-0000-7000-8000-000000000101",
+          "ordinal": 0,
+          "text": "Could you walk us through how the archive was first assembled?",
+          "after": "",
+          "confidence": 0.94,
+          "locators": [
+            {
+              "sourceAssetId": "018f0005-0000-7000-8000-000000000f01",
+              "timeStart": 12.8,
+              "timeEnd": 16.9,
+              "sourceFragmentId": "cue-4"
+            }
+          ]
+        }
+      ],
+      "text": "Could you walk us through how the archive was first assembled?",
+      "ref": {
+        "scheme": "transcript",
+        "kind": "canonical",
+        "workSlug": "oral-history-interview-12",
+        "segments": [{ "levelType": "transcript:utterance", "ordinal": 1 }],
+        "canonical": "transcript/utterance-1",
+        "display": "Interview 12, utterance 1"
+      },
+      "provenance": {
+        "parser": { "name": "corpora-admin", "version": "0.1.2", "profile": "plain" },
+        "convertedAt": "2026-07-16T12:40:00Z",
+        "sourceAssetId": "018f0005-0000-7000-8000-000000000f01",
+        "confidence": 0.94,
+        "validationState": "machine_validated"
+      },
+      "ext": {
+        "transcript": { "speakerId": "S1", "speakerRole": "interviewer" }
+      }
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "id": "018f0005-0000-7000-8000-000000000102",
+      "editionId": "018f0005-0000-7000-8000-000000000e01",
+      "parentId": "018f0005-0000-7000-8000-000000000100",
+      "ordinal": 1,
+      "depth": 1,
+      "category": "block",
+      "type": "transcript:utterance",
+      "refOrdinal": 2,
+      "label": "Respondent",
+      "childCount": 0,
+      "fragments": [
+        {
+          "schemaVersion": "1.0.0",
+          "id": "018f0005-0000-7000-8000-000000000202",
+          "nodeId": "018f0005-0000-7000-8000-000000000102",
+          "ordinal": 0,
+          "text": "It started as three boxes of letters in the parish basement.",
+          "after": " ",
+          "confidence": 0.88,
+          "locators": [
+            {
+              "sourceAssetId": "018f0005-0000-7000-8000-000000000f01",
+              "timeStart": 17.3,
+              "timeEnd": 21.0,
+              "sourceFragmentId": "cue-5"
+            }
+          ]
+        },
+        {
+          "schemaVersion": "1.0.0",
+          "id": "018f0005-0000-7000-8000-000000000203",
+          "nodeId": "018f0005-0000-7000-8000-000000000102",
+          "ordinal": 1,
+          "text": "Nobody had opened them since the fifties.",
+          "after": "",
+          "confidence": 0.9,
+          "locators": [
+            {
+              "sourceAssetId": "018f0005-0000-7000-8000-000000000f01",
+              "timeStart": 21.2,
+              "timeEnd": 23.8,
+              "sourceFragmentId": "cue-6"
+            }
+          ]
+        }
+      ],
+      "text": "It started as three boxes of letters in the parish basement. Nobody had opened them since the fifties.",
+      "ref": {
+        "scheme": "transcript",
+        "kind": "canonical",
+        "workSlug": "oral-history-interview-12",
+        "segments": [{ "levelType": "transcript:utterance", "ordinal": 2 }],
+        "canonical": "transcript/utterance-2",
+        "display": "Interview 12, utterance 2"
+      },
+      "provenance": {
+        "parser": { "name": "corpora-admin", "version": "0.1.2", "profile": "plain" },
+        "convertedAt": "2026-07-16T12:40:00Z",
+        "sourceAssetId": "018f0005-0000-7000-8000-000000000f01",
+        "confidence": 0.89,
+        "validationState": "machine_validated"
+      },
+      "ext": {
+        "transcript": { "speakerId": "S2", "speakerRole": "respondent" }
+      }
+    }
+  ],
+  "total": 214,
+  "offset": 0,
+  "limit": 2,
+  "nextCursor": "b3JkaW5hbC0y"
+}
