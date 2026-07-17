@@ -61,7 +61,7 @@ jobs:
           ls -lh dist/*.whl
 
       - name: Upload wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
@@ -104,7 +104,7 @@ jobs:
 
       # Cache the standalone-Python tarball — it's ~70 MB and rarely changes.
       - name: Cache standalone Python
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .cache/python-standalone
           key: python-standalone-${{ matrix.platform }}-3.13.14-20260623
@@ -150,7 +150,7 @@ jobs:
           WINDOWS_SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
 
       - name: Upload archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: corpora-py-sidecar-${{ github.run_id }}-${{ matrix.platform }}
           path: dist/corpora-py-${{ matrix.platform }}.zip
