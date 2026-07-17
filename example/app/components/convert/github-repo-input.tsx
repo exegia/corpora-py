@@ -7,7 +7,6 @@ import { Input } from "~/components/ui/input"
 import { useGithubRepoImport } from "~/lib/hooks/use-github-repo-import"
 import { cn } from "~/lib/utils"
 import { GithubIcon } from "~/components/icons/icon-github"
-import GlassFolder from "../glass-folder"
 
 interface GithubRepoInputProps {
   disabled?: boolean
@@ -21,10 +20,17 @@ export function GithubRepoInput({
   onFile,
   className,
 }: GithubRepoInputProps) {
-  const { url, setUrl, phase, busy, validation, retryValidation, importRepository } =
-    useGithubRepoImport({
-      onFile,
-    })
+  const {
+    url,
+    setUrl,
+    phase,
+    busy,
+    validation,
+    retryValidation,
+    importRepository,
+  } = useGithubRepoImport({
+    onFile,
+  })
 
   const errorMessage =
     phase.kind === "error"
@@ -35,9 +41,7 @@ export function GithubRepoInput({
 
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
-      <h4 className="mb-0.5 ml-2 text-xl leading-none font-medium">
-        Import from GitHub
-      </h4>
+      <h4 className="ml-2 text-xl leading-2 font-medium">Import from GitHub</h4>
       <p className="mb-2 ml-2 text-sm text-muted-foreground">
         Enter the URL of a public GitHub repository that contains a Text-Fabric
         corpus. The repository will be downloaded and converted into a ZIP file

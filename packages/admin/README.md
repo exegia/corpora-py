@@ -86,7 +86,10 @@ corpus_path = convert_to_corpus(
 - **`admin.services`** — HTTP surface over the pipeline above: `api.py`
   (`POST /convert` upload + background job, `GET /convert/{id}` poll,
   `GET /convert/{id}/download`), `websocket.py` (`/convert/{id}/ws` status push), `jobs.py` (the in-process `JobManager`
-  backing both). Not a standalone app — meant to be included into a FastAPI app (see
+  backing both). `storage.py` stores finished `.corpus` archives in a Hugging Face Hub repo
+  (`HF_STORAGE_REPO`/`HF_TOKEN`) via the `huggingface_hub` SDK, with `storage_api.py` (REST `/storage` —
+  list/inspect/upload/download/delete) and `storage_mcp.py` (`storage_*` MCP tools, registered by the combined app)
+  exposing it. Not a standalone app — meant to be included into a FastAPI app (see
   `src/corpora_py/app.py`).
 
 ## Development

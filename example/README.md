@@ -7,6 +7,8 @@ and TypeScript.
 
 - **Convert corpora** — Transform EPUB, HTML, PDF, and TEI documents into Text-Fabric datasets
 - **Browse datasets** — View Text-Fabric corpora with full API access via the MCP server
+- **Corpus detail & reader** — Open any stored `.corpus` archive to edit its manifest metadata, browse its section
+  index, and read passages (see the flow below)
 - **Query support** — Use Claude or other AI models to query your corpus data
 - **Dark mode** — Light and dark theme support with persistent storage
 - **Desktop-native** — Runs as a native macOS/Windows/Linux application via Electrobun
@@ -59,17 +61,19 @@ bun run build:canary
 
 ```
 app/
-├── routes/              # React Router pages
+├── routes/              # React Router pages (see app/routes.ts for the tree)
 │   ├── home.tsx        # Dashboard with quick actions
+│   ├── explore.tsx     # Browse/search .corpus archives on the Hub
 │   ├── corpus/
 │   │   ├── upload.tsx  # Upload dialog for new corpora
 │   │   ├── convert.tsx # Conversion pipeline UI
-│   │   ├── layout.tsx  # Corpus detail layout
-│   │   ├── detail.tsx  # Corpus metadata & stats
-│   │   └── view.tsx    # Corpus reader view
+│   │   ├── layout.tsx  # Corpus detail layout (breadcrumb + Detail/View tabs)
+│   │   ├── detail.tsx  # Corpus metadata (editable) & section index
+│   │   └── view.tsx    # Corpus reader view (paginated, section picker)
 │   └── +types/         # Auto-generated type definitions
 ├── components/         # Reusable UI components
 ├── lib/               # Utilities (routing, theme, sounds)
+│   └── corpus-detail.ts # Typed client + pure helpers for the detail endpoints
 └── app.css            # Global styles (Tailwind + custom)
 
 bun/                    # Backend integration
@@ -81,6 +85,24 @@ bun/                    # Backend integration
 public/                # Static assets
 dist/                  # Built app & web output
 ```
+
+## Corpus detail flow
+
+Browsing a stored archive runs `explore → detail → view`:
+
+1. **`/explore`** (`routes/explore.tsx`) lists the `.corpus` archives published to the Hub. Each row has a **Details**
+   action that navigates to `/corpus/:id`, where `:id` is the archive filename minus the trailing `.corpus`,
+   URL-encoded.
+2. **`/corpus/:id`** (`routes/corpus/layout.tsx`) is a shared layout: an `Explore → <name>`
+   breadcrumb plus **Detail** / **View** tabs. Its index route is the detail tab.
+3. **`/corpus/:id`** → **`routes/corpus/detail.tsx`** — an editable manifest metadata card (PATCHes the archive on the
+   Hub) and a section-index card whose entries link into the reader.
+4. **`/corpus/:id/view`** (`routes/corpus/view.tsx`) — a paginated passage reader with a section picker; the current
+   section is kept in the URL as `?ref=`.
+
+All four screens talk to the backend through the typed client and pure helpers in
+`app/lib/corpus-detail.ts`, which target the `/storage/{filename}/{manifest,index,content}`
+endpoints (`{filename}` = `:id` with `.corpus` re-appended). See `packages/admin/CLAUDE.md` for the server side.
 
 ## Tech Stack
 
@@ -96,7 +118,8 @@ dist/                  # Built app & web output
 
 ## UI Components (shadcn)
 
-This project uses [shadcn/ui](https://ui.shadcn.com) for all React components. Components are copy-pasted into `app/components/ui/` and styled with Tailwind CSS.
+This project uses [shadcn/ui](https://ui.shadcn.com) for all React components. Components are copy-pasted into
+`app/components/ui/` and styled with Tailwind CSS.
 
 ### Adding new components
 
@@ -104,7 +127,8 @@ This project uses [shadcn/ui](https://ui.shadcn.com) for all React components. C
 npx shadcn-ui@latest add <component-name>
 ```
 
-Common components: `button`, `card`, `dialog`, `input`, `select`, `table`, `toast`, etc. See [shadcn/ui docs](https://ui.shadcn.com/docs/components/button) for usage.
+Common components: `button`, `card`, `dialog`, `input`, `select`, `table`, `toast`, etc.
+See [shadcn/ui docs](https://ui.shadcn.com/docs/components/button) for usage.
 
 ## Environment
 

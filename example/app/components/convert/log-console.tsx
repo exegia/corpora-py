@@ -9,21 +9,40 @@ export type LogTone = "info" | "success" | "warning" | "error"
 
 export type LogLine = {
   text: string
+  description?: string
   tone: LogTone
 }
 
+/**
+ * Colors for the tone prefix glyph (>, ✓, !, ✗). Theme-aware -- the console
+ * body uses the app background, so dark-only zinc/emerald shades would be
+ * unreadable in light mode.
+ */
 export const TONE_CLASSES: Record<LogTone, string> = {
-  info: "text-zinc-400",
-  success: "text-emerald-400",
-  warning: "text-amber-400",
-  error: "text-red-400"
+  info: "text-muted-foreground",
+  success: "text-emerald-600 dark:text-emerald-400",
+  warning: "text-amber-600 dark:text-amber-400",
+  error: "text-red-600 dark:text-red-400",
+}
+
+/**
+ * Colors for the line text itself. Deliberately quieter than the prefix:
+ * success/info lines stay neutral (the ✓ glyph and the stage heading carry
+ * the green), so color is reserved for text that needs attention --
+ * warnings and errors.
+ */
+export const TONE_TEXT_CLASSES: Record<LogTone, string> = {
+  info: "text-muted-foreground",
+  success: "text-foreground",
+  warning: "text-amber-600 dark:text-amber-400",
+  error: "text-red-600 dark:text-red-400",
 }
 
 export const TONE_PREFIX: Record<LogTone, string> = {
   info: ">",
   success: "✓",
   warning: "!",
-  error: "✗"
+  error: "✗",
 }
 
 interface LogConsoleProps {
@@ -56,14 +75,14 @@ interface LogConsoleProps {
  * behavior and shows a "Jump to latest" control instead.
  */
 export function LogConsole({
-                             title = "Conversion log",
-                             lines,
-                             status,
-                             header,
-                             scrollKey = 0,
-                             copyText,
-                             className
-                           }: LogConsoleProps) {
+  title = "Conversion log",
+  lines,
+  status,
+  header,
+  scrollKey = 0,
+  copyText,
+  className,
+}: LogConsoleProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [atBottom, setAtBottom] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -71,10 +90,12 @@ export function LogConsole({
   const scrollToBottom = useCallback((smooth = true) => {
     const node = scrollRef.current
     if (!node) return
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches
     node.scrollTo({
       top: node.scrollHeight,
-      behavior: smooth && !reduceMotion ? "smooth" : "auto"
+      behavior: smooth && !reduceMotion ? "smooth" : "auto",
     })
   }, [])
 
@@ -104,8 +125,10 @@ export function LogConsole({
       )}
       aria-label={title}
     >
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-2.5">
-        <span className="text-sm font-medium text-zinc-400">{title}</span>
+      <div className="flex items-center justify-between border-b border-neutral-300 bg-neutral-100 px-4 py-2.5 dark:border-neutral-700 dark:bg-neutral-800">
+        <span className="text-sm font-medium text-muted-foreground">
+          {title}
+        </span>
         <Button
           variant="ghost"
           size="icon"
@@ -133,17 +156,20 @@ export function LogConsole({
           role="log"
           aria-label="Processing log"
         >
-          {header && <div className="px-4 py-3 text-zinc-100">{header}</div>}
+          {header && <div className="px-4 py-3 text-foreground">{header}</div>}
 
           {lines.length > 0 && (
-            <div className="border-t border-zinc-800 p-4 font-mono text-xs leading-relaxed md:text-sm">
+            <div className="border-t border-border p-4 font-mono text-xs leading-relaxed md:text-sm">
               {lines.map((line, index) => (
                 <p
                   key={`${index}-${line.text}`}
                   className="mb-1.5 flex animate-in items-start gap-2 duration-300 fade-in last:mb-0 motion-reduce:animate-none"
                 >
                   <span
-                    className={cn("shrink-0 font-semibold", TONE_CLASSES[line.tone])}
+                    className={cn(
+                      "shrink-0 font-semibold",
+                      TONE_CLASSES[line.tone]
+                    )}
                     aria-hidden="true"
                   >
                     {TONE_PREFIX[line.tone]}
@@ -152,14 +178,18 @@ export function LogConsole({
                   <span className="sr-only">
                     {line.tone !== "info" ? `${line.tone}: ` : ""}
                   </span>
-                  <span
+                  <div
                     className={cn(
                       "whitespace-pre-wrap",
-                      line.tone === "info" ? "text-zinc-300" : TONE_CLASSES[line.tone]
+                      TONE_TEXT_CLASSES[line.tone]
                     )}
                   >
-                    {line.text}
-                  </span>
+                    <span className="font-bold">{line.text}</span>
+                    <br />
+                    <span className="text-xs text-neutral-500">
+                      {line.description}
+                    </span>
+                  </div>
                 </p>
               ))}
             </div>
@@ -184,7 +214,7 @@ export function LogConsole({
 
       {status && (
         <div
-          className="border-t border-zinc-800 px-4 py-2 text-xs text-zinc-400"
+          className="border-t border-border px-4 py-2 text-xs text-muted-foreground"
           role="status"
           aria-live="polite"
         >
