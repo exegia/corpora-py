@@ -4,9 +4,10 @@ import { uploadAtom } from "~/lib/atoms/upload-atom"
 import {
   deleteUpload,
   initUploadManager,
+  publishUpload,
   retryUpload,
   saveUpload,
-  uploadFile
+  uploadFile,
 } from "~/lib/uploads/manager"
 
 export type { UploadOptions } from "~/lib/uploads/manager"
@@ -29,7 +30,14 @@ export const useUpload = () => {
   // mount anywhere in the app hydrates history and resumes job tracking.
   useEffect(initUploadManager, [])
 
-  return { uploads, uploadFile, deleteUpload, retryUpload, saveUpload }
+  return {
+    uploads,
+    uploadFile,
+    deleteUpload,
+    retryUpload,
+    saveUpload,
+    publishUpload,
+  }
 }
 
 export default useUpload

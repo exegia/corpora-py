@@ -1,8 +1,13 @@
 
+import datetime
+import ipaddress
 from pathlib import Path
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 from fastapi.routing import APIRoute
-from OpenSSL import crypto
 
 from .console import corpora_logger
 from .constant import CERT_DIR, CERT_FILE, KEY_FILE
@@ -26,37 +31,49 @@ def generate_ssl_cert() -> tuple[Path, Path]:
     CERT_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── Key pair ──────────────────────────────────────────────────────────────
-    key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, 2048)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
     # ── Certificate ───────────────────────────────────────────────────────────
-    cert = crypto.X509()
-    cert.get_subject().C = "US"
-    cert.get_subject().ST = "Local"
-    cert.get_subject().L = "Local"
-    cert.get_subject().O = "Exegia"
-    cert.get_subject().OU = "Dev"
-    cert.get_subject().CN = "localhost"
-
-    cert.set_serial_number(1)
-    cert.gmtime_adj_notBefore(0)
-    cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)  # valid for 1 year
-    cert.set_issuer(cert.get_subject())
-    cert.set_pubkey(key)
-
-    # SAN extension so browsers/clients accept the cert for localhost
-    cert.add_extensions(
+    subject = issuer = x509.Name(
         [
-            crypto.X509Extension(b"subjectAltName", False, b"DNS:localhost,IP:127.0.0.1"),
-            crypto.X509Extension(b"basicConstraints", True, b"CA:TRUE"),
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Local"),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, "Local"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Exegia"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Dev"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
         ]
     )
 
-    cert.sign(key, "sha256")
+    now = datetime.datetime.now(datetime.UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(1)
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=365))  # valid for 1 year
+        # SAN extension so browsers/clients accept the cert for localhost
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [x509.DNSName("localhost"), x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
+            ),
+            critical=False,
+        )
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(key, hashes.SHA256())
+    )
 
     # ── Write PEM files ───────────────────────────────────────────────────────
-    CERT_FILE.write_bytes(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
-    KEY_FILE.write_bytes(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+    CERT_FILE.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    KEY_FILE.write_bytes(
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
 
     corpora_logger.info("SSL certificate written to %s / %s", CERT_FILE, KEY_FILE)
     return CERT_FILE, KEY_FILE

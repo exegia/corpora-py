@@ -1,6 +1,11 @@
 import { getDefaultStore } from "jotai"
 import { API_URL } from "~/lib/types/socket"
-import { uploadAtom, type UploadEntry, type ValidationOutcome } from "~/lib/atoms/upload-atom"
+import {
+  uploadAtom,
+  type StorageOutcome,
+  type UploadEntry,
+  type ValidationOutcome,
+} from "~/lib/atoms/upload-atom"
 import { type JobStatusMessage, subscribeJobStatus } from "~/lib/hooks/use-socket"
 import { loadPersistedUploads, savePersistedUploads } from "./persistence"
 import { detectSourceFormat } from "./source-format"
@@ -126,6 +131,54 @@ const validateConversion = async (
   }
 }
 
+/**
+ * Publishes the converted archive to the Hugging Face Hub storage repo
+ * (`POST /storage` by job id -- see `admin.services.storage_api`), mapping
+ * every outcome to a `StorageOutcome` instead of throwing. A 201 is
+ * "stored" (with the archive's `resolve/main` download URL); anything else
+ * -- storage not configured on the server (503), the Hub rejecting the
+ * upload (502), a network error -- is "skipped" with the reason, and can
+ * simply be retried. App code goes through `publishUpload`, which tracks
+ * the outcome on the entry; this is exported for unit tests.
+ */
+export const publishConversion = async (
+  jobId: string
+): Promise<StorageOutcome> => {
+  try {
+    const response = await fetch(`${API_URL}/storage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId }),
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        detail?: string
+      }
+      throw new Error(
+        body.detail ?? `Publish request failed (${response.status})`
+      )
+    }
+    const stored = (await response.json()) as {
+      filename: string
+      size_bytes: number | null
+      repo_id: string
+      url: string
+    }
+    return {
+      status: "stored",
+      url: stored.url,
+      repoId: stored.repo_id,
+      filename: stored.filename,
+      sizeBytes: stored.size_bytes ?? undefined,
+    }
+  } catch (error) {
+    return {
+      status: "skipped",
+      reasons: [error instanceof Error ? error.message : String(error)],
+    }
+  }
+}
+
 const handleJobSucceeded = async (
   id: string,
   jobId: string,
@@ -145,6 +198,11 @@ const handleJobSucceeded = async (
   updateEntry(id, (draft) => {
     draft.validation = validation
   })
+
+  // Publishing to the Hugging Face Hub deliberately does NOT happen here:
+  // it's a manual step (`publishUpload`) the user triggers from the result
+  // panel once the conversion is done, so nothing leaves this machine for
+  // the Hub without an explicit click.
 
   try {
     const blob = await fetchCorpusBlob(jobId)
@@ -377,6 +435,30 @@ export const saveUpload = async (id: string): Promise<void> => {
   }
 }
 
+/**
+ * Manually publishes (or retries publishing) a completed conversion's
+ * `.corpus` archive to the Hugging Face Hub storage repo -- triggered by
+ * the "Publish to Hugging Face" action in the result panel, never
+ * automatically. The outcome lands in `entry.storage` ("stored" with the
+ * Hub download URL, or "skipped" with the reason and a retry available);
+ * either way the local download/save flow is unaffected.
+ */
+export const publishUpload = async (id: string): Promise<void> => {
+  const entry = store.get(uploadAtom)[id]
+  // Needs a finished server-side job to publish from, and only one publish
+  // in flight per entry -- a second click while "running" is a no-op.
+  if (!entry?.jobId || entry.storage?.status === "running") return
+  const { jobId } = entry
+
+  updateEntry(id, (draft) => {
+    draft.storage = { status: "running" }
+  })
+  const storage = await publishConversion(jobId)
+  updateEntry(id, (draft) => {
+    draft.storage = storage
+  })
+}
+
 // Confirms a rehydrated "ready" entry (server said "succeeded" in a past
 // session) is still actually downloadable before leaving it in the list.
 // Deliberately does NOT auto-fetch the blob or pop the save dialog here --
@@ -429,7 +511,13 @@ export const initUploadManager = (): void => {
   const persisted = loadPersistedUploads()
 
   store.set(uploadAtom, (draft) => {
-    for (const entry of persisted) draft[entry.id] = entry
+    for (const entry of persisted) {
+      // A reload mid-publish leaves a persisted "running" storage outcome
+      // with no fetch behind it anymore -- clear it so the manual "Publish
+      // to Hugging Face" action reappears instead of a stuck spinner.
+      if (entry.storage?.status === "running") entry.storage = undefined
+      draft[entry.id] = entry
+    }
   })
 
   for (const entry of persisted) {

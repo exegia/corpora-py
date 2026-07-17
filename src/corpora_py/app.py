@@ -1,4 +1,3 @@
-
 """Combined FastAPI application: MCP server + admin conversion API.
 
 This is the natural place for this app to live: `corpora_py` (the umbrella
@@ -20,6 +19,11 @@ Layout:
     /validate   -- corpus validation (`admin.services.validation_api`): confirm a
                    dataset round-trips the `.tf -> .cfm -> mmap` cycle. Shares
                    the validation logic with the `validate_corpus` MCP tool.
+    /storage/*  -- Hugging Face Hub storage of finished `.corpus` archives
+                   (`admin.services.storage_api`): list/inspect/upload/download/
+                   delete, backed by `HF_STORAGE_REPO`. Shares its implementation
+                   with the `storage_*` MCP tools (`admin.services.storage_mcp`),
+                   registered onto the MCP server below.
     /health     -- liveness check for the combined app.
 
 This ships as a sidecar spawned by a Tauri+Supabase desktop app, not a public
@@ -65,7 +69,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from admin.services.api import router as conversion_router
+from admin.services.corpus_detail_api import router as corpus_detail_router
+from admin.services.corpus_detail_mcp import register_corpus_detail_tools
 from admin.services.jobs import job_manager
+from admin.services.storage_api import router as storage_router
+from admin.services.storage_mcp import register_storage_tools
 from admin.services.validation_api import router as validation_router
 from admin.services.websocket import router as conversion_ws_router
 from corpora_mcp import mcp
@@ -74,6 +82,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastmcp.utilities.lifespan import combine_lifespans
 
 from .auth import AuthMiddleware
+
+# The `storage_*` MCP tools live in `admin.services.storage_mcp` (admin owns
+# its API surfaces; see packages/admin/CLAUDE.md) and are registered onto the
+# shared server here, before the ASGI app is built -- a standalone `cf-mcp`
+# process never registers them, keeping the slim MCP package admin-free.
+register_storage_tools(mcp)
+# The `corpus_*` detail tools (`admin.services.corpus_detail_mcp`) are the MCP
+# counterpart of the `/storage/{filename}/...` detail router, registered here
+# for the same reason as the storage tools -- to keep the slim MCP package free
+# of the admin/text-fabric dependency.
+register_corpus_detail_tools(mcp)
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).
@@ -112,6 +131,8 @@ app.mount("/mcp", _mcp_app)
 app.include_router(conversion_router)
 app.include_router(conversion_ws_router)
 app.include_router(validation_router)
+app.include_router(storage_router)
+app.include_router(corpus_detail_router)
 
 
 @app.get("/health", tags=["Health"])
