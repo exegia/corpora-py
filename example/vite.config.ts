@@ -7,11 +7,13 @@ export default defineConfig({
   plugins: [tailwindcss(), reactRouter()],
   build: {
     outDir: "dist",
-    emptyOutDir: true
+    emptyOutDir: true,
   },
   server: {
     open: true,
-    port: 5173,
-    strictPort: true
-  }
+    // PORT is set by launchers (e.g. the preview harness with autoPort);
+    // fall back to 5173 for plain `bun run vite:dev`.
+    port: process.env.PORT ? Number(process.env.PORT) : 5173,
+    strictPort: Boolean(process.env.PORT),
+  },
 })

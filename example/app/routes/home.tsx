@@ -5,10 +5,8 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardTitle,
 } from "~/components/ui/card"
-import { Button } from "~/components/ui/button"
 
 export function meta() {
   return [{ title: "Home | Corpora" }]
