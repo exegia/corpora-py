@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "1.0.0",
+  "node": {
+    "schemaVersion": "1.0.0",
+    "id": "018f0001-0000-7000-8000-000000000103",
+    "editionId": "018f0001-0000-7000-8000-000000000e01",
+    "parentId": "018f0001-0000-7000-8000-000000000102",
+    "ordinal": 2,
+    "depth": 3,
+    "category": "block",
+    "type": "generic:paragraph",
+    "refOrdinal": 3,
+    "childCount": 0,
+    "sourceLocalId": "ch04.xhtml#p12",
+    "fragments": [
+      {
+        "schemaVersion": "1.0.0",
+        "id": "018f0001-0000-7000-8000-000000000201",
+        "nodeId": "018f0001-0000-7000-8000-000000000103",
+        "ordinal": 0,
+        "text": "The distinction between a corpus and an edition is easy to state and hard to honor: the corpus is what we collect, the edition is what we actually read.",
+        "after": "",
+        "charStart": 0,
+        "charEnd": 152,
+        "locators": [
+          {
+            "sourceAssetId": "018f0001-0000-7000-8000-000000000f01",
+            "sourceFragmentId": "ch04.xhtml#p12"
+          }
+        ]
+      }
+    ],
+    "text": "The distinction between a corpus and an edition is easy to state and hard to honor: the corpus is what we collect, the edition is what we actually read.",
+    "ref": {
+      "scheme": "monograph",
+      "kind": "canonical",
+      "workSlug": "on-reading-collections",
+      "segments": [
+        { "levelType": "generic:chapter", "ordinal": 4 },
+        { "levelType": "generic:section", "ordinal": 2 },
+        { "levelType": "generic:paragraph", "ordinal": 3 }
+      ],
+      "canonical": "monograph/chapter-4/section-2/paragraph-3",
+      "display": "Chapter 4, Section 2, ¶3"
+    },
+    "provenance": {
+      "parser": { "name": "corpora-admin", "version": "0.1.2", "profile": "epub" },
+      "convertedAt": "2026-07-16T12:05:00Z",
+      "sourceAssetId": "018f0001-0000-7000-8000-000000000f01",
+      "confidence": 0.97,
+      "validationState": "machine_validated"
+    },
+    "ext": {
+      "src/epub": { "class": "noindent" }
+    }
+  },
+  "breadcrumbs": [
+    {
+      "id": "018f0001-0000-7000-8000-000000000100",
+      "category": "root",
+      "type": "generic:book",
+      "label": "On Reading Collections"
+    },
+    {
+      "id": "018f0001-0000-7000-8000-000000000101",
+      "category": "division",
+      "type": "generic:chapter",
+      "label": "Chapter 4 — Editions",
+      "refOrdinal": 4
+    },
+    {
+      "id": "018f0001-0000-7000-8000-000000000102",
+      "category": "section",
+      "type": "generic:section",
+      "label": "4.2 What an edition is",
+      "refOrdinal": 2
+    }
+  ],
+  "prev": {
+    "id": "018f0001-0000-7000-8000-000000000104",
+    "category": "block",
+    "type": "generic:paragraph",
+    "refOrdinal": 2
+  },
+  "next": {
+    "id": "018f0001-0000-7000-8000-000000000105",
+    "category": "block",
+    "type": "generic:paragraph",
+    "refOrdinal": 4
+  }
+}

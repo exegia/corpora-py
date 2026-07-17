@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/physical-locator.schema.json",
+  "title": "PhysicalLocator",
+  "description": "Embeddable value object mapping content back to a coordinate in a SourceAsset: page, printed page label, bounding box, character offsets, timecodes, or a source-native fragment id. At least one locating property is required. Logical structure never depends on locators.",
+  "allOf": [{ "$ref": "#/$defs/PhysicalLocator" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "PhysicalLocator": {
+      "type": "object",
+      "properties": {
+        "sourceAssetId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "pageIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based physical page index in the asset (PDF page index, scan index). NOT the printed number."
+        },
+        "printedLabel": {
+          "type": "string",
+          "description": "The page label as printed ('23', 'xiv', 'B-4'). May not be numeric or unique."
+        },
+        "bbox": { "$ref": "common.defs.schema.json#/$defs/BBox" },
+        "charStart": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start offset in the asset's extracted text stream (plaintext/HTML/XML sources)."
+        },
+        "charEnd": { "type": "integer", "minimum": 0 },
+        "timeStart": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds from the start of an audio/video asset."
+        },
+        "timeEnd": { "type": "number", "minimum": 0 },
+        "sourceFragmentId": {
+          "type": "string",
+          "description": "Source-native fragment id: EPUB/HTML anchor, TEI xml:id, OCR block id, subtitle cue id."
+        },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "anyOf": [
+        { "required": ["pageIndex"] },
+        { "required": ["printedLabel"] },
+        { "required": ["bbox"] },
+        { "required": ["charStart"] },
+        { "required": ["timeStart"] },
+        { "required": ["sourceFragmentId"] }
+      ]
+    }
+  }
+}

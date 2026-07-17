@@ -60,6 +60,9 @@ dev = [
     "httpx>=0.28.0",
     "ruff>=0.15.20",
     "mypy>=2.1.0",
+    # Context Fabric schema validation tests (tests/common/test_context_fabric_schemas.py).
+    # Declared explicitly: the transitive pin via the mcp SDK is not a contract.
+    "jsonschema>=4.26",
 ]
 
 # ── Tool configuration (shared across workspace) ───────────────────────────────

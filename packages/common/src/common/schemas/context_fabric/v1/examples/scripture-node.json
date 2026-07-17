@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1.0.0",
+  "node": {
+    "schemaVersion": "1.0.0",
+    "id": "018f0000-0000-7000-8000-000000000103",
+    "editionId": "018f0000-0000-7000-8000-000000000e01",
+    "parentId": "018f0000-0000-7000-8000-000000000102",
+    "ordinal": 15,
+    "depth": 3,
+    "category": "block",
+    "type": "bible:verse",
+    "refOrdinal": 16,
+    "label": "16",
+    "childCount": 0,
+    "sourceLocalId": "jhn3-v16",
+    "fragments": [
+      {
+        "schemaVersion": "1.0.0",
+        "id": "018f0000-0000-7000-8000-000000000201",
+        "nodeId": "018f0000-0000-7000-8000-000000000103",
+        "ordinal": 0,
+        "text": "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.",
+        "after": "",
+        "charStart": 0,
+        "charEnd": 141,
+        "locators": [
+          {
+            "sourceAssetId": "018f0000-0000-7000-8000-000000000f01",
+            "sourceFragmentId": "jhn3.xhtml#v16"
+          }
+        ]
+      }
+    ],
+    "text": "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.",
+    "ref": {
+      "scheme": "bible",
+      "kind": "canonical",
+      "workSlug": "john",
+      "editionSlug": "kjv",
+      "segments": [
+        { "levelType": "bible:book", "code": "JHN" },
+        { "levelType": "bible:chapter", "ordinal": 3 },
+        { "levelType": "bible:verse", "ordinal": 16 }
+      ],
+      "canonical": "bible/JHN/3/16",
+      "display": "John 3:16 (KJV)"
+    },
+    "provenance": {
+      "parser": { "name": "corpora-admin", "version": "0.1.2", "profile": "epub" },
+      "convertedAt": "2026-07-16T12:00:00Z",
+      "sourceAssetId": "018f0000-0000-7000-8000-000000000f01",
+      "confidence": 0.99,
+      "validationState": "human_validated"
+    },
+    "ext": {
+      "src/epub": { "class": "verse", "epub:type": "verse" }
+    }
+  },
+  "breadcrumbs": [
+    {
+      "id": "018f0000-0000-7000-8000-000000000101",
+      "category": "division",
+      "type": "bible:book",
+      "label": "John",
+      "code": "JHN"
+    },
+    {
+      "id": "018f0000-0000-7000-8000-000000000102",
+      "category": "division",
+      "type": "bible:chapter",
+      "label": "3",
+      "refOrdinal": 3
+    }
+  ],
+  "prev": {
+    "id": "018f0000-0000-7000-8000-000000000104",
+    "category": "block",
+    "type": "bible:verse",
+    "label": "15",
+    "refOrdinal": 15
+  },
+  "next": {
+    "id": "018f0000-0000-7000-8000-000000000105",
+    "category": "block",
+    "type": "bible:verse",
+    "label": "17",
+    "refOrdinal": 17
+  }
+}

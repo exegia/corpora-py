@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/annotation.schema.json",
+  "title": "Annotation",
+  "description": "Standoff content attached to a node, fragment, or range: footnotes, endnotes, editorial notes, cross-references, glosses, media attachments, reader comments. Annotations never alter the base text.",
+  "allOf": [{ "$ref": "#/$defs/Annotation" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "AnnotationTarget": {
+      "type": "object",
+      "description": "What the annotation is anchored to. Exactly one anchoring style is used.",
+      "properties": {
+        "nodeId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "fragmentId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "range": {
+          "type": "object",
+          "description": "A span across nodes, optionally trimmed by character offsets into the boundary nodes' concatenated text.",
+          "properties": {
+            "startNodeId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+            "endNodeId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+            "startChar": { "type": "integer", "minimum": 0 },
+            "endChar": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["startNodeId", "endNodeId"],
+          "additionalProperties": false
+        }
+      },
+      "anyOf": [{ "required": ["nodeId"] }, { "required": ["fragmentId"] }, { "required": ["range"] }],
+      "additionalProperties": false
+    },
+    "AnnotationBody": {
+      "type": "object",
+      "description": "The annotation's content: inline text, a pointer to a node subtree (rich bodies), a media asset, an external URI, or a Reference (cross-references).",
+      "properties": {
+        "text": { "type": "string" },
+        "nodeId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "assetId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "uri": { "type": "string", "format": "uri" },
+        "reference": { "$ref": "reference.schema.json#/$defs/Reference" }
+      },
+      "additionalProperties": false
+    },
+    "Annotation": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "editionId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "kind": {
+          "$ref": "common.defs.schema.json#/$defs/NamespacedType",
+          "description": "Open namespaced kind: 'note:footnote', 'note:editorial', 'ref:crossref', 'media:image', 'user:comment'."
+        },
+        "target": { "$ref": "#/$defs/AnnotationTarget" },
+        "body": { "$ref": "#/$defs/AnnotationBody" },
+        "marker": { "type": "string", "description": "Visible anchor marker in the text ('*', '1', '†')." },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "provenance": { "$ref": "common.defs.schema.json#/$defs/Provenance" },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "kind", "target"]
+    }
+  }
+}

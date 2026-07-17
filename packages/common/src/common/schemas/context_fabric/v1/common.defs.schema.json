@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/common.defs.schema.json",
+  "title": "Context Fabric — shared definitions",
+  "description": "Reusable $defs shared by every Context Fabric v1 entity schema. This file defines no root document type.",
+  "$defs": {
+    "Id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Opaque stable identifier. UUIDv7 recommended so ids sort roughly by creation time. Identity is ONLY carried by this field — never by labels, refs, or paths."
+    },
+    "SchemaVersion": {
+      "$ref": "#/$defs/SemVer",
+      "description": "Version of the Context Fabric schema the payload conforms to (semver). Major version also appears in the schema $id path (/v1/)."
+    },
+    "SemVer": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "Slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "maxLength": 128,
+      "description": "URL-safe lowercase identifier segment, unique within its parent scope."
+    },
+    "LangTag": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$",
+      "description": "BCP 47 language tag (e.g. 'en', 'grc', 'ar', 'he-Latn')."
+    },
+    "ScriptCode": {
+      "type": "string",
+      "pattern": "^[A-Z][a-z]{3}$",
+      "description": "ISO 15924 script code (e.g. 'Latn', 'Arab', 'Hebr')."
+    },
+    "Code": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "maxLength": 64,
+      "description": "Stable canonical code used for reference resolution (e.g. USFM book code 'JHN'). Language-independent; never a display label."
+    },
+    "NamespacedType": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$",
+      "description": "Open node/annotation type: '<namespace>:<name>' (e.g. 'bible:verse', 'quran:ayah', 'tei:div', 'generic:paragraph'). Namespaces are registered in the taxonomy doc; unknown types must degrade to their category."
+    },
+    "NodeCategory": {
+      "type": "string",
+      "enum": [
+        "root",
+        "division",
+        "section",
+        "heading",
+        "block",
+        "inline",
+        "list",
+        "table",
+        "figure",
+        "media",
+        "note",
+        "milestone"
+      ],
+      "description": "Closed rendering/query category. Frozen within a schema major version — new source semantics go into the open 'type' field, never here."
+    },
+    "Ext": {
+      "type": "object",
+      "description": "The single lossless extension point. Keys are namespaces ('tei', 'x-vendor') or namespace/subject pairs ('src/epub'); values are arbitrary JSON. Servers round-trip ext untouched; clients ignore unknown namespaces.",
+      "patternProperties": {
+        "^[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)?$": true
+      },
+      "additionalProperties": false
+    },
+    "Confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Parser/aligner confidence, 0 (guess) to 1 (certain)."
+    },
+    "ValidationState": {
+      "type": "string",
+      "enum": ["unvalidated", "machine_validated", "human_validated", "flagged", "rejected"],
+      "description": "Review lifecycle state of parsed content."
+    },
+    "ParserInfo": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Parser/converter package name (e.g. 'corpora-admin')." },
+        "version": { "$ref": "#/$defs/SemVer" },
+        "profile": {
+          "type": "string",
+          "description": "Structure profile the parser applied (e.g. 'epub', 'pdf', 'tei'). Matches a per-format alias table in the taxonomy."
+        }
+      },
+      "required": ["name", "version"],
+      "additionalProperties": false
+    },
+    "Correction": {
+      "type": "object",
+      "description": "One manual or automated correction applied after initial parse. History is append-only.",
+      "properties": {
+        "correctedAt": { "type": "string", "format": "date-time" },
+        "correctedBy": { "type": "string", "description": "User id, tool name, or 'system'." },
+        "path": { "type": "string", "description": "JSON Pointer to the corrected field within the entity." },
+        "previousValue": { "description": "Value before the correction (any JSON)." },
+        "note": { "type": "string" }
+      },
+      "required": ["correctedAt", "path"],
+      "additionalProperties": false
+    },
+    "Provenance": {
+      "type": "object",
+      "description": "How this entity came to exist: which parser produced it, when, from what, how confident, and what has been corrected since.",
+      "properties": {
+        "parser": { "$ref": "#/$defs/ParserInfo" },
+        "convertedAt": { "type": "string", "format": "date-time" },
+        "sourceAssetId": { "$ref": "#/$defs/Id" },
+        "confidence": { "$ref": "#/$defs/Confidence" },
+        "validationState": { "$ref": "#/$defs/ValidationState", "default": "unvalidated" },
+        "corrections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Correction" }
+        }
+      },
+      "required": ["parser", "convertedAt"],
+      "additionalProperties": false
+    },
+    "BBox": {
+      "type": "object",
+      "description": "Rectangle on a physical page. Origin top-left of the page.",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 },
+        "unit": { "type": "string", "enum": ["pt", "px", "ratio"], "default": "pt" }
+      },
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false
+    },
+    "EntityRef": {
+      "type": "object",
+      "description": "Typed pointer to any Context Fabric entity.",
+      "properties": {
+        "entity": {
+          "type": "string",
+          "enum": ["corpus", "work", "edition", "node", "fragment", "asset", "annotation"]
+        },
+        "id": { "$ref": "#/$defs/Id" }
+      },
+      "required": ["entity", "id"],
+      "additionalProperties": false
+    },
+    "Creator": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string", "description": "e.g. 'author', 'translator', 'editor', 'speaker'." }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    }
+  }
+}

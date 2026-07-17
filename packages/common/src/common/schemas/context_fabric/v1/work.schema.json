@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/work.schema.json",
+  "title": "Work",
+  "description": "An abstract intellectual creation, independent of any particular text, translation, or physical form (FRBR 'work'): the Gospel of John, the Quran, a specific letter, a speech. Editions realize works.",
+  "allOf": [{ "$ref": "#/$defs/Work" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "Work": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "corpusId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "slug": { "$ref": "common.defs.schema.json#/$defs/Slug" },
+        "title": { "type": "string", "minLength": 1 },
+        "sortTitle": { "type": "string", "description": "Title normalized for sorting (articles stripped, transliterated)." },
+        "creators": {
+          "type": "array",
+          "items": { "$ref": "common.defs.schema.json#/$defs/Creator" }
+        },
+        "originalLanguage": { "$ref": "common.defs.schema.json#/$defs/LangTag" },
+        "genre": {
+          "type": "string",
+          "description": "Free-form genre hint (e.g. 'scripture', 'monograph', 'letter', 'academic-paper', 'speech', 'transcript'). Informative only; never drives parsing or rendering."
+        },
+        "refScheme": {
+          "$ref": "common.defs.schema.json#/$defs/Slug",
+          "description": "Default canonical reference scheme for this work (e.g. 'bible', 'quran', 'monograph'). Registered in the reference-scheme registry; editions may override."
+        },
+        "date": { "type": "string", "description": "Composition date or range, free-form ('1863', 'c. 90 AD')." },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "corpusId", "slug", "title"]
+    }
+  }
+}

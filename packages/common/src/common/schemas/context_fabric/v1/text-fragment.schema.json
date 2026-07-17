@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.exegia.co/context-fabric/v1/text-fragment.schema.json",
+  "title": "TextFragment",
+  "description": "A contiguous run of text belonging to exactly one ContentNode. Fragments are the join between logical structure and physical location: a node spanning two pages has (at least) two fragments, each with its own PhysicalLocator; a page holding parts of several nodes holds one fragment per node.",
+  "allOf": [{ "$ref": "#/$defs/TextFragment" }],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "TextFragment": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "$ref": "common.defs.schema.json#/$defs/SchemaVersion" },
+        "id": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "nodeId": { "$ref": "common.defs.schema.json#/$defs/Id" },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based order of this fragment within its node."
+        },
+        "text": { "type": "string" },
+        "after": {
+          "type": "string",
+          "default": "",
+          "description": "Separator that follows this fragment when concatenating node text (mirrors Text-Fabric's 'after' feature)."
+        },
+        "language": { "$ref": "common.defs.schema.json#/$defs/LangTag" },
+        "script": { "$ref": "common.defs.schema.json#/$defs/ScriptCode" },
+        "charStart": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start offset of this fragment within the node's concatenated plain text."
+        },
+        "charEnd": { "type": "integer", "minimum": 0 },
+        "locators": {
+          "type": "array",
+          "items": { "$ref": "physical-locator.schema.json#/$defs/PhysicalLocator" }
+        },
+        "confidence": { "$ref": "common.defs.schema.json#/$defs/Confidence" },
+        "ext": { "$ref": "common.defs.schema.json#/$defs/Ext" }
+      },
+      "required": ["schemaVersion", "id", "nodeId", "ordinal", "text"]
+    }
+  }
+}

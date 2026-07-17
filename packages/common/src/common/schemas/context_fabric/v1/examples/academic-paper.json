@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "1.0.0",
+  "node": {
+    "schemaVersion": "1.0.0",
+    "id": "018f0003-0000-7000-8000-000000000102",
+    "editionId": "018f0003-0000-7000-8000-000000000e01",
+    "parentId": "018f0003-0000-7000-8000-000000000100",
+    "ordinal": 2,
+    "depth": 1,
+    "category": "section",
+    "type": "acad:section",
+    "refOrdinal": 2,
+    "heading": "2. Methods",
+    "childCount": 2,
+    "locators": [
+      {
+        "sourceAssetId": "018f0003-0000-7000-8000-000000000f01",
+        "pageIndex": 2,
+        "printedLabel": "142"
+      },
+      {
+        "sourceAssetId": "018f0003-0000-7000-8000-000000000f01",
+        "pageIndex": 3,
+        "printedLabel": "143"
+      }
+    ],
+    "children": [
+      {
+        "schemaVersion": "1.0.0",
+        "id": "018f0003-0000-7000-8000-000000000103",
+        "editionId": "018f0003-0000-7000-8000-000000000e01",
+        "parentId": "018f0003-0000-7000-8000-000000000102",
+        "ordinal": 0,
+        "depth": 2,
+        "category": "block",
+        "type": "acad:paragraph",
+        "childCount": 0,
+        "fragments": [
+          {
+            "schemaVersion": "1.0.0",
+            "id": "018f0003-0000-7000-8000-000000000201",
+            "nodeId": "018f0003-0000-7000-8000-000000000103",
+            "ordinal": 0,
+            "text": "We sampled 214 digitized editions across four source formats and measured structural fidelity after conversion.",
+            "after": " ",
+            "charStart": 0,
+            "charEnd": 111,
+            "locators": [
+              {
+                "sourceAssetId": "018f0003-0000-7000-8000-000000000f01",
+                "pageIndex": 2,
+                "printedLabel": "142",
+                "bbox": { "x": 54.0, "y": 388.2, "width": 243.5, "height": 64.0, "unit": "pt" }
+              }
+            ]
+          },
+          {
+            "schemaVersion": "1.0.0",
+            "id": "018f0003-0000-7000-8000-000000000202",
+            "nodeId": "018f0003-0000-7000-8000-000000000103",
+            "ordinal": 1,
+            "text": "Fidelity was scored by two annotators working independently.",
+            "after": "",
+            "charStart": 112,
+            "charEnd": 172,
+            "locators": [
+              {
+                "sourceAssetId": "018f0003-0000-7000-8000-000000000f01",
+                "pageIndex": 3,
+                "printedLabel": "143",
+                "bbox": { "x": 306.0, "y": 72.0, "width": 243.5, "height": 28.0, "unit": "pt" }
+              }
+            ]
+          }
+        ],
+        "text": "We sampled 214 digitized editions across four source formats and measured structural fidelity after conversion. Fidelity was scored by two annotators working independently.",
+        "annotations": [
+          {
+            "schemaVersion": "1.0.0",
+            "id": "018f0003-0000-7000-8000-000000000301",
+            "editionId": "018f0003-0000-7000-8000-000000000e01",
+            "kind": "note:footnote",
+            "marker": "3",
+            "target": { "fragmentId": "018f0003-0000-7000-8000-000000000202" },
+            "body": {
+              "text": "Inter-annotator agreement: Cohen's κ = 0.83."
+            }
+          }
+        ]
+      },
+      {
+        "schemaVersion": "1.0.0",
+        "id": "018f0003-0000-7000-8000-000000000104",
+        "editionId": "018f0003-0000-7000-8000-000000000e01",
+        "parentId": "018f0003-0000-7000-8000-000000000102",
+        "ordinal": 1,
+        "depth": 2,
+        "category": "table",
+        "type": "acad:table",
+        "label": "Table 1",
+        "heading": "Table 1: Corpus composition by source format",
+        "childCount": 0,
+        "locators": [
+          {
+            "sourceAssetId": "018f0003-0000-7000-8000-000000000f01",
+            "pageIndex": 3,
+            "printedLabel": "143",
+            "bbox": { "x": 54.0, "y": 140.0, "width": 495.0, "height": 180.0, "unit": "pt" }
+          }
+        ],
+        "ext": {
+          "src/pdf": { "tableModel": { "rows": 5, "cols": 3 } }
+        }
+      }
+    ],
+    "ref": {
+      "scheme": "academic",
+      "kind": "canonical",
+      "workSlug": "structural-fidelity-2026",
+      "segments": [{ "levelType": "acad:section", "ordinal": 2 }],
+      "canonical": "academic/section-2",
+      "display": "§2 Methods"
+    },
+    "provenance": {
+      "parser": { "name": "corpora-admin", "version": "0.1.2", "profile": "pdf" },
+      "convertedAt": "2026-07-16T12:20:00Z",
+      "sourceAssetId": "018f0003-0000-7000-8000-000000000f01",
+      "confidence": 0.87,
+      "validationState": "machine_validated"
+    }
+  },
+  "breadcrumbs": [
+    {
+      "id": "018f0003-0000-7000-8000-000000000100",
+      "category": "root",
+      "type": "acad:article",
+      "label": "Structural Fidelity in Automated Corpus Conversion"
+    }
+  ],
+  "prev": {
+    "id": "018f0003-0000-7000-8000-000000000101",
+    "category": "section",
+    "type": "acad:section",
+    "label": "1. Introduction",
+    "refOrdinal": 1
+  },
+  "next": {
+    "id": "018f0003-0000-7000-8000-000000000105",
+    "category": "section",
+    "type": "acad:section",
+    "label": "3. Results",
+    "refOrdinal": 3
+  }
+}
