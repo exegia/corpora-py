@@ -1,10 +1,11 @@
 name: Demo App - Docker Image
 
-# Builds and (optionally) publishes a dev container image for the ElectroBun "example.
-# The image contains Bun + the local Python library (editable venv inside container).
-# Bundling of the "frozen" embedded Python (wheel + standalone) is driven from
-# root scripts/ (see scripts/build_embedded_python.py and scripts/setup.py).
-# The dev container sets up a venv shim + DEV_PYTHON_BIN override on start.
+# Builds and (optionally) publishes a dev container image for the ElectroBun
+# example app (example/Dockerfile, built from the repo root).
+# The image contains Bun + the local Python library (editable uv venv inside
+# the container) and sets DEV_PYTHON_BIN so the app's PythonBridge
+# (example/bun/python-bridge.ts) uses that venv — no frozen/embedded Python
+# runtime is bundled (that bundling belongs to the build-sidecar workflow).
 #
 # MANUAL-ONLY until example/Dockerfile is rewritten: the Dockerfile is a
 # stale npm/react-router template from before the example-app restructure —
