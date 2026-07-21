@@ -16,6 +16,7 @@
       "runtimeArgs": [
         "AUTH_REQUIRED=false",
         "HF_STORAGE_REPO=philagora/corpora-archives",
+        "HF_STORAGE_REPO_TYPE=dataset",
         "uv",
         "run",
         "corpora-api"
