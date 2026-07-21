@@ -1,3 +1,4 @@
+import { apiFetch } from "~/lib/settings"
 import { API_URL } from "~/lib/types/socket"
 
 /**
@@ -104,6 +105,9 @@ export type CorpusIndex = {
 export type Passage = {
   ref: string
   text: string
+  /** Graph node id of the passage (added by newer backends; optional so the
+   * client tolerates older API responses without it). */
+  node?: number
 }
 
 /** `GET /storage/{filename}/content`. */
@@ -191,7 +195,7 @@ const parseJson = async <T>(response: Response): Promise<T> => {
 // ── Async API client ────────────────────────────────────────────────────────
 
 export const fetchManifest = async (id: string): Promise<Manifest> => {
-  const response = await fetch(`${storagePath(id)}/manifest`)
+  const response = await apiFetch(`${storagePath(id)}/manifest`)
   return parseJson<Manifest>(response)
 }
 
@@ -199,7 +203,7 @@ export const patchManifest = async (
   id: string,
   patch: ManifestPatch
 ): Promise<Manifest> => {
-  const response = await fetch(`${storagePath(id)}/manifest`, {
+  const response = await apiFetch(`${storagePath(id)}/manifest`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -208,7 +212,7 @@ export const patchManifest = async (
 }
 
 export const fetchIndex = async (id: string): Promise<CorpusIndex> => {
-  const response = await fetch(`${storagePath(id)}/index`)
+  const response = await apiFetch(`${storagePath(id)}/index`)
   return parseJson<CorpusIndex>(response)
 }
 
@@ -222,7 +226,7 @@ export const fetchContent = async (
   if (query.offset != null) params.set("offset", String(query.offset))
   if (query.limit != null) params.set("limit", String(query.limit))
   const suffix = params.toString() ? `?${params.toString()}` : ""
-  const response = await fetch(`${storagePath(id)}/content${suffix}`)
+  const response = await apiFetch(`${storagePath(id)}/content${suffix}`)
   return parseJson<ContentResponse>(response)
 }
 

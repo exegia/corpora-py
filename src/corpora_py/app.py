@@ -133,6 +133,11 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Browser MCP clients (the example app's chat agent) must be able to READ
+    # the streamable-http session header FastMCP issues on initialize --
+    # without exposing it, JS gets the response but not the header, sends no
+    # session id back, and every follow-up request 400s ("Missing session ID").
+    expose_headers=["mcp-session-id", "mcp-protocol-version"],
 )
 app.mount("/mcp", _mcp_app)
 app.include_router(conversion_router)

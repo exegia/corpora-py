@@ -1,11 +1,11 @@
 [project]
 name = "corpora-mcp"
-version = "0.1.2"
+version = "0.1.3"
 requires-python = ">=3.13"
 keywords = ["exegia", "corpora", "bible", "mcp", "text-fabric", "context-fabric"]
 
 dependencies = [
-    "corpora-common>=0.1.2",
+    "corpora-common>=0.1.3",
     # MCP server
     "fastmcp>=3.4.2",
     # Corpus runtime

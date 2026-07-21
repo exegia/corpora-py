@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useParams, useSearchParams } from "react-router"
+import { Form, useParams, useSearchParams } from "react-router"
 import {
   AlertTriangle,
   BookOpen,
@@ -27,6 +27,13 @@ import {
   pickerOptions,
 } from "~/lib/corpus-detail"
 import { cn } from "~/lib/utils"
+import { Input } from "@base-ui/react"
+import {
+  ChatPanel,
+  CorpusBlock,
+  SplitWorkspace,
+  WorkspaceProvider,
+} from "~/components/workspace"
 
 export function meta() {
   return [{ title: "Corpus viewer · Corpora" }]
@@ -45,6 +52,7 @@ type ContentState =
       status: "ready"
       passages: Passage[]
       total: number
+      query: string
       nextOffset: number | null
       format: string
       ref: string | null
@@ -58,6 +66,7 @@ export default function CorpusView() {
 
   const [options, setOptions] = useState<PickerOption[]>([])
   const [state, setState] = useState<ContentState>({ status: "loading" })
+  const [query, setQuery] = useState("")
   const [loadingMore, setLoadingMore] = useState(false)
 
   // Section picker data — best-effort; a missing index just hides the picker.
@@ -92,6 +101,7 @@ export default function CorpusView() {
           nextOffset: res.next_offset,
           format: res.format,
           ref: res.ref,
+          query: "",
         })
       )
       .catch((error) =>
@@ -139,20 +149,11 @@ export default function CorpusView() {
   const loaded = state.status === "ready" ? state.passages.length : 0
   const total = state.status === "ready" ? state.total : 0
 
-  return (
+  // Left pane of the split workspace — the existing reader, unchanged apart
+  // from passages now rendering as selectable `CorpusBlock`s.
+  const reader = (
     <div className="flex w-full flex-col gap-4">
       {/* Search uses Form method="get" so the query lives in the URL. */}
-      <Form method="get" className="w-full">
-        <label htmlFor="q" className="sr-only">{`Search ${id}`}</label>
-        <Input
-          aria-label="placeholder="
-          id="q"
-          name="q"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search ${id}…`}
-        />
-      </Form>
 
       <Card>
         <CardHeader>
@@ -268,17 +269,11 @@ export default function CorpusView() {
             <>
               <ol className="flex flex-col gap-2" aria-label="Passages">
                 {state.passages.map((passage, index) => (
-                  <li
+                  <CorpusBlock
                     key={`${passage.ref}-${index}`}
-                    className="rounded-md border p-3"
-                  >
-                    <div className="mb-1 font-mono text-xs text-muted-foreground">
-                      {passage.ref}
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">
-                      {passage.text}
-                    </p>
-                  </li>
+                    passage={passage}
+                    blockKey={`${passage.ref}#${index}`}
+                  />
                 ))}
               </ol>
 
@@ -309,5 +304,14 @@ export default function CorpusView() {
         </CardContent>
       </Card>
     </div>
+  )
+
+  // Split-screen workspace: reader on the left, mock AI chat on the right.
+  // The provider wires block selection/focus, attachments, and composer
+  // inserts between the two panes (UI-only — no LLM calls or persistence).
+  return (
+    <WorkspaceProvider corpusId={corpusId}>
+      <SplitWorkspace reader={reader} chat={<ChatPanel />} />
+    </WorkspaceProvider>
   )
 }

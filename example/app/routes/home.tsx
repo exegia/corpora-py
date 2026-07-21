@@ -25,9 +25,11 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-        {rest.map((item) => (
-          <MenuCard key={item.to} item={item} size="primary" />
-        ))}
+        {rest
+          .filter((item) => item.to !== "/settings")
+          .map((item) => (
+            <MenuCard key={item.to} item={item} size="primary" />
+          ))}
       </div>
     </div>
   )
@@ -46,7 +48,7 @@ function MenuCard({
 
   return (
     <Card
-      className="h-full transform cursor-pointer rounded-2xl border border-neutral-100 shadow shadow-neutral-300 transition-all hover:-translate-y-1 hover:bg-neutral-100 hover:shadow-2xl dark:border-neutral-800 dark:shadow-black dark:hover:bg-neutral-950"
+      className="h-full transform cursor-pointer rounded-3xl border border-neutral-100 shadow shadow-neutral-300 transition-all hover:-translate-y-1 hover:bg-neutral-100 hover:shadow-2xl dark:border-neutral-800 dark:shadow-black dark:hover:bg-neutral-950"
       onClick={() => navigate(item.to)}
     >
       <CardContent>

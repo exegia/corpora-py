@@ -46,7 +46,7 @@ doesn't give. Same one-implementation/two-surfaces shape as storage:
   unresolvable section reference), **502** (Hub rejected it). Unlike `/convert` and job-first `/storage` uploads, these
   routes have **no per-resource ownership check** — only the app-wide `AuthMiddleware` gates them.
 - **`corpus_detail_mcp.py`** — MCP tools `corpus_manifest_get`, `corpus_manifest_update`,
-  `corpus_index`, `corpus_content`. **Imports `fastmcp`, so — exactly like `storage_mcp` — it is deliberately excluded
+  `corpus_index`, `corpus_content`, `corpus_node_get`, `corpus_node_annotate`. **Imports `fastmcp`, so — exactly like `storage_mcp` — it is deliberately excluded
   from `admin.services.__init__`** and only imported by `corpora_py.app`, which calls
   `register_corpus_detail_tools(mcp)` alongside `register_storage_tools(mcp)`.
   `corpus_detail_api` (no fastmcp) *is* re-exported from `__init__`. A standalone `cf-mcp` process never registers
@@ -54,8 +54,12 @@ doesn't give. Same one-implementation/two-surfaces shape as storage:
 
 **In-process cache + invalidation.** `corpus_detail._cache` (filename → extracted dir + lazily loaded api, guarded by
 `_lock`) keeps a downloaded/extracted archive around so repeated manifest/index/content reads don't re-fetch.
-`update_manifest` re-zips the extracted archive, re-uploads it to the Hub, then calls `invalidate(filename)` so the next
-read re-fetches the updated bytes — **a PATCH is the only writer, and it always invalidates.** `corpus_storage`,
+The writers (`update_manifest`, `annotate_node`) share `_republish`: re-zip the extracted archive, re-upload it to the
+Hub, then `invalidate(filename)` so the next read re-fetches the updated bytes — **PATCHes are the only writers, and
+they always invalidate.** `annotate_node` records node-type corrections in an `annotations.json` sidecar at the archive
+root (`{"nodes": {"<id>": {otype, note, converted_otype, updated_at}}}`); the converted Text-Fabric payload under
+`corpora/` is never rewritten. `get_node` surfaces one node's otype/slot-span/features/text plus its sidecar entry;
+content passages carry their `node` id so clients can cherry-pick nodes without a ref→node round-trip. `corpus_storage`,
 `_HUB_CACHE_ROOT`, and `_cache` are module-level so a test can monkeypatch one fake `corpus_storage`
 and cover the REST router and MCP tools alike.
 

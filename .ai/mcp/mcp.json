@@ -1,0 +1,9 @@
+{
+  "$comment": "MCP servers exposed by this repo. `corpora` is the combined corpora-api app's MCP endpoint (uv run corpora-api, or the example app's launch.json `corpora-api-noauth` config) — streamable HTTP at /mcp/. It serves the corpora_mcp query tools plus the storage_*/corpus_* Hub-archive tools, including corpus_node_get / corpus_node_annotate used by the example app's AI chat to audit and correct converted node types. In production, requests need an `Authorization: Bearer <supabase-jwt>` header.",
+  "mcpServers": {
+    "corpora": {
+      "type": "http",
+      "url": "http://127.0.0.1:8000/mcp/"
+    }
+  }
+}

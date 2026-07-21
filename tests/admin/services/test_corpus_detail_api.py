@@ -62,6 +62,9 @@ class FakeStorage:
 
     def upload(self, local_path, filename=None):
         self.uploads.append((Path(local_path), filename))
+        # Serve the re-uploaded archive on subsequent downloads, like the Hub
+        # would -- writer tests can then verify their change round-trips.
+        self._bytes = Path(local_path).read_bytes()
         return None
 
 
@@ -182,7 +185,8 @@ def test_get_content_whole_corpus_paginates(client):
     assert body["limit"] == 2
     assert body["next_offset"] == 2
     assert len(body["passages"]) == 2
-    assert all(set(p) == {"ref", "text"} for p in body["passages"])
+    assert all(set(p) == {"node", "ref", "text"} for p in body["passages"])
+    assert all(isinstance(p["node"], int) for p in body["passages"])
     assert body["passages"][0]["text"]  # non-empty
 
 
@@ -226,3 +230,113 @@ def test_index_ref_round_trips_into_content(client):
     assert body["ref"] == ref
     assert body["total"] == 5
     assert body["passages"]
+
+
+# ── Nodes (GET) ────────────────────────────────────────────────────────────────
+
+
+def _first_passage_node(client) -> int:
+    """A real passage node id straight from the content endpoint."""
+    body = client.get(f"/storage/{ARCHIVE_NAME}/content", params={"limit": 1}).json()
+    return body["passages"][0]["node"]
+
+
+def test_get_node_shape(client):
+    node = _first_passage_node(client)
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/nodes/{node}")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["node"] == node
+    assert body["otype"] == "paragraph"
+    assert body["is_slot"] is False
+    assert body["slot_type"] == "word"
+    # A paragraph spans a real slot range, in order.
+    assert isinstance(body["first_slot"], int)
+    assert isinstance(body["last_slot"], int)
+    assert body["first_slot"] <= body["last_slot"]
+    assert body["text"]
+    assert isinstance(body["features"], dict)
+    assert body["annotation"] is None
+    assert set(body["node_types"]) >= {"book", "paragraph", "word"}
+
+
+def test_get_node_slot_node(client):
+    """Slot nodes report is_slot=True and span exactly themselves."""
+    detail = client.get(
+        f"/storage/{ARCHIVE_NAME}/nodes/{_first_passage_node(client)}"
+    ).json()
+    slot = detail["first_slot"]
+
+    body = client.get(f"/storage/{ARCHIVE_NAME}/nodes/{slot}").json()
+    assert body["otype"] == "word"
+    assert body["is_slot"] is True
+    assert body["first_slot"] == body["last_slot"] == slot
+
+
+def test_get_node_unknown_node_is_404(client):
+    assert client.get(f"/storage/{ARCHIVE_NAME}/nodes/999999").status_code == 404
+
+
+def test_get_node_unknown_filename_is_404(client):
+    assert client.get("/storage/absent.corpus/nodes/1").status_code == 404
+
+
+# ── Nodes (PATCH) ──────────────────────────────────────────────────────────────
+
+
+def test_patch_node_records_annotation_and_republishes(client, fake_storage):
+    node = _first_passage_node(client)
+    resp = client.patch(
+        f"/storage/{ARCHIVE_NAME}/nodes/{node}",
+        json={"otype": "clause", "note": "converter over-grouped this"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["node"] == node
+    assert body["otype"] == "clause"
+    assert body["note"] == "converter over-grouped this"
+    # The converter's original type is recorded server-side for provenance.
+    assert body["converted_otype"] == "paragraph"
+    assert body["updated_at"]
+
+    # The archive was re-uploaded and the cache invalidated (same contract as
+    # a manifest PATCH).
+    assert fake_storage.uploads
+    assert fake_storage.uploads[-1][1] == ARCHIVE_NAME
+    assert ARCHIVE_NAME not in corpus_detail._cache
+
+
+def test_patch_node_annotation_round_trips_into_get(client, fake_storage):
+    """After a PATCH, a fresh download of the archive carries the annotation.
+
+    The fake storage serves the last-uploaded bytes (like the Hub), and the
+    PATCH invalidated the cache -- so the GET below re-downloads the
+    re-published archive and must find the sidecar entry in it.
+    """
+    node = _first_passage_node(client)
+    client.patch(f"/storage/{ARCHIVE_NAME}/nodes/{node}", json={"otype": "clause"})
+
+    body = client.get(f"/storage/{ARCHIVE_NAME}/nodes/{node}").json()
+    assert body["annotation"]["otype"] == "clause"
+    assert body["annotation"]["converted_otype"] == "paragraph"
+
+    # A second PATCH merges into the existing entry rather than replacing it.
+    client.patch(f"/storage/{ARCHIVE_NAME}/nodes/{node}", json={"note": "2nd pass"})
+    body = client.get(f"/storage/{ARCHIVE_NAME}/nodes/{node}").json()
+    assert body["annotation"]["otype"] == "clause"
+    assert body["annotation"]["note"] == "2nd pass"
+    assert body["annotation"]["converted_otype"] == "paragraph"
+
+
+def test_patch_node_empty_body_is_422(client):
+    node = _first_passage_node(client)
+    resp = client.patch(f"/storage/{ARCHIVE_NAME}/nodes/{node}", json={})
+    assert resp.status_code == 422
+
+
+def test_patch_node_unknown_node_is_404(client):
+    resp = client.patch(
+        f"/storage/{ARCHIVE_NAME}/nodes/999999", json={"otype": "word"}
+    )
+    assert resp.status_code == 404
