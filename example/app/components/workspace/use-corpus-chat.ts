@@ -6,6 +6,7 @@ import { API_URL } from "~/lib/types/socket"
 import {
   ANTHROPIC_BROWSER_HEADERS,
   authHeaders,
+  boundFetch,
   getApiKey,
   hasValidAnthropicKey,
   useApiKeys,
@@ -170,17 +171,6 @@ export type SendMessageInput = {
   text: string
   references?: CorpusReference[]
 }
-
-/**
- * `window.fetch` bound to the global. The SDK stores its `fetch` option as an
- * object property and calls it method-style, which re-binds `this` to that
- * object — Chrome then throws "Illegal invocation". An arrow wrapper keeps
- * the call on the global no matter how it's invoked.
- */
-// Cast: Bun's global types add a `preconnect` static to `typeof fetch` that a
-// plain wrapper can't carry; the SDK only ever calls the function itself.
-const boundFetch = ((input: RequestInfo | URL, init?: RequestInit) =>
-  globalThis.fetch(input, init)) as typeof fetch
 
 export function useCorpusChat(corpusId: string) {
   const keys = useApiKeys()

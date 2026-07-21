@@ -304,6 +304,17 @@ export const hasValidAnthropicKey = (
 
 // ── Auth-aware fetch ────────────────────────────────────────────────────────
 
+/**
+ * `window.fetch` bound to the global. The AI SDK stores its `fetch` option as
+ * an object property and calls it method-style, which re-binds `this` to that
+ * object — Chrome then throws "Illegal invocation". An arrow wrapper keeps the
+ * call on the global no matter how it's invoked.
+ */
+// Cast: Bun's global types add a `preconnect` static to `typeof fetch` that a
+// plain wrapper can't carry; the SDK only ever calls the function itself.
+export const boundFetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+  globalThis.fetch(input, init)) as typeof fetch
+
 /** Thrown by {@link apiFetch} in production when no Supabase key is stored --
  * call sites surface `error.message` through their existing error paths. */
 export class MissingApiKeyError extends Error {
