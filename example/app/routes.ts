@@ -14,6 +14,9 @@ export default [
   // settings — manage the Hugging Face / Supabase API keys
   route("settings", "routes/settings.tsx"),
 
+  // chat — load a published corpus into the MCP server and chat about it
+  route("chat", "routes/chat.tsx"),
+
   ...prefix("corpus", [
     // corpus/upload — ingest a new corpus
     route("upload", "routes/corpus/upload.tsx"),
