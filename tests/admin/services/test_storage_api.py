@@ -217,3 +217,28 @@ def test_delete(client, fake_storage):
 
 def test_delete_missing_is_404(client):
     assert client.delete("/storage/absent.corpus").status_code == 404
+
+
+# ── read-only mode (HF_READ_ONLY) ─────────────────────────────────────────────
+# The `require_writable` dependency rejects mutating routes with 403 up front,
+# before any Hub I/O -- reads stay open.
+
+
+def test_read_only_post_is_403(client, fake_storage, monkeypatch):
+    monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
+    resp = client.post("/storage", json={"path": "/tmp/x.corpus"})
+    assert resp.status_code == 403
+    assert fake_storage.uploads == []
+
+
+def test_read_only_delete_is_403(client, fake_storage, monkeypatch):
+    monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
+    resp = client.delete("/storage/BHSA.corpus")
+    assert resp.status_code == 403
+    assert fake_storage.deleted == []
+
+
+def test_read_only_still_allows_reads(client, monkeypatch):
+    monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
+    assert client.get("/storage").status_code == 200
+    assert client.get("/storage/BHSA.corpus").status_code == 200

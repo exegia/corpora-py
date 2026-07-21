@@ -23,13 +23,15 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from common.utils.config import settings
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 
 from .jobs import JobStatus, job_manager
 from .storage import (
     CorpusNotFoundError,
+    ReadOnlyStorageError,
     StorageError,
     StorageNotConfiguredError,
     StoredCorpus,
@@ -39,6 +41,24 @@ from .storage import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/storage", tags=["Storage"])
+
+
+def require_writable() -> None:
+    """Refuse write requests up front when the Hub is in read-only mode.
+
+    A route dependency so a public, tokenless deployment (`HF_READ_ONLY=true`)
+    rejects mutating requests with an immediate 403 -- before any Hub download
+    or archive extraction runs, so anonymous callers can't drive pointless
+    (billable) Hub I/O. `CorpusStorage.upload`/`.delete` still refuse writes on
+    their own (`ReadOnlyStorageError`) as the authoritative backstop; this just
+    makes the rejection fast and clean. Shared by the storage and corpus-detail
+    write routes.
+    """
+    if settings.hf_read_only:
+        raise HTTPException(
+            status_code=403,
+            detail="This deployment is read-only; Hub writes are disabled.",
+        )
 
 # Where `GET /storage/{filename}/download` materializes archives fetched from
 # the Hub before streaming them back. Like `_RESULTS_ROOT` (`api.py`) nothing
@@ -56,6 +76,8 @@ async def _run[T](fn: Callable[[], T]) -> T:
         return await asyncio.to_thread(fn)
     except StorageNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ReadOnlyStorageError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except CorpusNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except StorageError as exc:
@@ -146,7 +168,12 @@ async def get_stored_corpus(filename: str) -> StoredCorpusResponse:
     return _response(await _run(lambda: corpus_storage.info(filename)))
 
 
-@router.post("", response_model=StoredCorpusResponse, status_code=201)
+@router.post(
+    "",
+    response_model=StoredCorpusResponse,
+    status_code=201,
+    dependencies=[Depends(require_writable)],
+)
 async def upload_corpus(payload: UploadRequest, request: Request) -> StoredCorpusResponse:
     """Push a finished `.corpus` archive to the Hub storage repo."""
     local, filename = _resolve_upload_source(payload, request)
@@ -164,7 +191,9 @@ async def download_stored_corpus(filename: str) -> FileResponse:
     return FileResponse(local, filename=local.name)
 
 
-@router.delete("/{filename}", status_code=204)
+@router.delete(
+    "/{filename}", status_code=204, dependencies=[Depends(require_writable)]
+)
 async def delete_stored_corpus(filename: str) -> None:
     """Remove one archive from the Hub storage repo."""
     await _run(lambda: corpus_storage.delete(filename))
