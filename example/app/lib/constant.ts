@@ -5,6 +5,7 @@ import {
   ListIcon,
   LucideHome,
   LucideUploadCloud,
+  SettingsIcon,
 } from "lucide-react"
 import { BoardIllustration } from "~/components/examples/c-empty-14"
 import { NodesIllustration } from "~/components/examples/c-empty-19"
@@ -52,5 +53,13 @@ export const MENU_ITEMS: MenuItem[] = [
     to: "/chat",
     icon: BubblesIcon,
     illustration: ChatIllustration,
+  },
+  // Always present in the header nav so API keys stay manageable even when
+  // the features they unlock (e.g. Explore) are disabled.
+  {
+    label: "Settings",
+    description: "Manage the Hugging Face and Supabase API keys.",
+    icon: SettingsIcon,
+    to: "/settings",
   },
 ]

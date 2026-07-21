@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useParams, useSearchParams } from "react-router"
+import { Form, useParams, useSearchParams } from "react-router"
 import {
   AlertTriangle,
   BookOpen,
@@ -27,6 +27,7 @@ import {
   pickerOptions,
 } from "~/lib/corpus-detail"
 import { cn } from "~/lib/utils"
+import { Input } from "@base-ui/react"
 
 export function meta() {
   return [{ title: "Corpus viewer · Corpora" }]
@@ -45,6 +46,7 @@ type ContentState =
       status: "ready"
       passages: Passage[]
       total: number
+      query: string
       nextOffset: number | null
       format: string
       ref: string | null
@@ -58,6 +60,7 @@ export default function CorpusView() {
 
   const [options, setOptions] = useState<PickerOption[]>([])
   const [state, setState] = useState<ContentState>({ status: "loading" })
+  const [query, setQuery] = useState("")
   const [loadingMore, setLoadingMore] = useState(false)
 
   // Section picker data — best-effort; a missing index just hides the picker.
@@ -92,12 +95,13 @@ export default function CorpusView() {
           nextOffset: res.next_offset,
           format: res.format,
           ref: res.ref,
+          query: "",
         })
       )
       .catch((error) =>
         setState({ status: "error", message: errorMessage(error) })
       )
-  }, [corpusId, ref])
+  }, [])
 
   useEffect(() => {
     load()
