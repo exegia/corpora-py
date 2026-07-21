@@ -23,9 +23,11 @@ from typing import Any
 from fastmcp.exceptions import ToolError
 
 from .corpus_detail import (
+    annotate_node,
     get_content,
     get_index,
     get_manifest,
+    get_node,
     update_manifest,
 )
 from .storage import StorageError
@@ -99,6 +101,59 @@ def register_corpus_detail_tools(mcp: Any) -> None:
         )
 
     @mcp.tool()
+    async def corpus_node_get(filename: str, node: int) -> str:
+        """
+        Inspect one graph node of a stored archive: type, slot span, text,
+        features, and any recorded annotation.
+
+        Use this to audit whether the converter assigned the node the right
+        type (slot vs non-slot, word/paragraph/clause/...): `otype` is the
+        converted type, `is_slot`/`slot_type`/`first_slot`/`last_slot` place it
+        in the graph model, `features` holds every non-empty node feature, and
+        `node_types` lists every type the corpus defines.
+
+        Args:
+            filename: Archive name, e.g. "BHSA.corpus".
+            node:     Integer node id (passages returned by corpus_content
+                      carry their node id).
+        """
+        try:
+            detail = await asyncio.to_thread(get_node, filename, node)
+        except StorageError as exc:
+            raise ToolError(str(exc)) from exc
+        return json.dumps(detail, indent=2, ensure_ascii=False, default=str)
+
+    @mcp.tool()
+    async def corpus_node_annotate(
+        filename: str,
+        node: int,
+        otype: str | None = None,
+        note: str | None = None,
+    ) -> str:
+        """
+        Record a node-type correction for a stored archive's node.
+
+        Writes to the archive's `annotations.json` sidecar (the converted
+        Text-Fabric payload itself is never rewritten), re-uploads the archive,
+        and records the converter's original type as `converted_otype`. Provide
+        at least one of `otype`/`note`.
+
+        Args:
+            filename: Archive name, e.g. "BHSA.corpus".
+            node:     Integer node id to annotate.
+            otype:    The corrected node type (e.g. "word", "clause",
+                      "paragraph").
+            note:     Free-text rationale for the correction.
+        """
+        if otype is None and note is None:
+            raise ToolError("Provide otype and/or note to annotate a node.")
+        try:
+            entry = await asyncio.to_thread(annotate_node, filename, node, otype, note)
+        except StorageError as exc:
+            raise ToolError(str(exc)) from exc
+        return "Annotated node:\n" + json.dumps(entry, indent=2, ensure_ascii=False)
+
+    @mcp.tool()
     async def corpus_index(filename: str) -> str:
         """
         Section structure (books/chapters/pages) and node-type counts of an archive.
@@ -162,7 +217,9 @@ def register_corpus_detail_tools(mcp: Any) -> None:
             f"passages {result['offset']}-{result['offset'] + len(result['passages'])} "
             f"of {result['total']}"
         )
-        body = "\n\n".join(f"[{p['ref']}] {p['text']}" for p in result["passages"])
+        body = "\n\n".join(
+            f"[node {p['node']} · {p['ref']}] {p['text']}" for p in result["passages"]
+        )
         footer = (
             f"\n\n(next offset: {result['next_offset']})"
             if result["next_offset"] is not None

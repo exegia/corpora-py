@@ -26,9 +26,11 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, model_validator
 
 from .corpus_detail import (
+    annotate_node,
     get_content,
     get_index,
     get_manifest,
+    get_node,
     update_manifest,
 )
 from .storage import (
@@ -96,6 +98,39 @@ async def patch_corpus_manifest(
     """Patch a subset of the manifest, re-upload the archive, return the full manifest."""
     updates = payload.model_dump(exclude_unset=True)
     return await _run(lambda: update_manifest(filename, updates))
+
+
+class NodeAnnotation(BaseModel):
+    """Node-correction payload: the corrected type and/or a rationale note.
+
+    An empty body is rejected (422) -- a PATCH must provide at least one of
+    the two. The converter's original type is recorded server-side
+    (`converted_otype`), never supplied by the client.
+    """
+
+    otype: str | None = None
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _require_one(self) -> NodeAnnotation:
+        if not self.model_fields_set:
+            raise ValueError("Provide otype and/or note to annotate a node")
+        return self
+
+
+@router.get("/{filename}/nodes/{node}")
+async def get_corpus_node(filename: str, node: int) -> dict[str, Any]:
+    """Inspect one graph node: type, slot span, text, features, annotation."""
+    return await _run(lambda: get_node(filename, node))
+
+
+@router.patch("/{filename}/nodes/{node}")
+async def patch_corpus_node(
+    filename: str, node: int, payload: NodeAnnotation
+) -> dict[str, Any]:
+    """Record a node-type correction in the archive's annotations sidecar."""
+    updates = payload.model_dump(exclude_unset=True)
+    return await _run(lambda: annotate_node(filename, node, **updates))
 
 
 @router.get("/{filename}/index")

@@ -13,6 +13,10 @@ import { API_URL } from "~/lib/types/socket"
  *   `Authorization: Bearer` header on every corpora-api call, but ONLY in a
  *   production build ({@link IS_PROD}). In development the backend runs with
  *   `AUTH_REQUIRED=false`, so the header is omitted and the key is optional.
+ * - Anthropic API key -- powers the real AI agent in the corpus workspace
+ *   chat (`components/workspace/use-corpus-chat.ts`), which calls the
+ *   Anthropic API directly from the webview. Without a validated key the chat
+ *   falls back to its mock assistant.
  *
  * Storage: `sessionStorage`, scoped to the tab/session -- keys never touch
  * localStorage, URLs, or logs. Error messages built here deliberately never
@@ -27,7 +31,7 @@ import { API_URL } from "~/lib/types/socket"
 /** Build-mode switch: Bearer auth is enforced only in production builds. */
 export const IS_PROD = import.meta.env.PROD
 
-export type ApiKeyName = "hf" | "supabase"
+export type ApiKeyName = "hf" | "supabase" | "anthropic"
 
 /** Validation state of a stored key ("missing" is derived from `value`). */
 export type ApiKeyStatus = "unchecked" | "valid" | "invalid"
@@ -40,6 +44,7 @@ export type ApiKeyEntry = {
 export type ApiKeysSnapshot = {
   hf: ApiKeyEntry
   supabase: ApiKeyEntry
+  anthropic: ApiKeyEntry
 }
 
 export type ValidationResult = {
@@ -75,18 +80,28 @@ const listeners = new Set<() => void>()
 
 // Cached so `useSyncExternalStore`'s getSnapshot returns a stable reference
 // between writes (a fresh object every call would loop the render).
-let snapshot: ApiKeysSnapshot = { hf: EMPTY_ENTRY, supabase: EMPTY_ENTRY }
+let snapshot: ApiKeysSnapshot = {
+  hf: EMPTY_ENTRY,
+  supabase: EMPTY_ENTRY,
+  anthropic: EMPTY_ENTRY,
+}
 let hydrated = false
 
+const readAll = (): ApiKeysSnapshot => ({
+  hf: readEntry("hf"),
+  supabase: readEntry("supabase"),
+  anthropic: readEntry("anthropic"),
+})
+
 const refreshSnapshot = (): void => {
-  snapshot = { hf: readEntry("hf"), supabase: readEntry("supabase") }
+  snapshot = readAll()
   for (const listener of listeners) listener()
 }
 
 const getSnapshot = (): ApiKeysSnapshot => {
   if (!hydrated && typeof sessionStorage !== "undefined") {
     hydrated = true
-    snapshot = { hf: readEntry("hf"), supabase: readEntry("supabase") }
+    snapshot = readAll()
   }
   return snapshot
 }
@@ -228,6 +243,64 @@ export const validateSupabaseKey = async (
     }
   }
 }
+
+/**
+ * Extra header Anthropic requires before it will serve a browser (CORS)
+ * request at all -- the app talks to the API directly from the webview with
+ * the user's own key, there is no proxy in between.
+ */
+export const ANTHROPIC_BROWSER_HEADERS: Record<string, string> = {
+  "anthropic-dangerous-direct-browser-access": "true",
+}
+
+/**
+ * Verifies an Anthropic API key by listing models -- the cheapest
+ * authenticated call, and its response doubles as a sanity check that the
+ * browser can reach the API cross-origin.
+ */
+export const validateAnthropicKey = async (
+  key: string
+): Promise<ValidationResult> => {
+  const trimmed = key.trim()
+  if (!trimmed) return { ok: false, message: "Enter a key first." }
+  try {
+    const response = await fetch(
+      "https://api.anthropic.com/v1/models?limit=1",
+      {
+        headers: {
+          "x-api-key": trimmed,
+          "anthropic-version": "2023-06-01",
+          ...ANTHROPIC_BROWSER_HEADERS,
+        },
+      }
+    )
+    if (response.ok)
+      return { ok: true, message: "Key verified with Anthropic." }
+    if (response.status === 401) {
+      return {
+        ok: false,
+        message:
+          "Anthropic rejected the key (401). Check it in the Anthropic console and try again.",
+      }
+    }
+    return {
+      ok: false,
+      message: `Anthropic validation failed (${response.status}). Try again.`,
+    }
+  } catch {
+    return {
+      ok: false,
+      message:
+        "Could not reach api.anthropic.com to validate the key. Check your connection and try again.",
+    }
+  }
+}
+
+/** True once an Anthropic key has been saved AND validated -- the gate the
+ * chat panel checks before running the real agent instead of the mock. */
+export const hasValidAnthropicKey = (
+  keys: ApiKeysSnapshot = getSnapshot()
+): boolean => keys.anthropic.value !== "" && keys.anthropic.status === "valid"
 
 // ── Auth-aware fetch ────────────────────────────────────────────────────────
 

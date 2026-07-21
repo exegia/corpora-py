@@ -18,6 +18,9 @@ export type CorpusReference = {
   blockKey: string
   /** Short excerpt shown in tooltips / previews. */
   excerpt: string
+  /** Graph node id of the passage, when the backend provided one — the handle
+   * the AI agent uses to inspect/annotate the node over MCP. */
+  node?: number
 }
 
 export type TextPart = { type: "text"; text: string }
@@ -27,7 +30,17 @@ export type CorpusReferencePart = {
   data: CorpusReference
 }
 
-export type MessagePart = TextPart | CorpusReferencePart
+/** One agent tool invocation, rendered as an activity row in the message. */
+export type ToolActivityPart = {
+  type: "tool"
+  toolCallId: string
+  name: string
+  state: "running" | "done" | "error"
+  /** Short human-readable summary of the call (e.g. "node 38552"). */
+  detail?: string
+}
+
+export type MessagePart = TextPart | CorpusReferencePart | ToolActivityPart
 
 export type ChatMessage = {
   id: string
