@@ -11,8 +11,10 @@ runs:
     - name: Build all workspace packages
       shell: bash
       run: |
-        # build the umbrella package (corpora-py) for sidecar/example installs
-        uv build --wheel --out-dir dist/
+        # Build every workspace member (corpora-common / -mcp / -admin / -py),
+        # not just the umbrella — the umbrella pins the other three by version,
+        # so all four must land on PyPI together for it to be installable.
+        uv build --all-packages --wheel --out-dir dist/
         echo "Built wheels:"
         ls -lh dist/*.whl
 
