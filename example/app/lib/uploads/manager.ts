@@ -1,4 +1,5 @@
 import { getDefaultStore } from "jotai"
+import { apiFetch, withWsAuth } from "~/lib/settings"
 import { API_URL } from "~/lib/types/socket"
 import {
   uploadAtom,
@@ -6,7 +7,10 @@ import {
   type UploadEntry,
   type ValidationOutcome,
 } from "~/lib/atoms/upload-atom"
-import { type JobStatusMessage, subscribeJobStatus } from "~/lib/hooks/use-socket"
+import {
+  type JobStatusMessage,
+  subscribeJobStatus,
+} from "~/lib/hooks/use-socket"
 import { loadPersistedUploads, savePersistedUploads } from "./persistence"
 import { detectSourceFormat } from "./source-format"
 import { saveCorpusFile } from "./save-corpus-file"
@@ -77,7 +81,7 @@ const updateEntry = (
 }
 
 const fetchCorpusBlob = async (jobId: string): Promise<Blob> => {
-  const response = await fetch(`${API_URL}/convert/${jobId}/download`)
+  const response = await apiFetch(`${API_URL}/convert/${jobId}/download`)
   if (!response.ok) throw new Error(`Download failed (${response.status})`)
   return response.blob()
 }
@@ -102,7 +106,7 @@ const validateConversion = async (
   jobId: string
 ): Promise<ValidationOutcome> => {
   try {
-    const response = await fetch(`${API_URL}/validate`, {
+    const response = await apiFetch(`${API_URL}/validate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: jobId }),
@@ -145,7 +149,7 @@ export const publishConversion = async (
   jobId: string
 ): Promise<StorageOutcome> => {
   try {
-    const response = await fetch(`${API_URL}/storage`, {
+    const response = await apiFetch(`${API_URL}/storage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: jobId }),
@@ -238,7 +242,10 @@ const handleJobSucceeded = async (
 }
 
 const trackJob = (id: string, jobId: string, wsPath: string): void => {
-  const wsUrl = `${API_URL.replace(/^http/, "ws")}${wsPath}`
+  // WebSocket handshakes can't carry an Authorization header, so in
+  // production the Supabase key rides along as a `?token=` query param
+  // (matching the backend's AuthMiddleware WebSocket contract).
+  const wsUrl = withWsAuth(`${API_URL.replace(/^http/, "ws")}${wsPath}`)
 
   const handleMessage = (message: JobStatusMessage) => {
     // Applies regardless of which branch below fires -- the server can push
@@ -337,7 +344,7 @@ export const uploadFile = async (
     )
     formData.append("description", options.description?.trim() || "")
 
-    const response = await fetch(`${API_URL}/convert`, {
+    const response = await apiFetch(`${API_URL}/convert`, {
       method: "POST",
       body: formData,
     })
@@ -468,7 +475,7 @@ export const publishUpload = async (id: string): Promise<void> => {
 // once the user actually clicks "Save file".
 const reconcileReady = async (id: string, jobId: string): Promise<void> => {
   try {
-    const response = await fetch(`${API_URL}/convert/${jobId}`)
+    const response = await apiFetch(`${API_URL}/convert/${jobId}`)
     if (!response.ok) throw new Error(`Job lookup failed (${response.status})`)
     const status = (await response.json()) as {
       status: string

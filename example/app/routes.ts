@@ -11,6 +11,9 @@ export default [
   // explore — browse/search the .corpus archives published to the Hub
   route("explore", "routes/explore.tsx"),
 
+  // settings — manage the Hugging Face / Supabase API keys
+  route("settings", "routes/settings.tsx"),
+
   ...prefix("corpus", [
     // corpus/upload — ingest a new corpus
     route("upload", "routes/corpus/upload.tsx"),

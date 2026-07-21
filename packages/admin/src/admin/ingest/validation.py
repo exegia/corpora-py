@@ -5,7 +5,7 @@ The Context Fabric schemas are packaged inside `corpora-common`
 their output offline at conversion time (phase 2 of
 `docs/architecture/context-fabric/07-migration-mapping.md`). The schemas
 cross-reference each other by absolute `$id` URI; a `referencing.Registry`
-resolves them without any network fetch — same mechanism as
+resolves them without any network fetch — the same mechanism as
 `tests/common/test_context_fabric_schemas.py`.
 """
 
@@ -45,11 +45,15 @@ def validator_for(schema_filename: str) -> Draft202012Validator:
     )
 
 
-def _collect_errors(instance: dict[str, Any], schema_filename: str, at: str) -> list[str]:
+def _collect_errors(
+    instance: dict[str, Any], schema_filename: str, at: str
+) -> list[str]:
     validator = validator_for(schema_filename)
     return [
         f"{at}/{'/'.join(str(p) for p in error.absolute_path)}: {error.message}"
-        for error in sorted(validator.iter_errors(instance), key=lambda e: list(e.absolute_path))
+        for error in sorted(
+            validator.iter_errors(instance), key=lambda e: list(e.absolute_path)
+        )
     ]
 
 
@@ -70,7 +74,9 @@ def validate_graph(graph: dict[str, Any]) -> None:
         if key in graph:
             errors.extend(_collect_errors(graph[key], schema_filename, at=key))
     for i, node in enumerate(graph.get("nodes", [])):
-        errors.extend(_collect_errors(node, "content-node.schema.json", at=f"nodes[{i}]"))
+        errors.extend(
+            _collect_errors(node, "content-node.schema.json", at=f"nodes[{i}]")
+        )
     for i, fragment in enumerate(graph.get("fragments", [])):
         errors.extend(
             _collect_errors(fragment, "text-fragment.schema.json", at=f"fragments[{i}]")

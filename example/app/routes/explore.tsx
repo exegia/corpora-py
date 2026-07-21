@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
 import { type MetaDescriptor, useNavigate } from "react-router"
 import {
-  ArrowRight,
-  Check,
   Download,
   ExternalLink,
   FileSpreadsheet,
+  KeyRound,
   RefreshCw,
   Search,
   SearchX,
@@ -26,6 +25,7 @@ import {
 import { Input } from "~/components/ui/input"
 import { Skeleton } from "~/components/ui/skeleton"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
+import { apiFetch, hasValidHfKey, useApiKeys } from "~/lib/settings"
 import { API_URL } from "~/lib/types/socket"
 import { cn } from "~/lib/utils"
 
@@ -56,7 +56,7 @@ const displayName = (filename: string): string =>
 
 const fetchStoredCorpora = async (): Promise<LoadState> => {
   try {
-    const response = await fetch(`${API_URL}/storage`)
+    const response = await apiFetch(`${API_URL}/storage`)
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
         detail?: string
@@ -78,14 +78,47 @@ export default function Explore() {
   const [state, setState] = useState<LoadState>({ status: "loading" })
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+
+  // Fetch-based download (instead of a plain <a href>) so the request can
+  // carry the Authorization header apiFetch adds in production.
+  const downloadCorpus = async (filename: string) => {
+    setDownloading(filename)
+    setDownloadError(null)
+    try {
+      const response = await apiFetch(
+        `${API_URL}/storage/${encodeURIComponent(filename)}/download`
+      )
+      if (!response.ok) throw new Error(`Download failed (${response.status})`)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  // Explore is gated on a saved-and-validated Hugging Face API key (see
+  // routes/settings.tsx) -- without one, nothing is fetched or listed.
+  const keys = useApiKeys()
+  const hfReady = hasValidHfKey(keys)
 
   const load = () => {
     setState({ status: "loading" })
     void fetchStoredCorpora().then(setState)
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
-  useEffect(load, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load() is stable
+  useEffect(() => {
+    if (hfReady) load()
+  }, [hfReady])
 
   const corpora = state.status === "ready" ? state.corpora : []
   const filtered = useMemo(() => {
@@ -96,7 +129,56 @@ export default function Explore() {
         corpus.filename.toLowerCase().includes(needle) ||
         corpus.repo_id.toLowerCase().includes(needle)
     )
-  }, [corpora, query])
+  }, [query])
+
+  if (!hfReady) {
+    return (
+      <div className="flex w-full flex-col gap-6">
+        <div>
+          <h2 className="text-2xl font-semibold">
+            Explore{" "}
+            <Badge variant="secondary" className="py-1.5 text-xl">
+              .corpus
+            </Badge>
+          </h2>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            Browse, search, and download the Context-Fabric <code>.corpus</code>{" "}
+            archives published to the Hugging Face Hub.
+          </p>
+        </div>
+        <Card>
+          <CardContent>
+            <Empty className="border-2 border-dashed">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HuggingFaceIcon className="size-6" />
+                </EmptyMedia>
+                <EmptyTitle>
+                  {keys.hf.status === "invalid"
+                    ? "Hugging Face API key is invalid"
+                    : "Hugging Face API key required"}
+                </EmptyTitle>
+                <EmptyDescription>
+                  {keys.hf.status === "invalid"
+                    ? "The saved key failed validation. Update or replace it in Settings to re-enable Explore."
+                    : "Explore is disabled until a Hugging Face API key is saved and validated in Settings."}
+                </EmptyDescription>
+              </EmptyHeader>
+              <Button
+                onClick={() => navigate("/settings")}
+                className="gap-1.5"
+                data-cuelume-press
+                data-cuelume-release
+              >
+                <KeyRound className="size-4" aria-hidden="true" />
+                Open Settings
+              </Button>
+            </Empty>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -156,6 +238,14 @@ export default function Explore() {
               />
             </Button>
           </div>
+
+          {downloadError && (
+            <Alert variant="destructive" role="alert">
+              <Download className="size-4" aria-hidden="true" />
+              <AlertTitle>Download failed</AlertTitle>
+              <AlertDescription>{downloadError}</AlertDescription>
+            </Alert>
+          )}
 
           {state.status === "loading" && (
             <div className="flex flex-col gap-2" aria-label="Loading corpora">
@@ -260,10 +350,17 @@ export default function Explore() {
                     <div
                       role="button"
                       tabIndex={0}
+
                       aria-pressed={isSelected}
-                      onClick={() =>
-                        setSelected(isSelected ? null : corpus.filename)
-                      }
+                      onClick={() => {
+                        if (isSelected) {
+                          navigate(
+                            `/corpus/${encodeURIComponent(displayName(corpus.filename))}`
+                          )
+                        } else {
+                          setSelected(isSelected ? null : corpus.filename)
+                        }
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault()
@@ -271,7 +368,7 @@ export default function Explore() {
                         }
                       }}
                       className={cn(
-                        "flex cursor-pointer flex-col gap-3 rounded-lg border-2 bg-background p-3 transition-colors",
+                        "flex cursor-pointer flex-col gap-3 rounded-2xl border-2 bg-background p-3 transition-colors",
                         "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
                         isSelected
                           ? "border-amber-400 dark:border-amber-500"
@@ -298,12 +395,6 @@ export default function Explore() {
                             {corpus.repo_id}
                           </p>
                         </div>
-                        {isSelected && (
-                          <Check
-                            className="size-4 shrink-0 text-amber-600 dark:text-amber-400"
-                            aria-hidden="true"
-                          />
-                        )}
                       </div>
 
                       {isSelected && (
@@ -312,28 +403,18 @@ export default function Explore() {
                           onClick={(event) => event.stopPropagation()}
                         >
                           <Button
-                            onClick={() =>
-                              navigate(
-                                `/corpus/${encodeURIComponent(displayName(corpus.filename))}`
-                              )
-                            }
+                            onClick={() => void downloadCorpus(corpus.filename)}
+                            disabled={downloading === corpus.filename}
+                            variant="ghost"
                             className="gap-1.5"
                             data-cuelume-press
                             data-cuelume-release
                           >
-                            Details
-                            <ArrowRight className="size-4" aria-hidden="true" />
-                          </Button>
-                          <a
-                            href={`${API_URL}/storage/${encodeURIComponent(corpus.filename)}/download`}
-                            download={corpus.filename}
-                            className={cn(buttonVariants(), "gap-1.5")}
-                            data-cuelume-press
-                            data-cuelume-release
-                          >
                             <Download className="size-4" aria-hidden="true" />
-                            Download
-                          </a>
+                            {downloading === corpus.filename
+                              ? "Downloading…"
+                              : "Download"}
+                          </Button>
                           <a
                             href={corpus.url}
                             target="_blank"
