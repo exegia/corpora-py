@@ -28,6 +28,12 @@ import {
 } from "~/lib/corpus-detail"
 import { cn } from "~/lib/utils"
 import { Input } from "@base-ui/react"
+import {
+  ChatPanel,
+  CorpusBlock,
+  SplitWorkspace,
+  WorkspaceProvider,
+} from "~/components/workspace"
 
 export function meta() {
   return [{ title: "Corpus viewer · Corpora" }]
@@ -101,7 +107,7 @@ export default function CorpusView() {
       .catch((error) =>
         setState({ status: "error", message: errorMessage(error) })
       )
-  }, [])
+  }, [corpusId, ref])
 
   useEffect(() => {
     load()
@@ -143,7 +149,9 @@ export default function CorpusView() {
   const loaded = state.status === "ready" ? state.passages.length : 0
   const total = state.status === "ready" ? state.total : 0
 
-  return (
+  // Left pane of the split workspace — the existing reader, unchanged apart
+  // from passages now rendering as selectable `CorpusBlock`s.
+  const reader = (
     <div className="flex w-full flex-col gap-4">
       {/* Search uses Form method="get" so the query lives in the URL. */}
       <Form method="get" className="w-full">
@@ -272,17 +280,11 @@ export default function CorpusView() {
             <>
               <ol className="flex flex-col gap-2" aria-label="Passages">
                 {state.passages.map((passage, index) => (
-                  <li
+                  <CorpusBlock
                     key={`${passage.ref}-${index}`}
-                    className="rounded-md border p-3"
-                  >
-                    <div className="mb-1 font-mono text-xs text-muted-foreground">
-                      {passage.ref}
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">
-                      {passage.text}
-                    </p>
-                  </li>
+                    passage={passage}
+                    blockKey={`${passage.ref}#${index}`}
+                  />
                 ))}
               </ol>
 
@@ -313,5 +315,14 @@ export default function CorpusView() {
         </CardContent>
       </Card>
     </div>
+  )
+
+  // Split-screen workspace: reader on the left, mock AI chat on the right.
+  // The provider wires block selection/focus, attachments, and composer
+  // inserts between the two panes (UI-only — no LLM calls or persistence).
+  return (
+    <WorkspaceProvider corpusId={corpusId}>
+      <SplitWorkspace reader={reader} chat={<ChatPanel />} />
+    </WorkspaceProvider>
   )
 }
