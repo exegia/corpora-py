@@ -111,12 +111,13 @@ export const loadGraphModelDoc = async (): Promise<string> => {
     const response = await fetch(GRAPH_MODEL_DOC_URL, {
       signal: AbortSignal.timeout(4000),
     })
-    if (response.ok) {
+    if (response.ok && typeof DOMParser !== "undefined") {
       const html = await response.text()
-      const text = html
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<[^>]+>/g, " ")
+      // Parse instead of regex-stripping: DOMParser never executes scripts,
+      // and textContent extraction can't be fooled by malformed tags.
+      const parsed = new DOMParser().parseFromString(html, "text/html")
+      for (const el of parsed.querySelectorAll("script, style")) el.remove()
+      const text = (parsed.body?.textContent ?? "")
         .replace(/\s{3,}/g, "\n\n")
         .trim()
       // A tag-stripped page still has to look like the doc; otherwise it's a
