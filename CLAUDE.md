@@ -110,6 +110,18 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # remains the deployment for heavy/long-running conversion work.
 vercel deploy          # manual preview deploy from a linked checkout
 vercel deploy --prod   # manual production deploy
+
+# ── Second Vercel project: the web example (corpora-py-example.vercel.app) ────
+# The React Router app in example/ (ssr:false → static SPA) is deployed as a
+# SEPARATE Vercel project on this same repo (Root Directory = example, config
+# in example/vercel.json: framework:null, buildCommand `react-router build`,
+# outputDirectory dist/client, SPA catch-all rewrite). Both projects share the
+# repo's Git integration and production branch (dev), so a push that redeploys
+# this API also redeploys the web example — no GitHub Actions, no chaining.
+# VITE_API_URL (build-time, Vite-inlined) must point at the API's prod URL.
+# Auth caveat: the API is JWT-gated (AUTH_REQUIRED default True) so the public
+# web build 401s until Supabase sign-in is wired. See example/README.md
+# ("Deploy the web example to Vercel") for the one-time project setup.
 ```
 
 ## Architecture

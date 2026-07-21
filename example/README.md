@@ -57,6 +57,52 @@ bun run vite:build
 bun run build:canary
 ```
 
+## Deploy the web example to Vercel
+
+The same React Router app that ships inside Electrobun can be served on the web
+as a static SPA (`react-router.config.ts` sets `ssr: false`). It is deployed to
+**`corpora-py-example.vercel.app`** as a **second Vercel project on this same
+repo**, distinct from the Python API project (`corpora-py`, deployed from the
+repo root).
+
+Both projects are wired to the repo's Git integration, so **a push that
+redeploys the API also redeploys the web example** — no GitHub Actions, no
+deploy chaining. `example/vercel.json` pins the static-SPA build so the project
+works the moment it is linked:
+
+- `framework: null`, `buildCommand: react-router build`,
+  `outputDirectory: dist/client` — plain static output, **not** the
+  `@vercel/react-router` SSR preset (the build also emits `dist/server/`; it is
+  intentionally ignored so Vercel never deploys a server function).
+- A catch-all rewrite (`/(.*) → /index.html`) hands unknown paths to the client
+  router; real assets under `/assets/*` still serve directly (the filesystem is
+  checked before rewrites).
+
+### One-time setup (Vercel dashboard or CLI)
+
+1. **Create the project** from this GitHub repo → set **Root Directory** to
+   `example`. Vercel reads `example/vercel.json` from there.
+2. **Production Branch** → `dev` (match the API project so both promote
+   production on the same push).
+3. **Environment variable** — add `VITE_API_URL = https://corpora-py.vercel.app`
+   (Production + Preview). This is **build-time**: Vite inlines it, so it must
+   exist *before* the build runs, or the bundle falls back to
+   `http://127.0.0.1:8000` (see `app/lib/types/socket.ts`).
+4. **Domain** — assign `corpora-py-example.vercel.app` to the project's
+   production deployment.
+5. Trigger the first deploy (push, or **Redeploy**). On that first build,
+   confirm it serves the SPA statically (an `index.html` at the root, assets
+   under `/assets/`) and does **not** spin up a React Router server function.
+
+### Auth caveat (read before sharing the URL)
+
+Every API path except `/health`, `/`, and `/docs` is gated: `AuthMiddleware`
+requires a Supabase Bearer JWT, and `AUTH_REQUIRED` defaults to `True`
+(fail-closed). The public web build has no signed-in Supabase session, so
+`/storage`, `/convert`, and `/mcp` calls return **401** — the page renders but
+loads no corpora. Wiring Supabase sign-in into the web build (or running the
+target API with `AUTH_REQUIRED=false`) is a separate task from this deploy.
+
 ## Project Structure
 
 ```
