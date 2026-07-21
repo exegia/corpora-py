@@ -14,15 +14,34 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICENSE"]
-# Umbrella: pulling this installs all three workspace packages.
-# Used by the sidecar/example build to get everything in one install.
+# Self-contained: this wheel BUNDLES the source of the corpora-common,
+# corpora-mcp and corpora-admin workspace packages (see
+# [tool.hatch.build.targets.wheel]), so `pip install corpora-py` pulls
+# nothing corpora-* from PyPI — only their third-party deps, declared
+# directly below. corpora-py is the only package published to PyPI.
 dependencies = [
-    "corpora-admin>=0.1.1",
-    "corpora-common>=0.1.1",
-    "corpora-mcp>=0.1.1",
     "dotenvx>=0.0.0",
-    # Corpus runtime
+    # ── common (settings, auth, web) ──
+    "pydantic-settings>=2.14.2",
+    "fastapi>=0.139.0",
+    "cryptography>=42.0.0",
+    "platformdirs>=4.10.0",
+    "pyjwt>=2.13.0",
+    # ── mcp server ──
+    "fastmcp>=3.4.2",
+    "python-multipart>=0.0.32",
+    # ── admin (parsing + Context-Fabric conversion) ──
     "context-fabric>=0.5.7",
+    "text-fabric>=13.1.0",
+    "ebooklib>=0.20",
+    "beautifulsoup4>=4.15.0",
+    "lxml>=6.1.1",
+    "pypdf>=6.14.2",
+    "pyyaml>=6.0.3",
+    "huggingface-hub>=1.0",
+    "docling-core>=2.30",
+    "jsonschema>=4.25",
+    "referencing>=0.36",
     # Combined FastAPI app (MCP + conversion API)
     "uvicorn[standard]>=0.49.0",
 ]
@@ -30,7 +49,7 @@ dependencies = [
 [project.optional-dependencies]
 # Full Docling converter for /ingest (admin.ingest) — heavy (torch). Enable
 # with `uv sync --extra docling` in dev, or install `corpora-py[docling]`.
-docling = ["corpora-admin[docling]"]
+docling = ["docling>=2.0"]
 
 [project.scripts]
 # Re-exported from corpora-mcp for convenience
@@ -43,7 +62,20 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# Umbrella wheel — tiny corpora_py module; real code lives in workspace members.
+# Self-contained wheel: bundle the source of every workspace member into this
+# single corpora-py distribution so it is the only package that needs to exist
+# on PyPI. (Their third-party deps are declared in [project.dependencies].)
+packages = [
+    "src/corpora_py",
+    "packages/common/src/common",
+    "packages/mcp/src/corpora_mcp",
+    "packages/admin/src/admin",
+]
+
+[tool.hatch.build.targets.editable]
+# Dev editable exposes only corpora_py; the other members are installed as
+# editable workspace packages via the dev dependency-group, so local imports
+# of admin/common/corpora_mcp resolve to their own source trees.
 packages = ["src/corpora_py"]
 
 # ── uv workspace ──────────────────────────────────────────────────────────────
@@ -57,8 +89,15 @@ corpora-mcp = { workspace = true }
 corpora-admin = { workspace = true }
 
 [dependency-groups]
-# Dev-only tools (not shipped in any package)
+# Dev-only (not shipped in the published wheel).
 dev = [
+    # The workspace members whose source the corpora-py wheel bundles. They are
+    # NOT runtime deps of corpora-py (their code ships inside it), but are
+    # installed editable here so local dev/tests import them from their own
+    # source trees and so each stays independently buildable/testable.
+    "corpora-common",
+    "corpora-mcp",
+    "corpora-admin",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=7.1.0",

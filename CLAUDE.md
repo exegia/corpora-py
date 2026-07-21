@@ -252,8 +252,15 @@ clients can't set custom headers on the handshake).
 
 On PR merge: the `bump` job auto-increments the patch version in **all** workspace
 `pyproject.toml` files simultaneously, commits back with `[skip ci]`, and pushes a `vX.Y.Z`
-tag. The `build` and `publish` jobs then run against that tag, building and publishing all four wheels
-(`corpora-common`, `corpora-mcp`, `corpora-admin`, `corpora-py`) to PyPI via OIDC trusted publishing (no stored token).
+tag. The `build` and `publish` jobs then run against that tag, building and publishing to PyPI via OIDC
+trusted publishing (no stored token). **Only `corpora-py` is published**: its wheel is self-contained —
+`[tool.hatch.build.targets.wheel]` in the root `pyproject.toml` bundles the source of `corpora-common`,
+`corpora-mcp` and `corpora-admin` into the single `corpora-py` distribution, and the three packages'
+third-party deps are flattened into `corpora-py`'s own `[project.dependencies]` (there are no `corpora-*`
+runtime deps). The three remain workspace members — installed editable via the `dev` dependency-group for
+local dev/tests, and still independently buildable — but are **not** published to PyPI (so
+`pip install corpora-mcp`/`-admin`/`-common` from PyPI is intentionally not a thing; install `corpora-py`).
+Only a `corpora-py` trusted publisher (PyPI project + workflow `publish.yml` + environment `pypi`) is needed.
 
 The `build-sidecar` workflow builds the same four wheels, then bundles them per-platform (macOS arm64/x64, Windows) into
 a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun apps. The bundle step runs
