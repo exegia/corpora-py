@@ -105,6 +105,9 @@ export type CorpusIndex = {
 export type Passage = {
   ref: string
   text: string
+  /** Graph node id of the passage (added by newer backends; optional so the
+   * client tolerates older API responses without it). */
+  node?: number
 }
 
 /** `GET /storage/{filename}/content`. */

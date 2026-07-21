@@ -28,12 +28,14 @@ the functions here).
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import tempfile
 import threading
 import zipfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -310,6 +312,18 @@ def update_manifest(filename: str, updates: dict[str, Any]) -> dict[str, Any]:
     manifest.update(editable)
     manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
 
+    name = _republish(filename, cached)
+    logger.info("Updated manifest for %s (%s)", name, sorted(editable))
+    return manifest
+
+
+def _republish(filename: str, cached: _Cached) -> str:
+    """Re-zip the extracted archive, upload it, invalidate the cache.
+
+    The shared tail of every archive writer (`update_manifest`,
+    `annotate_node`): whoever mutated files under `cached.extract_dir` calls
+    this to publish the change. Returns the normalized archive name.
+    """
     name = _safe_name(filename)
     with tempfile.TemporaryDirectory(prefix="corpus-detail-") as tmp:
         base = Path(tmp) / Path(name).stem
@@ -319,8 +333,149 @@ def update_manifest(filename: str, updates: dict[str, Any]) -> dict[str, Any]:
         corpus_storage.upload(out, name)
 
     invalidate(name)
-    logger.info("Updated manifest for %s (%s)", name, sorted(editable))
-    return manifest
+    return name
+
+
+# ── Nodes (inspect + annotate) ────────────────────────────────────────────────
+
+# Sidecar file at the archive root (next to manifest.yml) recording node-level
+# corrections: {"nodes": {"<node id>": {"otype": ..., "note": ..., ...}}}.
+# The converted Text-Fabric payload under corpora/ is never rewritten -- an
+# annotation records what the type SHOULD be (plus provenance) so downstream
+# consumers and future re-conversions can apply it, without risking the
+# binary feature data on an imperfect in-place edit.
+_ANNOTATIONS_FILE = "annotations.json"
+
+
+def _read_annotations(extract_dir: Path) -> dict[str, Any]:
+    """Parse the annotations sidecar, tolerating a missing/corrupt file."""
+    path = extract_dir / _ANNOTATIONS_FILE
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def get_annotations(filename: str) -> dict[str, Any]:
+    """Return the archive's node-annotation sidecar (empty dict if absent)."""
+    cached = _ensure_extracted(filename)
+    return _read_annotations(cached.extract_dir)
+
+
+def _require_api(filename: str) -> Any:
+    """Load the cfabric api or raise (the node surfaces can't degrade to empty)."""
+    api = _load_api(filename)
+    if api is None:
+        raise CorpusNotFoundError(
+            f"Corpus payload in {_safe_name(filename)} could not be loaded"
+        )
+    return api
+
+
+def get_node(filename: str, node: int) -> dict[str, Any]:
+    """Inspect one node: its type, slot span, text, features, and annotation.
+
+    The graph-model facts an auditor needs in one payload: `otype` as the
+    converter emitted it, whether the node is a slot, the slot range it spans,
+    every non-None node-feature value, and any correction already recorded in
+    the annotations sidecar.
+    """
+    api = _require_api(filename)
+    otype = api.F.otype.v(node)
+    if otype is None:
+        raise CorpusNotFoundError(f"Node {node} not found in {_safe_name(filename)}")
+
+    slot_type = api.F.otype.slotType
+    is_slot = otype == slot_type
+    if is_slot:
+        first_slot: int | None = int(node)
+        last_slot: int | None = int(node)
+    else:
+        try:
+            slots = api.E.oslots.s(node)
+            first_slot = int(slots[0]) if len(slots) else None
+            last_slot = int(slots[-1]) if len(slots) else None
+        except Exception:  # noqa: BLE001 - a node without oslots still has features
+            first_slot = last_slot = None
+
+    features: dict[str, Any] = {}
+    for name in sorted(api.Fall()):
+        if name == "otype":
+            continue
+        try:
+            value = api.Fs(name).v(node)
+        except Exception:  # noqa: BLE001 - skip features that fail to look up
+            continue
+        if value is not None:
+            features[name] = value
+
+    try:
+        text = api.T.text(node)
+    except Exception:  # noqa: BLE001 - some non-slot nodes have no text
+        text = ""
+
+    cached = _ensure_extracted(filename)
+    annotation = _read_annotations(cached.extract_dir).get("nodes", {}).get(str(node))
+
+    return {
+        "node": int(node),
+        "otype": otype,
+        "is_slot": is_slot,
+        "slot_type": slot_type,
+        "first_slot": first_slot,
+        "last_slot": last_slot,
+        "section_ref": _section_ref(node, api),
+        "text": text,
+        "features": features,
+        "annotation": annotation,
+        "node_types": [str(t) for t in (api.F.otype.all or ())],
+    }
+
+
+def annotate_node(
+    filename: str,
+    node: int,
+    otype: str | None = None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Record a node-type correction in the annotations sidecar and republish.
+
+    Merges into the node's existing annotation entry: `otype` is the corrected
+    node type, `note` free-text rationale. The converter's original type is
+    recorded once as `converted_otype` for provenance. Like `update_manifest`,
+    this re-zips + re-uploads the archive and invalidates the local cache.
+    """
+    if otype is None and note is None:
+        raise StorageError("Provide otype and/or note to annotate a node")
+    if otype is not None and not otype.strip():
+        raise StorageError("otype must be a non-empty string")
+
+    api = _require_api(filename)
+    current = api.F.otype.v(node)
+    if current is None:
+        raise CorpusNotFoundError(f"Node {node} not found in {_safe_name(filename)}")
+
+    cached = _ensure_extracted(filename)
+    data = _read_annotations(cached.extract_dir)
+    nodes = data.setdefault("nodes", {})
+    entry: dict[str, Any] = nodes.get(str(node)) or {}
+    entry.setdefault("converted_otype", str(current))
+    if otype is not None:
+        entry["otype"] = otype.strip()
+    if note is not None:
+        entry["note"] = note
+    entry["updated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    nodes[str(node)] = entry
+
+    sidecar = cached.extract_dir / _ANNOTATIONS_FILE
+    sidecar.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+    name = _republish(filename, cached)
+    logger.info("Annotated node %s in %s (%s)", node, name, sorted(entry))
+    return {"node": int(node), **entry}
 
 
 # ── Index ─────────────────────────────────────────────────────────────────────
@@ -457,14 +612,18 @@ def get_content(
     total = len(passage_nodes)
     page = passage_nodes[offset : offset + limit]
 
-    passages: list[dict[str, str]] = []
+    passages: list[dict[str, Any]] = []
     for node in page:
         try:
             text = api.T.text(node, fmt=fmt_used) if fmt_used else api.T.text(node)
         except Exception as exc:  # noqa: BLE001 - degrade to empty, don't fail the page
             logger.debug("text() failed for node %s: %s", node, exc)
             text = ""
-        passages.append({"ref": _section_ref(node, api), "text": text})
+        # `node` lets clients cherry-pick a passage's graph node (inspect /
+        # annotate it) without a second ref->node resolution round-trip.
+        passages.append(
+            {"node": int(node), "ref": _section_ref(node, api), "text": text}
+        )
 
     next_offset = offset + limit if offset + limit < total else None
     return {

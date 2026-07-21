@@ -7,10 +7,12 @@ import {
 } from "react"
 import {
   BookOpen,
+  Check,
   Loader2,
   PanelRightClose,
   SendHorizontal,
   Sparkles,
+  Wrench,
   X,
 } from "lucide-react"
 import { Badge } from "~/components/ui/badge"
@@ -18,18 +20,26 @@ import { Button } from "~/components/ui/button"
 import { Textarea } from "~/components/ui/textarea"
 import { cn } from "~/lib/utils"
 
-import type { ChatMessage, CorpusReference, CorpusReferencePart } from "./types"
-import { useMockChat } from "./use-mock-chat"
+import type {
+  ChatMessage,
+  CorpusReference,
+  CorpusReferencePart,
+  ToolActivityPart,
+} from "./types"
+import { PREMADE_PROMPTS } from "./premade-prompts"
+import { AGENT_MODEL, useCorpusChat } from "./use-corpus-chat"
 import { useWorkspace } from "./workspace-context"
 
 /**
  * The AI chat panel (right pane): header with collapse control, scrollable
  * message log, attachment chips, and a composer following the AI SDK UI
- * conventions (Enter sends, Shift+Enter breaks). All conversation state is
- * mock and in-memory — see `useMockChat`.
+ * conventions (Enter sends, Shift+Enter breaks). The brain is
+ * `useCorpusChat`: a real node-auditing agent when an Anthropic key is set in
+ * Settings, a mock assistant otherwise.
  */
 export function ChatPanel() {
   const {
+    corpusId,
     attachments,
     removeAttachment,
     clearAttachments,
@@ -39,7 +49,7 @@ export function ChatPanel() {
     setChatOpen,
     announce,
   } = useWorkspace()
-  const { messages, status, sendMessage } = useMockChat()
+  const { messages, status, sendMessage, live } = useCorpusChat(corpusId)
   const [input, setInput] = useState("")
   const logRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -87,6 +97,12 @@ export function ChatPanel() {
     focusBlock(reference.blockKey, reference.ref)
   }
 
+  const insertPremadePrompt = (label: string, prompt: string) => {
+    setInput((prev) => (prev.trim() ? `${prev}\n\n${prompt}` : prompt))
+    textareaRef.current?.focus()
+    announce(`Inserted "${label}" prompt into the composer`)
+  }
+
   return (
     <section
       id="chat-panel"
@@ -97,7 +113,16 @@ export function ChatPanel() {
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-amber-500" aria-hidden="true" />
           <h3 className="text-sm font-semibold">Assistant</h3>
-          <Badge variant="secondary">mock</Badge>
+          <Badge
+            variant="secondary"
+            title={
+              live
+                ? `Live agent (${AGENT_MODEL}) with corpus MCP tools`
+                : "No Anthropic key set — add one in Settings for the live agent"
+            }
+          >
+            {live ? AGENT_MODEL : "mock"}
+          </Badge>
         </div>
         <Button
           variant="ghost"
@@ -145,6 +170,27 @@ export function ChatPanel() {
         onSubmit={onSubmit}
         className="flex shrink-0 flex-col gap-2 border-t p-3"
       >
+        <ul aria-label="Premade prompts" className="flex flex-wrap gap-1.5">
+          {PREMADE_PROMPTS.map((premade) => (
+            <li key={premade.id}>
+              <button
+                type="button"
+                title={premade.description}
+                aria-label={`Insert premade prompt: ${premade.label} — ${premade.description}`}
+                onClick={() =>
+                  insertPremadePrompt(premade.label, premade.prompt)
+                }
+                data-cuelume-press
+                data-cuelume-release
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs text-muted-foreground outline-none hover:border-amber-400 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+              >
+                <Sparkles className="size-3" aria-hidden="true" />
+                {premade.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+
         {attachments.length > 0 && (
           <ul
             aria-label="Attached passage references"
@@ -225,8 +271,11 @@ function ChatMessageBubble({
   const references = message.parts.filter(
     (part): part is CorpusReferencePart => part.type === "data-corpusReference"
   )
+  const toolCalls = message.parts.filter(
+    (part): part is ToolActivityPart => part.type === "tool"
+  )
 
-  if (!text && references.length === 0) return null
+  if (!text && references.length === 0 && toolCalls.length === 0) return null
 
   return (
     <div
@@ -235,6 +284,41 @@ function ChatMessageBubble({
         isUser ? "items-end self-end" : "items-start self-start"
       )}
     >
+      {toolCalls.length > 0 && (
+        <ul
+          aria-label="Agent tool activity"
+          className="flex flex-col gap-0.5 text-xs text-muted-foreground"
+        >
+          {toolCalls.map((tool) => (
+            <li key={tool.toolCallId} className="flex items-center gap-1.5">
+              {tool.state === "running" ? (
+                <Loader2
+                  className="size-3 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : tool.state === "error" ? (
+                <X className="size-3 text-destructive" aria-hidden="true" />
+              ) : (
+                <Check className="size-3 text-success" aria-hidden="true" />
+              )}
+              <Wrench className="size-3" aria-hidden="true" />
+              <span className="font-mono">{tool.name}</span>
+              {tool.detail && (
+                <span className="truncate text-muted-foreground/70">
+                  {tool.detail}
+                </span>
+              )}
+              <span className="sr-only">
+                {tool.state === "running"
+                  ? "running"
+                  : tool.state === "error"
+                    ? "failed"
+                    : "finished"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {text && (
         <div
           className={cn(

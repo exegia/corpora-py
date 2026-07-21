@@ -6,6 +6,7 @@ import {
   KeyRound,
   Loader2,
   ShieldAlert,
+  Sparkles,
   Trash2,
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
@@ -26,6 +27,7 @@ import {
   markApiKeyStatus,
   setApiKey,
   useApiKeys,
+  validateAnthropicKey,
   validateHfKey,
   validateSupabaseKey,
   type ApiKeyEntry,
@@ -246,6 +248,34 @@ export default function Settings() {
         inputLabel="Enter Supabase API key"
         placeholder="eyJ…"
         validate={validateSupabaseKey}
+      />
+
+      <KeySection
+        name="anthropic"
+        entry={keys.anthropic}
+        title="Anthropic API key"
+        icon={<Sparkles className="size-5 text-amber-500" aria-hidden="true" />}
+        description={
+          <>
+            Powers the AI assistant in the corpus viewer&apos;s chat panel: a
+            real agent that inspects your corpus&apos;s graph nodes over MCP and
+            records node-type corrections. Until a key is saved and validated,
+            the chat runs a mock assistant. The key is sent directly from this
+            app to Anthropic — create one under{" "}
+            <a
+              href="https://console.anthropic.com/settings/keys"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              Anthropic Console → API keys
+            </a>
+            .
+          </>
+        }
+        inputLabel="Enter Anthropic API key"
+        placeholder="sk-ant-…"
+        validate={validateAnthropicKey}
       />
 
       {!IS_PROD && (

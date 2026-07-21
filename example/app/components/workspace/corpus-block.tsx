@@ -89,6 +89,7 @@ export function CorpusBlock({
         passage.text.length > 140
           ? `${passage.text.slice(0, 140)}…`
           : passage.text,
+      node: passage.node,
     })
   }
 
@@ -118,6 +119,11 @@ export function CorpusBlock({
             {selected ? "Deselect" : "Select"} passage{" "}
           </span>
           {passage.ref}
+          {passage.node != null && String(passage.node) !== passage.ref && (
+            <span className="ml-1.5 text-muted-foreground/60">
+              n{passage.node}
+            </span>
+          )}
         </button>
 
         <div

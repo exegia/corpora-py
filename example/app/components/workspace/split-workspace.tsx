@@ -132,7 +132,7 @@ export function SplitWorkspace({
           <div
             aria-hidden="true"
             className={cn(
-              "h-full min-h-40 w-px rounded-full bg-border transition-colors group-hover:w-0.5 group-hover:bg-ring group-focus-visible:w-0.5 group-focus-visible:bg-ring",
+              "h-full min-h-40 rounded-full bg-border transition-colors group-hover:w-0.5 group-hover:bg-ring group-focus-visible:w-0.5 group-focus-visible:bg-ring",
               dragging && "w-0.5 bg-ring"
             )}
           />
