@@ -83,6 +83,7 @@ from admin.services.storage_api import router as storage_router
 from admin.services.storage_mcp import register_storage_tools
 from admin.services.validation_api import router as validation_router
 from admin.services.websocket import router as conversion_ws_router
+from common.utils.config import settings
 from corpora_mcp import mcp
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,12 +95,12 @@ from .auth import AuthMiddleware
 # its API surfaces; see packages/admin/CLAUDE.md) and are registered onto the
 # shared server here, before the ASGI app is built -- a standalone `cf-mcp`
 # process never registers them, keeping the slim MCP package admin-free.
-register_storage_tools(mcp)
+register_storage_tools(mcp, read_only=settings.hf_read_only)
 # The `corpus_*` detail tools (`admin.services.corpus_detail_mcp`) are the MCP
 # counterpart of the `/storage/{filename}/...` detail router, registered here
 # for the same reason as the storage tools -- to keep the slim MCP package free
 # of the admin/text-fabric dependency.
-register_corpus_detail_tools(mcp)
+register_corpus_detail_tools(mcp, read_only=settings.hf_read_only)
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).

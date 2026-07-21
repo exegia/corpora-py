@@ -33,8 +33,14 @@ def _describe(stored: StoredCorpus) -> str:
     return f"{stored.filename} ({size})\n  repo: {stored.repo_id}\n  url:  {stored.url}"
 
 
-def register_storage_tools(mcp: Any) -> None:
-    """Register the `storage_*` tools on a FastMCP server instance."""
+def register_storage_tools(mcp: Any, *, read_only: bool = False) -> None:
+    """Register the `storage_*` tools on a FastMCP server instance.
+
+    When ``read_only`` is set (public `HF_READ_ONLY=true` deployment), the
+    write tools (`storage_upload_corpus`, `storage_delete_corpus`) are not
+    registered at all, so they never appear in the tool list a public client
+    can call. Read/list/info/download tools are always registered.
+    """
 
     @mcp.tool()
     async def storage_list_corpora() -> str:
@@ -61,22 +67,24 @@ def register_storage_tools(mcp: Any) -> None:
             raise ToolError(str(exc)) from exc
         return _describe(stored)
 
-    @mcp.tool()
-    async def storage_upload_corpus(path: str, filename: str | None = None) -> str:
-        """
-        Upload a local `.corpus` archive to the Hub storage repo.
+    if not read_only:
 
-        Args:
-            path:     Path to a `.corpus` archive on disk (e.g. a finished
-                      conversion result).
-            filename: Optional name to store it under; defaults to the file's
-                      own name (".corpus" appended if missing).
-        """
-        try:
-            stored = await asyncio.to_thread(corpus_storage.upload, path, filename)
-        except StorageError as exc:
-            raise ToolError(str(exc)) from exc
-        return f"Uploaded:\n{_describe(stored)}"
+        @mcp.tool()
+        async def storage_upload_corpus(path: str, filename: str | None = None) -> str:
+            """
+            Upload a local `.corpus` archive to the Hub storage repo.
+
+            Args:
+                path:     Path to a `.corpus` archive on disk (e.g. a finished
+                          conversion result).
+                filename: Optional name to store it under; defaults to the file's
+                          own name (".corpus" appended if missing).
+            """
+            try:
+                stored = await asyncio.to_thread(corpus_storage.upload, path, filename)
+            except StorageError as exc:
+                raise ToolError(str(exc)) from exc
+            return f"Uploaded:\n{_describe(stored)}"
 
     @mcp.tool()
     async def storage_download_corpus(filename: str, dest_dir: str) -> str:
@@ -95,16 +103,18 @@ def register_storage_tools(mcp: Any) -> None:
             raise ToolError(str(exc)) from exc
         return f"Downloaded {filename} to {local}"
 
-    @mcp.tool()
-    async def storage_delete_corpus(filename: str) -> str:
-        """
-        Delete a stored `.corpus` archive from the Hub storage repo.
+    if not read_only:
 
-        Args:
-            filename: Archive name, e.g. "BHSA.corpus".
-        """
-        try:
-            await asyncio.to_thread(corpus_storage.delete, filename)
-        except StorageError as exc:
-            raise ToolError(str(exc)) from exc
-        return f"Deleted {filename} from Hub storage."
+        @mcp.tool()
+        async def storage_delete_corpus(filename: str) -> str:
+            """
+            Delete a stored `.corpus` archive from the Hub storage repo.
+
+            Args:
+                filename: Archive name, e.g. "BHSA.corpus".
+            """
+            try:
+                await asyncio.to_thread(corpus_storage.delete, filename)
+            except StorageError as exc:
+                raise ToolError(str(exc)) from exc
+            return f"Deleted {filename} from Hub storage."

@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     hf_storage_repo: str | None = os.getenv("HF_STORAGE_REPO")
     hf_storage_repo_type: Literal["model", "dataset", "space", "bucket"] = "bucket"
     hf_storage_private: bool = True
+    # Read-only Hub mode. When True, every write to the storage repo
+    # (upload/delete + the manifest/annotation PATCHes that re-upload the
+    # archive) is refused: HTTP write routes return 403 and the `storage_*` /
+    # `corpus_*` MCP *write* tools are not registered at all. Reads, downloads,
+    # conversions, and queries are unaffected. This is the guard for a PUBLIC
+    # deployment reachable without a token (AUTH_REQUIRED=false): the demo can
+    # browse/query the Hub, but nobody can mutate it -- the owner keeps
+    # publishing locally (AUTH_REQUIRED on / this flag left False) to the same
+    # repo. Default False so the desktop sidecar and local dev stay writable;
+    # set HF_READ_ONLY=true on the public deployment. It is deliberately NOT
+    # coupled to auth_required, so `AUTH_REQUIRED=false` local dev still writes.
+    hf_read_only: bool = False
 
     PROJECT_NAME: ClassVar[str] = "Corpora API"
     PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."

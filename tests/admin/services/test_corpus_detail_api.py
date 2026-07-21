@@ -340,3 +340,33 @@ def test_patch_node_unknown_node_is_404(client):
         f"/storage/{ARCHIVE_NAME}/nodes/999999", json={"otype": "word"}
     )
     assert resp.status_code == 404
+
+
+# ── read-only mode (HF_READ_ONLY) ─────────────────────────────────────────────
+# Both PATCH routes re-upload the archive to the Hub, so they carry the shared
+# `require_writable` guard: 403 up front, no download/extract, no re-upload.
+
+
+def test_read_only_patch_manifest_is_403(client, fake_storage, monkeypatch):
+    from admin.services import storage_api
+
+    monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
+    resp = client.patch(f"/storage/{ARCHIVE_NAME}/manifest", json={"name": "New"})
+    assert resp.status_code == 403
+    assert fake_storage.uploads == []
+
+
+def test_read_only_patch_node_is_403(client, fake_storage, monkeypatch):
+    from admin.services import storage_api
+
+    monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
+    resp = client.patch(f"/storage/{ARCHIVE_NAME}/nodes/1", json={"note": "x"})
+    assert resp.status_code == 403
+    assert fake_storage.uploads == []
+
+
+def test_read_only_still_allows_manifest_read(client, monkeypatch):
+    from admin.services import storage_api
+
+    monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
+    assert client.get(f"/storage/{ARCHIVE_NAME}/manifest").status_code == 200

@@ -13,6 +13,7 @@ import pytest
 from admin.services.storage import (
     CorpusNotFoundError,
     CorpusStorage,
+    ReadOnlyStorageError,
     StorageError,
     StorageNotConfiguredError,
     _safe_archive_name,
@@ -191,3 +192,26 @@ def test_delete_existing(storage, api):
     api.paths_info = [_entry("BHSA.corpus")]
     storage.delete("BHSA.corpus")
     assert ("delete_file", "BHSA.corpus", "user/archives") in api.calls
+
+
+# ── read-only mode (HF_READ_ONLY) ─────────────────────────────────────────────
+# The authoritative chokepoint: every Hub write funnels through upload/delete,
+# so refusing here blocks all write paths (HTTP, MCP, future) by construction.
+
+
+def test_read_only_blocks_upload(storage, api, monkeypatch, tmp_path):
+    monkeypatch.setattr("admin.services.storage.settings.hf_read_only", True)
+    archive = tmp_path / "x.corpus"
+    archive.write_bytes(b"zip")
+    with pytest.raises(ReadOnlyStorageError):
+        storage.upload(archive)
+    # Refused before any Hub call (repo creation, upload) is attempted.
+    assert api.calls == []
+
+
+def test_read_only_blocks_delete(storage, api, monkeypatch):
+    api.paths_info = [_entry("BHSA.corpus")]
+    monkeypatch.setattr("admin.services.storage.settings.hf_read_only", True)
+    with pytest.raises(ReadOnlyStorageError):
+        storage.delete("BHSA.corpus")
+    assert api.calls == []
