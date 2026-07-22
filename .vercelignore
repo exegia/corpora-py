@@ -23,6 +23,15 @@
 !packages
 !packages/**
 
+# The web example (second Vercel project, root directory example/). Git deploys
+# apply this repo-root allowlist before cd-ing into any project's root, so
+# example/ must be un-included here or `bun install` finds no package.json. The
+# Python function bundle stays unaffected: vercel.json functions.excludeFiles
+# already trims example/** out of it. (example/node_modules, dist, build,
+# .react-router are gitignored, so the git clone never uploads them anyway.)
+!example
+!example/**
+
 # Re-excluded from the allowed trees
 **/__pycache__
 **/*.py[co]
