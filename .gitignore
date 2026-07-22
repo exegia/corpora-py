@@ -61,3 +61,7 @@ resources/python/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# vercel link artifact (.env.local, holding the pulled VERCEL_OIDC_TOKEN,
+# is already covered above)
+.vercel
