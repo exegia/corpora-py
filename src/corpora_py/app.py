@@ -154,6 +154,22 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/capabilities", tags=["Health"])
+async def capabilities() -> dict[str, bool]:
+    """What this deployment lets a client do, so UIs don't offer dead actions.
+
+    Deliberately unauthenticated (like `/health`): a client needs to know
+    whether to render a "Publish to the Hub" button *before* it has a token,
+    and neither flag is a secret -- both are already observable by making one
+    request and reading the 401/403. `hub_writable` is the inverse of
+    `HF_READ_ONLY`; `auth_required` mirrors `AUTH_REQUIRED`.
+    """
+    return {
+        "auth_required": settings.auth_required,
+        "hub_writable": not settings.hf_read_only,
+    }
+
+
 @app.get("/", tags=["Health"], include_in_schema=False)
 async def root() -> dict[str, str]:
     return {"message": "Corpora API — see /docs, MCP at /mcp, conversions at /convert"}

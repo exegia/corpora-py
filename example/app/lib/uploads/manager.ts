@@ -296,10 +296,13 @@ type ConvertResponse = { job_id: string; status_url: string; ws_url: string }
  * explicit step -- `saveUpload` -- so a pile of finished conversions never
  * fires save-as dialogs unprompted.
  *
- * `corpora-api` requires a Supabase JWT by default (`AUTH_REQUIRED=true`,
- * see the root CLAUDE.md's "Auth" section) -- this example has no Supabase
- * session to attach one from yet, so run the server locally with
- * `AUTH_REQUIRED=false` (see README.md) until real auth is wired in here.
+ * `corpora-api` gates every route behind a Supabase JWT *by default*
+ * (`AUTH_REQUIRED=true`, see the root CLAUDE.md's "Auth" section), and this
+ * example has no Supabase session to mint one from. Both the public
+ * deployment and local dev therefore run the backend with
+ * `AUTH_REQUIRED=false` (see README.md); `apiFetch` attaches a Bearer token
+ * only if one happens to be stored in Settings, so nothing here breaks either
+ * way.
  *
  * Multiple files can be in flight at once -- each gets its own entry in
  * `uploadAtom`, keyed by a client-generated id, and its own

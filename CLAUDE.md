@@ -120,9 +120,11 @@ vercel deploy --prod   # manual production deploy
 # this API also redeploys the web example — no GitHub Actions, no chaining.
 # VITE_API_URL (build-time, Vite-inlined) must point at the API's prod URL.
 # Public-demo backend config (set on the corpora-py API project, not the
-# example project): AUTH_REQUIRED=false opens reads/queries to anonymous
-# visitors, and HF_READ_ONLY=true locks the Hub so the now-tokenless public
-# can't mutate it (see "Auth"/HF_READ_ONLY below). See example/README.md
+# example project): AUTH_REQUIRED=false opens conversion/reads/queries to
+# anonymous visitors, and HF_READ_ONLY=true locks the Hub so the now-tokenless
+# public can't mutate it (see "Auth"/HF_READ_ONLY below). Both must be set
+# together -- AUTH_REQUIRED=false without HF_READ_ONLY=true would hand the
+# public Hub uploads and deletes. See example/README.md
 # ("Deploy the web example to Vercel") for the one-time project setup.
 ```
 
@@ -266,6 +268,12 @@ clients can't set custom headers on the handshake).
   public client never sees a tool it could mutate with. Left `False` on the desktop sidecar and local dev
   (including `AUTH_REQUIRED=false` local dev), which stay fully writable — so the owner keeps publishing
   locally to the same Hub repo the public demo reads. See `packages/admin/src/admin/services/CLAUDE.md`.
+  There is deliberately **no** per-case exception to this — the public demo converts, downloads, and
+  explores, and never writes to the Hub at all.
+- **Nothing in this repo writes to Supabase.** Supabase appears only as a JWT *issuer* whose signatures
+  `common.utils.jwt_auth` verifies against the public JWKS; there is no Supabase client, no service-role
+  key, and no table this app can touch (see "Dropped/missing functionality" above). An anonymous
+  deployment therefore has no Supabase write surface to lock down.
 - Decoded JWT claims land in `scope["state"]["user"]` and are used by
   `ConversionJob.is_visible_to()` (`admin.services.jobs`) to scope `GET /convert/{id}`,
   `/download`, and `/ws` to the job's own submitter (the JWT `sub` claim, recorded on the job at

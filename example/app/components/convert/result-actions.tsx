@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
 import { HuggingFaceIcon } from "~/components/icons/icon-hugging-face"
 import { Button } from "~/components/ui/button"
 import type { StorageOutcome } from "~/lib/atoms/upload-atom"
+import { useCapabilities } from "~/lib/capabilities"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
 import { cn } from "~/lib/utils"
 import { FileTypeIcon } from "./file-icon"
@@ -40,6 +41,11 @@ export function CompletedResult({
 }: CompletedResultProps) {
   const publishing = storage?.status === "running"
   const published = storage?.status === "stored"
+  // A read-only deployment (the public demo) refuses every Hub write, so the
+  // publish button would 403 no matter what -- don't offer it. An
+  // already-published archive still renders its link below.
+  const capabilities = useCapabilities()
+  const canPublish = capabilities?.hubWritable === true
   return (
     <div
       className={cn(
@@ -123,7 +129,7 @@ export function CompletedResult({
           <Download className="size-4" aria-hidden="true" />
           {saved ? "Saved" : "Download"}
         </Button>
-        {!published && (
+        {!published && canPublish && (
           <Button
             variant="outline"
             onClick={onPublish}
