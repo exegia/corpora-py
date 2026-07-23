@@ -9,6 +9,7 @@ import {
 } from "~/lib/atoms/upload-atom"
 import {
   type JobStatusMessage,
+  pollJobStatus,
   subscribeJobStatus,
 } from "~/lib/hooks/use-socket"
 import { loadPersistedUploads, savePersistedUploads } from "./persistence"
@@ -276,7 +277,40 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
     }
   }
 
-  unsubscribers.set(id, subscribeJobStatus(wsUrl, handleMessage))
+  // The WebSocket is the preferred transport (real push, no polling
+  // traffic) and is what the desktop sidecar serves. It does NOT exist on
+  // the Vercel deployment, though -- Functions don't support WebSockets, so
+  // `/convert/{id}/ws` 404s and the socket closes without ever delivering a
+  // message. Falling back on the first close-with-no-messages covers both
+  // that case and a mid-job socket drop, without giving up push where it
+  // works.
+  let sawMessage = false
+  let fallback: (() => void) | undefined
+
+  const startPolling = () => {
+    if (fallback || sawMessage) return
+    fallback = pollJobStatus(async () => {
+      const response = await apiFetch(`${API_URL}/convert/${jobId}`)
+      if (!response.ok) throw new Error(`Status check failed (${response.status})`)
+      return (await response.json()) as JobStatusMessage
+    }, handleMessage)
+  }
+
+  const closeSocket = subscribeJobStatus(
+    wsUrl,
+    (message) => {
+      sawMessage = true
+      handleMessage(message)
+    },
+    (status) => {
+      if (status === "error" || status === "closed") startPolling()
+    }
+  )
+
+  unsubscribers.set(id, () => {
+    closeSocket()
+    fallback?.()
+  })
 }
 
 export type UploadOptions = {
@@ -296,10 +330,13 @@ type ConvertResponse = { job_id: string; status_url: string; ws_url: string }
  * explicit step -- `saveUpload` -- so a pile of finished conversions never
  * fires save-as dialogs unprompted.
  *
- * `corpora-api` requires a Supabase JWT by default (`AUTH_REQUIRED=true`,
- * see the root CLAUDE.md's "Auth" section) -- this example has no Supabase
- * session to attach one from yet, so run the server locally with
- * `AUTH_REQUIRED=false` (see README.md) until real auth is wired in here.
+ * `corpora-api` gates every route behind a Supabase JWT *by default*
+ * (`AUTH_REQUIRED=true`, see the root CLAUDE.md's "Auth" section), and this
+ * example has no Supabase session to mint one from. Both the public
+ * deployment and local dev therefore run the backend with
+ * `AUTH_REQUIRED=false` (see README.md); `apiFetch` attaches a Bearer token
+ * only if one happens to be stored in Settings, so nothing here breaks either
+ * way.
  *
  * Multiple files can be in flight at once -- each gets its own entry in
  * `uploadAtom`, keyed by a client-generated id, and its own

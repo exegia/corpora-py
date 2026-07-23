@@ -42,6 +42,7 @@ import {
   manifestFieldLabel,
   patchManifest,
 } from "~/lib/corpus-detail"
+import { useCapabilities } from "~/lib/capabilities"
 import { cn } from "~/lib/utils"
 
 export function meta() {
@@ -212,6 +213,9 @@ function MetadataCard({
   onRetry: () => void
 }) {
   const manifest = state.status === "ready" ? state.manifest : null
+  // `PATCH /storage/{id}/manifest` re-uploads the archive to the Hub, so a
+  // read-only deployment refuses it -- offer "Edit" only where it can work.
+  const canEdit = useCapabilities()?.hubWritable === true
 
   return (
     <Card>
@@ -223,7 +227,7 @@ function MetadataCard({
               Descriptive fields stored in the corpus manifest.
             </CardDescription>
           </div>
-          {state.status === "ready" && !editing && (
+          {state.status === "ready" && !editing && canEdit && (
             <Button
               variant="outline"
               size="sm"
