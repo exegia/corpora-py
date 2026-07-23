@@ -63,6 +63,54 @@ export const subscribeJobStatus = (
 }
 
 /**
+ * Polling equivalent of `subscribeJobStatus`, driving `GET /convert/{id}`
+ * on an interval until the job reaches a terminal state.
+ *
+ * Exists because the production API runs on Vercel Functions, which don't
+ * support WebSockets at all -- `/convert/{id}/ws` 404s there, so the socket
+ * closes immediately and no status ever arrives. On Vercel this is also the
+ * only thing that *advances* the conversion: the job runs on a background
+ * thread whose instance is frozen between requests, so it only makes
+ * progress while a request is in flight (see the root CLAUDE.md's note that
+ * the container image, not Functions, is the deployment for heavy
+ * conversion work).
+ *
+ * `fetchStatus` is injected rather than importing `apiFetch` here, so this
+ * module stays free of settings/auth concerns like the socket path above.
+ */
+export const pollJobStatus = (
+  fetchStatus: () => Promise<JobStatusMessage>,
+  onMessage: (message: JobStatusMessage) => void,
+  intervalMs = 2000
+): (() => void) => {
+  let stopped = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const tick = async () => {
+    if (stopped) return
+    try {
+      const message = await fetchStatus()
+      if (stopped) return
+      onMessage(message)
+      if (TERMINAL_STATUSES.includes(message.status)) return
+    } catch {
+      // Transient network/5xx errors shouldn't kill tracking -- keep polling
+      // and let the next tick recover. A job that genuinely vanished
+      // (instance eviction) stays "converting" rather than being reported as
+      // a failure we can't actually confirm.
+    }
+    timer = setTimeout(() => void tick(), intervalMs)
+  }
+
+  void tick()
+
+  return () => {
+    stopped = true
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+/**
  * React hook wrapper around `subscribeJobStatus`, for components that want
  * to reactively render a single job's live status. Re-subscribes whenever
  * `url` changes; pass `null`/`undefined` to stay idle (e.g. before a job id

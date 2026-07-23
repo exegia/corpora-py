@@ -10,6 +10,7 @@ The archive contains:
 See packages/admin/README.md for an overview of the conversion/packaging pipeline.
 """
 
+import logging
 import shutil
 import subprocess
 import tempfile
@@ -22,6 +23,8 @@ import yaml
 from cfabric import Fabric
 
 from .convert_to_cfm import convert_to_cfm
+
+logger = logging.getLogger(__name__)
 
 
 def _file_entry(path: Path, *, kind: str, visible: bool = True) -> dict[str, Any]:
@@ -122,7 +125,29 @@ def _build_toc(
 
 def _git_snapshot(root: Path) -> None:
     """Init a git repo at the archive root and commit the payload, so the
-    `.corpus` archive carries its own version history (see Schema.md)."""
+    `.corpus` archive carries its own version history (see Schema.md).
+
+    Skipped when there's no `git` binary on PATH. Serverless Python runtimes
+    (Vercel Functions, where this app also deploys) ship no git, and shelling
+    out there raised `FileNotFoundError: 'git'` *after* the whole parse ->
+    TF -> .cfm pipeline had already succeeded -- failing every conversion at
+    the last step. Nothing in the read path consumes the archive's `.git/`
+    (loads go through `manifest.yml`/`toc.yml` and `corpora/`), so an archive
+    without version history is still fully valid; degrading here is
+    preferable to having no archive at all.
+
+    Deliberately gated on `shutil.which` rather than catching
+    `FileNotFoundError`, so a genuine git failure on a machine that *does*
+    have git still raises instead of being silently swallowed.
+    """
+    if shutil.which("git") is None:
+        logger.warning(
+            "git not found on PATH -- packaging %s without a .git/ version "
+            "history snapshot",
+            root.name,
+        )
+        return
+
     run = lambda *args: subprocess.run(args, cwd=root, check=True, capture_output=True)  # noqa: E731
     run("git", "init", "-q")
     run("git", "add", "-A")
