@@ -83,6 +83,7 @@ from admin.services.storage_api import router as storage_router
 from admin.services.storage_mcp import register_storage_tools
 from admin.services.validation_api import router as validation_router
 from admin.services.websocket import router as conversion_ws_router
+from common.utils.config import settings
 from corpora_mcp import mcp
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,12 +95,12 @@ from .auth import AuthMiddleware
 # its API surfaces; see packages/admin/CLAUDE.md) and are registered onto the
 # shared server here, before the ASGI app is built -- a standalone `cf-mcp`
 # process never registers them, keeping the slim MCP package admin-free.
-register_storage_tools(mcp)
+register_storage_tools(mcp, read_only=settings.hf_read_only)
 # The `corpus_*` detail tools (`admin.services.corpus_detail_mcp`) are the MCP
 # counterpart of the `/storage/{filename}/...` detail router, registered here
 # for the same reason as the storage tools -- to keep the slim MCP package free
 # of the admin/text-fabric dependency.
-register_corpus_detail_tools(mcp)
+register_corpus_detail_tools(mcp, read_only=settings.hf_read_only)
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).
@@ -151,6 +152,22 @@ app.include_router(corpus_detail_router)
 @app.get("/health", tags=["Health"])
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/capabilities", tags=["Health"])
+async def capabilities() -> dict[str, bool]:
+    """What this deployment lets a client do, so UIs don't offer dead actions.
+
+    Deliberately unauthenticated (like `/health`): a client needs to know
+    whether to render a "Publish to the Hub" button *before* it has a token,
+    and neither flag is a secret -- both are already observable by making one
+    request and reading the 401/403. `hub_writable` is the inverse of
+    `HF_READ_ONLY`; `auth_required` mirrors `AUTH_REQUIRED`.
+    """
+    return {
+        "auth_required": settings.auth_required,
+        "hub_writable": not settings.hf_read_only,
+    }
 
 
 @app.get("/", tags=["Health"], include_in_schema=False)

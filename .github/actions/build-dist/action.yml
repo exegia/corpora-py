@@ -8,10 +8,13 @@ runs:
       with:
         enable-cache: true
 
-    - name: Build all workspace packages
+    - name: Build the corpora-py wheel
       shell: bash
       run: |
-        # build the umbrella package (corpora-py) for sidecar/example installs
+        # corpora-py is the only published package: its wheel bundles the
+        # source of every workspace member (see the root pyproject's
+        # [tool.hatch.build.targets.wheel]), so a single self-contained wheel
+        # is all that goes to PyPI.
         uv build --wheel --out-dir dist/
         echo "Built wheels:"
         ls -lh dist/*.whl

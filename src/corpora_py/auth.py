@@ -41,9 +41,20 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 logger = logging.getLogger(__name__)
 
 # Paths that stay reachable without a token: liveness/info endpoints and the
-# generated API docs (schema only, no corpus/job data).
+# generated API docs (schema only, no corpus/job data). `/capabilities` is
+# here because a client has to know whether to offer a write action *before*
+# it has a token, and its two flags are already inferable from the 401/403 a
+# tokenless request gets.
 _EXEMPT_PATHS = frozenset(
-    {"/health", "/", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+    {
+        "/health",
+        "/",
+        "/capabilities",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/redoc",
+        "/openapi.json",
+    }
 )
 
 _WS_UNAUTHORIZED_CLOSE_CODE = 4401  # application-defined range (4000-4999)

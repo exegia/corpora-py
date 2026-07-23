@@ -1,5 +1,5 @@
 name: "Publish to PyPI"
-description: "Download artifact and publish all workspace wheel to PyPI"
+description: "Download the corpora-py wheel artifact and publish it to PyPI"
 runs:
   using: "composite"
   steps:
@@ -20,4 +20,7 @@ runs:
 
     - name: Publish all distributions to PyPI
       shell: bash
-      run: uv publish dist/
+      # `uv publish dist/` passes a directory, which matches no files ("No
+      # files found to publish"); uv expects file globs. Bare `uv publish`
+      # defaults to the `dist/*` glob and uploads every built wheel.
+      run: uv publish

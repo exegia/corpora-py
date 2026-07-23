@@ -64,6 +64,16 @@ class CorpusNotFoundError(StorageError):
     """Raised when the named archive does not exist in the storage repo."""
 
 
+class ReadOnlyStorageError(StorageError):
+    """Raised when a write is attempted while `HF_READ_ONLY` is set.
+
+    The authoritative guard: every Hub write funnels through
+    `CorpusStorage.upload`/`.delete` (manifest/annotation PATCHes re-upload via
+    `_republish`), so refusing here blocks all write paths -- HTTP, MCP, and any
+    future caller -- by construction. HTTP surfaces map it to 403.
+    """
+
+
 @dataclass(frozen=True)
 class StoredCorpus:
     """One `.corpus` archive as it exists in the Hub storage repo."""
@@ -218,6 +228,8 @@ class CorpusStorage:
 
     def upload(self, local_path: Path | str, filename: str | None = None) -> StoredCorpus:
         """Push a local `.corpus` archive to the Hub, creating the location if needed."""
+        if settings.hf_read_only:
+            raise ReadOnlyStorageError("Hub storage is read-only; uploads are disabled.")
         local = Path(local_path).expanduser()
         if not local.is_file():
             raise StorageError(f"Not a corpus archive file: {local}")
@@ -275,6 +287,8 @@ class CorpusStorage:
 
     def delete(self, filename: str) -> None:
         """Remove one archive from the location; raises `CorpusNotFoundError` if absent."""
+        if settings.hf_read_only:
+            raise ReadOnlyStorageError("Hub storage is read-only; deletes are disabled.")
         repo_id = self._require_repo()
         filename = _safe_archive_name(filename)
         try:

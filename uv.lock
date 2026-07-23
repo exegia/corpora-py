@@ -468,21 +468,38 @@ name = "corpora-py"
 version = "0.1.3"
 source = { editable = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
     { name = "context-fabric" },
-    { name = "corpora-admin" },
-    { name = "corpora-common" },
-    { name = "corpora-mcp" },
+    { name = "cryptography" },
+    { name = "docling-core" },
     { name = "dotenvx" },
+    { name = "ebooklib" },
+    { name = "fastapi" },
+    { name = "fastmcp" },
+    { name = "huggingface-hub" },
+    { name = "jsonschema" },
+    { name = "lxml" },
+    { name = "platformdirs" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt" },
+    { name = "pypdf" },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "referencing" },
+    { name = "text-fabric" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
 docling = [
-    { name = "corpora-admin", extra = ["docling"] },
+    { name = "docling" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "corpora-admin" },
+    { name = "corpora-common" },
+    { name = "corpora-mcp" },
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "mypy" },
@@ -494,18 +511,35 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "context-fabric", specifier = ">=0.5.7" },
-    { name = "corpora-admin", editable = "packages/admin" },
-    { name = "corpora-admin", extras = ["docling"], marker = "extra == 'docling'", editable = "packages/admin" },
-    { name = "corpora-common", editable = "packages/common" },
-    { name = "corpora-mcp", editable = "packages/mcp" },
+    { name = "cryptography", specifier = ">=42.0.0" },
+    { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
+    { name = "docling-core", specifier = ">=2.30" },
     { name = "dotenvx", specifier = ">=0.0.0" },
+    { name = "ebooklib", specifier = ">=0.20" },
+    { name = "fastapi", specifier = ">=0.139.0" },
+    { name = "fastmcp", specifier = ">=3.4.2" },
+    { name = "huggingface-hub", specifier = ">=1.0" },
+    { name = "jsonschema", specifier = ">=4.25" },
+    { name = "lxml", specifier = ">=6.1.1" },
+    { name = "platformdirs", specifier = ">=4.10.0" },
+    { name = "pydantic-settings", specifier = ">=2.14.2" },
+    { name = "pyjwt", specifier = ">=2.13.0" },
+    { name = "pypdf", specifier = ">=6.14.2" },
+    { name = "python-multipart", specifier = ">=0.0.32" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "referencing", specifier = ">=0.36" },
+    { name = "text-fabric", specifier = ">=13.1.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
 ]
 provides-extras = ["docling"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "corpora-admin", editable = "packages/admin" },
+    { name = "corpora-common", editable = "packages/common" },
+    { name = "corpora-mcp", editable = "packages/mcp" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "jsonschema", specifier = ">=4.26" },
     { name = "mypy", specifier = ">=2.1.0" },

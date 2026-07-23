@@ -26,6 +26,28 @@ inside `corpora_mcp` instead would force the slim MCP package to depend on admin
 blocking network I/O; both surfaces must go through
 `asyncio.to_thread`.
 
+**Read-only mode (`HF_READ_ONLY`, `common.utils.config`).** When set (a public,
+tokenless deployment running `AUTH_REQUIRED=false`), every Hub write is refused so the anonymous public
+can browse/query but not mutate the repo. Enforced in three layers, most authoritative first: (1)
+`CorpusStorage.upload`/`.delete` raise `ReadOnlyStorageError` — the true chokepoint, since **every** write
+path (including the manifest/annotation PATCHes, which re-upload via `corpus_detail._republish`) funnels
+through these two methods, so the guard holds for HTTP, MCP, and any future caller by construction; (2) the
+`require_writable` FastAPI dependency (defined in `storage_api`, shared by the storage and corpus-detail
+write routes) returns **403** up front, before any Hub download, so anonymous callers can't drive billable
+Hub I/O — both `_run` mappers also map a leaked `ReadOnlyStorageError` to 403; (3)
+`register_storage_tools`/`register_corpus_detail_tools` take a `read_only` kwarg (passed from
+`corpora_py.app` as `settings.hf_read_only`) and skip registering the four **write** tools
+(`storage_upload_corpus`, `storage_delete_corpus`, `corpus_manifest_update`, `corpus_node_annotate`)
+entirely, so they never appear in a public client's tool list. Default `False`, so the desktop sidecar and
+local dev stay writable.
+
+**There is deliberately no "public upload" escape hatch.** On the public demo the Hub is read-only, full
+stop: an anonymous visitor converts and downloads their own `.corpus`, and nothing they do reaches the Hub.
+Publishing stays an owner action, done locally against a writable deployment. If you are tempted to add a
+narrow allowance (e.g. "let a visitor publish the job they just converted"), that was considered and
+rejected — it makes an unauthenticated deployment a write path to the owner's Hub account, and the demo
+gets everything it needs without one.
+
 ## Corpus detail (`corpus_detail*.py`)
 
 A *detail* layer over Hub storage for the desktop app's reader: read/patch a stored archive's

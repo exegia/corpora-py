@@ -48,7 +48,8 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           pr_number: ${{ github.event.pull_request.number }}
 
-  # Builds all workspace wheels. Runs after a successful bump, on a tag push,
+  # Builds the single self-contained corpora-py wheel (which bundles every
+  # workspace member's source). Runs after a successful bump, on a tag push,
   # or on workflow_dispatch. Skips for PRs closed without merging.
   build:
     name: Build distributions
@@ -69,8 +70,9 @@ jobs:
       - name: Build
         uses: ./.github/actions/build-dist
 
-  # Publishes all workspace wheels to PyPI (corpora-shared-py, corpora-client-py,
-  # corpora-admin-py, corpora-py). Uses OIDC trusted publishing — no stored token.
+  # Publishes the corpora-py wheel to PyPI (the only published package; it
+  # bundles corpora-common/-mcp/-admin). Uses OIDC trusted publishing — no
+  # stored token.
   publish:
     name: Publish Python 🐍 distributions 📦 to PyPI
     needs: [ bump, build ]

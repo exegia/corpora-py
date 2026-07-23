@@ -57,6 +57,104 @@ bun run vite:build
 bun run build:canary
 ```
 
+## Deploy the web example to Vercel
+
+The same React Router app that ships inside Electrobun can be served on the web
+as a static SPA (`react-router.config.ts` sets `ssr: false`). It is deployed to
+**`corpora-py-example.vercel.app`** as a **second Vercel project on this same
+repo**, distinct from the Python API project (`corpora-py`, deployed from the
+repo root).
+
+Both projects are wired to the repo's Git integration, so **a push that
+redeploys the API also redeploys the web example** — no GitHub Actions, no
+deploy chaining. `example/vercel.json` pins the static-SPA build so the project
+works the moment it is linked:
+
+- `framework: null`, `buildCommand: react-router build`,
+  `outputDirectory: dist/client` — plain static output, **not** the
+  `@vercel/react-router` SSR preset (the build also emits `dist/server/`; it is
+  intentionally ignored so Vercel never deploys a server function).
+- A catch-all rewrite (`/(.*) → /index.html`) hands unknown paths to the client
+  router; real assets under `/assets/*` still serve directly (the filesystem is
+  checked before rewrites).
+
+### One-time setup (Vercel dashboard or CLI)
+
+1. **Create the project** from this GitHub repo → set **Root Directory** to
+   `example`. Vercel reads `example/vercel.json` from there.
+2. **Production Branch** → `dev` (match the API project so both promote
+   production on the same push).
+3. **Environment variable** — add `VITE_API_URL = https://corpora-py.vercel.app`
+   (Production + Preview). This is **build-time**: Vite inlines it, so it must
+   exist *before* the build runs, or the bundle falls back to
+   `http://127.0.0.1:8000` (see `app/lib/types/socket.ts`).
+4. **Domain** — assign `corpora-py-example.vercel.app` to the project's
+   production deployment.
+5. Trigger the first deploy (push, or **Redeploy**). On that first build,
+   confirm it serves the SPA statically (an `index.html` at the root, assets
+   under `/assets/`) and does **not** spin up a React Router server function.
+
+### Backend (API) configuration for the public demo
+
+For the public web example to load corpora without a signed-in Supabase
+session, set these environment variables on the **API** project (`corpora-py`)
+in Vercel — not on this example project:
+
+| Env var           | Value                          | Why                                                                                             |
+|-------------------|--------------------------------|-------------------------------------------------------------------------------------------------|
+| `AUTH_REQUIRED`   | `false`                        | Opens reads/queries/conversions to the anonymous public demo (the default `true` fail-closes to 401). |
+| `HF_READ_ONLY`    | `true`                         | **Locks the Hub.** With auth off, this is what keeps the public from mutating your Hub repo — see below. |
+| `HF_STORAGE_REPO` | your Hub repo/bucket           | Where the `.corpus` archives live; without it `/storage` 503s.                                   |
+| `HF_TOKEN`        | a Hub token, **read-only scope** | Auth for reading the (private) storage repo. **Use a fine-grained read-only token** — see below. |
+
+> **The hardest guarantee is the token, not the code.** `AUTH_REQUIRED=false`
+> and `HF_READ_ONLY=true` must *both* be set — set only the first and forget the
+> second, and a write-capable token leaves your Hub wide open. A **fine-grained
+> read-only `HF_TOKEN`** removes that footgun entirely: Hugging Face itself
+> refuses every write regardless of what the app code does, so it backstops the
+> whole read-only gate. Mint one at
+> huggingface.co → Settings → Access Tokens (fine-grained, read only on the
+> storage repo) and use it here. Publish from your own machine with a separate
+> write token that never ships to the deployment.
+
+**Read-only guarantee (`HF_READ_ONLY=true`).** Turning auth off would otherwise
+open *writes* to everyone. With `HF_READ_ONLY=true` every Hub write is refused
+across both API surfaces: HTTP write routes (`POST /storage`,
+`DELETE /storage/{f}`, `PATCH /storage/{f}/manifest`, `PATCH …/nodes/{n}`)
+return **403**, and the `storage_*` / `corpus_*` **write** MCP tools
+(`storage_upload_corpus`, `storage_delete_corpus`, `corpus_manifest_update`,
+`corpus_node_annotate`) are not even registered — so nothing on the public API
+can push to, delete from, or re-upload the repo. Reads, downloads, conversions,
+and corpus queries are unaffected. You keep publishing from your own machine
+(run locally with `HF_READ_ONLY` unset / `false`) to the **same** Hub repo; the
+demo reads what you publish.
+
+Consequence for the demo UI: write affordances are **hidden**, not left to fail.
+The app asks `GET /capabilities` (unauthenticated — reports `auth_required` and
+`hub_writable`) and, when the Hub is read-only, omits the **Publish to Hugging
+Face** button and the corpus **Edit** metadata button entirely. The chat
+**"Fix"** chips still get a missing-tool response, since those write MCP tools
+aren't registered. Everything else — converting, downloading the `.corpus`,
+browsing, reading, querying — works anonymously.
+
+Note the Supabase token in Settings is **optional**: `apiFetch` attaches a
+Bearer header only if one is stored, so the demo works with none. That page
+probes the backend and says so when a token isn't needed.
+
+Exposures to accept (or address) before going live — read-only mode covers Hub
+writes, **not** these:
+
+- **Anonymous compute.** With auth off, `POST /convert` is reachable by anyone
+  and pins a CPU for up to the 300s function limit — visitors can run up your
+  Vercel Active-CPU bill (convert → `GET /convert/{id}/download` works without
+  ever publishing). This is a cost/abuse *decision*: it may be a legitimate demo
+  path, or you may want to disable public conversion / put the API behind
+  Vercel's firewall or rate limiting. (`/ingest` already 503s on Vercel.)
+- **Job scoping off.** Conversion-job polling/downloads (`GET /convert/{id}`) no
+  longer scope to their submitter, so any job id is visible to anyone.
+- **Private repo, public reads.** The server reads the (private) Hub repo with
+  its own token and serves its contents to every visitor.
+
 ## Project Structure
 
 ```

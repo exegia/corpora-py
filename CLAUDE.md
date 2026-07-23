@@ -110,6 +110,22 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # remains the deployment for heavy/long-running conversion work.
 vercel deploy          # manual preview deploy from a linked checkout
 vercel deploy --prod   # manual production deploy
+
+# ── Second Vercel project: the web example (corpora-py-example.vercel.app) ────
+# The React Router app in example/ (ssr:false → static SPA) is deployed as a
+# SEPARATE Vercel project on this same repo (Root Directory = example, config
+# in example/vercel.json: framework:null, buildCommand `react-router build`,
+# outputDirectory dist/client, SPA catch-all rewrite). Both projects share the
+# repo's Git integration and production branch (dev), so a push that redeploys
+# this API also redeploys the web example — no GitHub Actions, no chaining.
+# VITE_API_URL (build-time, Vite-inlined) must point at the API's prod URL.
+# Public-demo backend config (set on the corpora-py API project, not the
+# example project): AUTH_REQUIRED=false opens conversion/reads/queries to
+# anonymous visitors, and HF_READ_ONLY=true locks the Hub so the now-tokenless
+# public can't mutate it (see "Auth"/HF_READ_ONLY below). Both must be set
+# together -- AUTH_REQUIRED=false without HF_READ_ONLY=true would hand the
+# public Hub uploads and deletes. See example/README.md
+# ("Deploy the web example to Vercel") for the one-time project setup.
 ```
 
 ## Architecture
@@ -240,6 +256,24 @@ clients can't set custom headers on the handshake).
 - **`AUTH_REQUIRED`** (`common.utils.config.Settings.auth_required`, default `True`) — set to
   `false` for local dev. When `True` with no JWKS URL configured (`PROJECT_REF` /
   `SUPABASE_JWKS_URL` unset), requests fail closed (401), not open.
+- **`HF_READ_ONLY`** (`common.utils.config.Settings.hf_read_only`, default `False`) — the *write* guard,
+  deliberately **decoupled** from `AUTH_REQUIRED`. Turning auth off (public demo) would otherwise open Hub
+  *writes* to everyone; setting `HF_READ_ONLY=true` refuses every Hub mutation across both API surfaces at
+  once. Enforced in three layers: (1) the authoritative chokepoint — `CorpusStorage.upload`/`.delete`
+  (`admin.services.storage`) raise `ReadOnlyStorageError`, and *every* write funnels through them (the
+  manifest/annotation PATCHes re-upload via `_republish`), so all write paths are blocked by construction;
+  (2) a fast `require_writable` FastAPI dependency (`storage_api`) returns **403** on the write routes before
+  any Hub I/O; (3) `register_storage_tools`/`register_corpus_detail_tools` skip the 4 **write** MCP tools
+  (`storage_upload_corpus`, `storage_delete_corpus`, `corpus_manifest_update`, `corpus_node_annotate`) so a
+  public client never sees a tool it could mutate with. Left `False` on the desktop sidecar and local dev
+  (including `AUTH_REQUIRED=false` local dev), which stay fully writable — so the owner keeps publishing
+  locally to the same Hub repo the public demo reads. See `packages/admin/src/admin/services/CLAUDE.md`.
+  There is deliberately **no** per-case exception to this — the public demo converts, downloads, and
+  explores, and never writes to the Hub at all.
+- **Nothing in this repo writes to Supabase.** Supabase appears only as a JWT *issuer* whose signatures
+  `common.utils.jwt_auth` verifies against the public JWKS; there is no Supabase client, no service-role
+  key, and no table this app can touch (see "Dropped/missing functionality" above). An anonymous
+  deployment therefore has no Supabase write surface to lock down.
 - Decoded JWT claims land in `scope["state"]["user"]` and are used by
   `ConversionJob.is_visible_to()` (`admin.services.jobs`) to scope `GET /convert/{id}`,
   `/download`, and `/ws` to the job's own submitter (the JWT `sub` claim, recorded on the job at
@@ -252,8 +286,15 @@ clients can't set custom headers on the handshake).
 
 On PR merge: the `bump` job auto-increments the patch version in **all** workspace
 `pyproject.toml` files simultaneously, commits back with `[skip ci]`, and pushes a `vX.Y.Z`
-tag. The `build` and `publish` jobs then run against that tag, building and publishing all four wheels
-(`corpora-common`, `corpora-mcp`, `corpora-admin`, `corpora-py`) to PyPI via OIDC trusted publishing (no stored token).
+tag. The `build` and `publish` jobs then run against that tag, building and publishing to PyPI via OIDC
+trusted publishing (no stored token). **Only `corpora-py` is published**: its wheel is self-contained —
+`[tool.hatch.build.targets.wheel]` in the root `pyproject.toml` bundles the source of `corpora-common`,
+`corpora-mcp` and `corpora-admin` into the single `corpora-py` distribution, and the three packages'
+third-party deps are flattened into `corpora-py`'s own `[project.dependencies]` (there are no `corpora-*`
+runtime deps). The three remain workspace members — installed editable via the `dev` dependency-group for
+local dev/tests, and still independently buildable — but are **not** published to PyPI (so
+`pip install corpora-mcp`/`-admin`/`-common` from PyPI is intentionally not a thing; install `corpora-py`).
+Only a `corpora-py` trusted publisher (PyPI project + workflow `publish.yml` + environment `pypi`) is needed.
 
 The `build-sidecar` workflow builds the same four wheels, then bundles them per-platform (macOS arm64/x64, Windows) into
 a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun apps. The bundle step runs

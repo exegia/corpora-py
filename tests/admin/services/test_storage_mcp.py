@@ -135,3 +135,35 @@ async def test_not_configured_surfaces_as_tool_error(tools):
     registered = tools(storage)
     with pytest.raises(ToolError, match="HF_STORAGE_REPO"):
         await registered["storage_list_corpora"]()
+
+
+# ── read-only mode (HF_READ_ONLY) ─────────────────────────────────────────────
+# A public read-only deployment must not even expose the write tools, so a
+# client never sees a tool it could call to mutate the Hub.
+
+_WRITE_TOOLS = {
+    "storage_upload_corpus",
+    "storage_delete_corpus",
+    "corpus_manifest_update",
+    "corpus_node_annotate",
+}
+
+
+def _register(read_only: bool) -> set[str]:
+    from admin.services import corpus_detail_mcp
+
+    rec = RecordingMCP()
+    storage_mcp.register_storage_tools(rec, read_only=read_only)
+    corpus_detail_mcp.register_corpus_detail_tools(rec, read_only=read_only)
+    return set(rec.tools)
+
+
+def test_read_only_omits_write_tools():
+    names = _register(read_only=True)
+    assert names.isdisjoint(_WRITE_TOOLS)
+    # Reads stay registered.
+    assert {"storage_list_corpora", "storage_download_corpus", "corpus_content"} <= names
+
+
+def test_writable_registers_write_tools():
+    assert _WRITE_TOOLS <= _register(read_only=False)

@@ -22,7 +22,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, model_validator
 
 from .corpus_detail import (
@@ -35,9 +35,11 @@ from .corpus_detail import (
 )
 from .storage import (
     CorpusNotFoundError,
+    ReadOnlyStorageError,
     StorageError,
     StorageNotConfiguredError,
 )
+from .storage_api import require_writable
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,8 @@ async def _run[T](fn: Callable[[], T]) -> T:
         return await asyncio.to_thread(fn)
     except StorageNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ReadOnlyStorageError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except CorpusNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except StorageError as exc:
@@ -91,7 +95,7 @@ async def get_corpus_manifest(filename: str) -> dict[str, Any]:
     return await _run(lambda: get_manifest(filename))
 
 
-@router.patch("/{filename}/manifest")
+@router.patch("/{filename}/manifest", dependencies=[Depends(require_writable)])
 async def patch_corpus_manifest(
     filename: str, payload: ManifestUpdate
 ) -> dict[str, Any]:
@@ -124,7 +128,7 @@ async def get_corpus_node(filename: str, node: int) -> dict[str, Any]:
     return await _run(lambda: get_node(filename, node))
 
 
-@router.patch("/{filename}/nodes/{node}")
+@router.patch("/{filename}/nodes/{node}", dependencies=[Depends(require_writable)])
 async def patch_corpus_node(
     filename: str, node: int, payload: NodeAnnotation
 ) -> dict[str, Any]:

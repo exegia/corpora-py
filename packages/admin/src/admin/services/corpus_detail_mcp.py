@@ -33,8 +33,16 @@ from .corpus_detail import (
 from .storage import StorageError
 
 
-def register_corpus_detail_tools(mcp: Any) -> None:
-    """Register the `corpus_*` detail tools on a FastMCP server instance."""
+def register_corpus_detail_tools(mcp: Any, *, read_only: bool = False) -> None:
+    """Register the `corpus_*` detail tools on a FastMCP server instance.
+
+    When ``read_only`` is set (public `HF_READ_ONLY=true` deployment), the
+    write tools (`corpus_manifest_update`, `corpus_node_annotate` -- both
+    re-upload the archive to the Hub) are not registered, so a public client
+    never sees a tool it could use to mutate the repo. The read tools
+    (`corpus_manifest_get`, `corpus_node_get`, `corpus_index`,
+    `corpus_content`) are always registered.
+    """
 
     @mcp.tool()
     async def corpus_manifest_get(filename: str) -> str:
@@ -50,55 +58,57 @@ def register_corpus_detail_tools(mcp: Any) -> None:
             raise ToolError(str(exc)) from exc
         return json.dumps(manifest, indent=2, ensure_ascii=False)
 
-    @mcp.tool()
-    async def corpus_manifest_update(
-        filename: str,
-        name: str | None = None,
-        description: str | None = None,
-        version: str | None = None,
-        language: str | None = None,
-        languageCode: str | None = None,  # noqa: N803 - matches manifest key
-        type: str | None = None,  # noqa: A002 - matches manifest key
-        category: str | None = None,
-        written_date: str | None = None,
-    ) -> str:
-        """
-        Update a subset of a stored archive's manifest and re-upload it.
+    if not read_only:
 
-        Only the fields you pass are changed; the rest of the manifest is
-        preserved. At least one field must be provided.
+        @mcp.tool()
+        async def corpus_manifest_update(
+            filename: str,
+            name: str | None = None,
+            description: str | None = None,
+            version: str | None = None,
+            language: str | None = None,
+            languageCode: str | None = None,  # noqa: N803 - matches manifest key
+            type: str | None = None,  # noqa: A002 - matches manifest key
+            category: str | None = None,
+            written_date: str | None = None,
+        ) -> str:
+            """
+            Update a subset of a stored archive's manifest and re-upload it.
 
-        Args:
-            filename:     Archive name, e.g. "BHSA.corpus".
-            name:         Display name.
-            description:  Free-text description.
-            version:      Version string.
-            language:     Human-readable language name.
-            languageCode: Language code (e.g. "en", "hbo").
-            type:         Corpus type.
-            category:     Category.
-            written_date: Written/composition date.
-        """
-        updates = {
-            "name": name,
-            "description": description,
-            "version": version,
-            "language": language,
-            "languageCode": languageCode,
-            "type": type,
-            "category": category,
-            "written_date": written_date,
-        }
-        provided = {k: v for k, v in updates.items() if v is not None}
-        if not provided:
-            raise ToolError("Provide at least one manifest field to update.")
-        try:
-            manifest = await asyncio.to_thread(update_manifest, filename, provided)
-        except StorageError as exc:
-            raise ToolError(str(exc)) from exc
-        return "Updated manifest:\n" + json.dumps(
-            manifest, indent=2, ensure_ascii=False
-        )
+            Only the fields you pass are changed; the rest of the manifest is
+            preserved. At least one field must be provided.
+
+            Args:
+                filename:     Archive name, e.g. "BHSA.corpus".
+                name:         Display name.
+                description:  Free-text description.
+                version:      Version string.
+                language:     Human-readable language name.
+                languageCode: Language code (e.g. "en", "hbo").
+                type:         Corpus type.
+                category:     Category.
+                written_date: Written/composition date.
+            """
+            updates = {
+                "name": name,
+                "description": description,
+                "version": version,
+                "language": language,
+                "languageCode": languageCode,
+                "type": type,
+                "category": category,
+                "written_date": written_date,
+            }
+            provided = {k: v for k, v in updates.items() if v is not None}
+            if not provided:
+                raise ToolError("Provide at least one manifest field to update.")
+            try:
+                manifest = await asyncio.to_thread(update_manifest, filename, provided)
+            except StorageError as exc:
+                raise ToolError(str(exc)) from exc
+            return "Updated manifest:\n" + json.dumps(
+                manifest, indent=2, ensure_ascii=False
+            )
 
     @mcp.tool()
     async def corpus_node_get(filename: str, node: int) -> str:
@@ -123,35 +133,41 @@ def register_corpus_detail_tools(mcp: Any) -> None:
             raise ToolError(str(exc)) from exc
         return json.dumps(detail, indent=2, ensure_ascii=False, default=str)
 
-    @mcp.tool()
-    async def corpus_node_annotate(
-        filename: str,
-        node: int,
-        otype: str | None = None,
-        note: str | None = None,
-    ) -> str:
-        """
-        Record a node-type correction for a stored archive's node.
+    if not read_only:
 
-        Writes to the archive's `annotations.json` sidecar (the converted
-        Text-Fabric payload itself is never rewritten), re-uploads the archive,
-        and records the converter's original type as `converted_otype`. Provide
-        at least one of `otype`/`note`.
+        @mcp.tool()
+        async def corpus_node_annotate(
+            filename: str,
+            node: int,
+            otype: str | None = None,
+            note: str | None = None,
+        ) -> str:
+            """
+            Record a node-type correction for a stored archive's node.
 
-        Args:
-            filename: Archive name, e.g. "BHSA.corpus".
-            node:     Integer node id to annotate.
-            otype:    The corrected node type (e.g. "word", "clause",
-                      "paragraph").
-            note:     Free-text rationale for the correction.
-        """
-        if otype is None and note is None:
-            raise ToolError("Provide otype and/or note to annotate a node.")
-        try:
-            entry = await asyncio.to_thread(annotate_node, filename, node, otype, note)
-        except StorageError as exc:
-            raise ToolError(str(exc)) from exc
-        return "Annotated node:\n" + json.dumps(entry, indent=2, ensure_ascii=False)
+            Writes to the archive's `annotations.json` sidecar (the converted
+            Text-Fabric payload itself is never rewritten), re-uploads the
+            archive, and records the converter's original type as
+            `converted_otype`. Provide at least one of `otype`/`note`.
+
+            Args:
+                filename: Archive name, e.g. "BHSA.corpus".
+                node:     Integer node id to annotate.
+                otype:    The corrected node type (e.g. "word", "clause",
+                          "paragraph").
+                note:     Free-text rationale for the correction.
+            """
+            if otype is None and note is None:
+                raise ToolError("Provide otype and/or note to annotate a node.")
+            try:
+                entry = await asyncio.to_thread(
+                    annotate_node, filename, node, otype, note
+                )
+            except StorageError as exc:
+                raise ToolError(str(exc)) from exc
+            return "Annotated node:\n" + json.dumps(
+                entry, indent=2, ensure_ascii=False
+            )
 
     @mcp.tool()
     async def corpus_index(filename: str) -> str:

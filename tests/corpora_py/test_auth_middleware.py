@@ -86,7 +86,16 @@ class TestExtractBearerToken:
 
 class TestExemptAndBypass:
     @pytest.mark.parametrize(
-        "path", ["/health", "/", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"]
+        "path",
+        [
+            "/health",
+            "/",
+            "/capabilities",
+            "/docs",
+            "/docs/oauth2-redirect",
+            "/redoc",
+            "/openapi.json",
+        ],
     )
     async def test_exempt_paths_pass_without_token(self, middleware, downstream, path):
         await middleware(_scope(path=path), None, SendRecorder())
