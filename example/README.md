@@ -129,9 +129,17 @@ and corpus queries are unaffected. You keep publishing from your own machine
 (run locally with `HF_READ_ONLY` unset / `false`) to the **same** Hub repo; the
 demo reads what you publish.
 
-Consequence for the demo UI: the in-browser **Publish** button and the chat
-**"Fix"** chips (which call the write tools) will get a 403 / missing-tool
-response on the public deployment — expected, since only you can write.
+Consequence for the demo UI: write affordances are **hidden**, not left to fail.
+The app asks `GET /capabilities` (unauthenticated — reports `auth_required` and
+`hub_writable`) and, when the Hub is read-only, omits the **Publish to Hugging
+Face** button and the corpus **Edit** metadata button entirely. The chat
+**"Fix"** chips still get a missing-tool response, since those write MCP tools
+aren't registered. Everything else — converting, downloading the `.corpus`,
+browsing, reading, querying — works anonymously.
+
+Note the Supabase token in Settings is **optional**: `apiFetch` attaches a
+Bearer header only if one is stored, so the demo works with none. That page
+probes the backend and says so when a token isn't needed.
 
 Exposures to accept (or address) before going live — read-only mode covers Hub
 writes, **not** these:

@@ -41,6 +41,13 @@ Hub I/O — both `_run` mappers also map a leaked `ReadOnlyStorageError` to 403;
 entirely, so they never appear in a public client's tool list. Default `False`, so the desktop sidecar and
 local dev stay writable.
 
+**There is deliberately no "public upload" escape hatch.** On the public demo the Hub is read-only, full
+stop: an anonymous visitor converts and downloads their own `.corpus`, and nothing they do reaches the Hub.
+Publishing stays an owner action, done locally against a writable deployment. If you are tempted to add a
+narrow allowance (e.g. "let a visitor publish the job they just converted"), that was considered and
+rejected — it makes an unauthenticated deployment a write path to the owner's Hub account, and the demo
+gets everything it needs without one.
+
 ## Corpus detail (`corpus_detail*.py`)
 
 A *detail* layer over Hub storage for the desktop app's reader: read/patch a stored archive's

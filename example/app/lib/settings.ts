@@ -9,10 +9,11 @@ import { API_URL } from "~/lib/types/socket"
  * - Hugging Face API key -- gates the Explore features (`routes/explore.tsx`
  *   hides its browse/search UI until a key has been saved AND validated
  *   against `https://huggingface.co/api/whoami-v2`).
- * - Supabase API key -- attached by {@link apiFetch} as an
- *   `Authorization: Bearer` header on every corpora-api call, but ONLY in a
- *   production build ({@link IS_PROD}). In development the backend runs with
- *   `AUTH_REQUIRED=false`, so the header is omitted and the key is optional.
+ * - Supabase API key -- OPTIONAL. Attached by {@link apiFetch} as an
+ *   `Authorization: Bearer` header whenever one is stored, and simply omitted
+ *   when it isn't. The public deployment and local dev both run the backend
+ *   with `AUTH_REQUIRED=false`, so the app has to work with no key at all; a
+ *   key only matters against a backend that does enforce auth.
  * - Anthropic API key -- powers the real AI agent in the corpus workspace
  *   chat (`components/workspace/use-corpus-chat.ts`), which calls the
  *   Anthropic API directly from the webview. Without a validated key the chat
@@ -201,26 +202,53 @@ export const validateHfKey = async (key: string): Promise<ValidationResult> => {
   }
 }
 
-// Loose JWT shape (three dot-separated base64url segments) -- catches typos
-// and pasted anon-key fragments before a network round-trip.
+// Loose JWT shape (three dot-separated base64url segments) -- catches the
+// common mistake of pasting a `sb_publishable_...` / `sb_secret_...` API key
+// instead of a session access token, before a network round-trip.
 const JWT_SHAPE = /^[\w-]+\.[\w-]+\.[\w-]+$/
+
+/** Whether the backend answers a protected endpoint with no credentials at
+ * all -- true when it runs with `AUTH_REQUIRED=false`, in which case no key
+ * is needed and none can meaningfully be validated. */
+export const backendRequiresAuth = async (): Promise<boolean> => {
+  const response = await fetch(`${API_URL}/storage`)
+  return response.status === 401 || response.status === 403
+}
 
 /**
  * Validates a Supabase key against the corpora-api backend by probing a
  * protected endpoint with the key as a Bearer token: a 401/403 means the
  * backend rejected it; any other outcome (200, or even a 5xx from further in
  * the handler) means it made it past auth.
+ *
+ * Probes anonymously first: against a deployment that doesn't enforce auth,
+ * *every* key "passes", so reporting success would be a lie. Say so instead.
  */
 export const validateSupabaseKey = async (
   key: string
 ): Promise<ValidationResult> => {
   const trimmed = key.trim()
   if (!trimmed) return { ok: false, message: "Enter a key first." }
+  try {
+    if (!(await backendRequiresAuth())) {
+      return {
+        ok: true,
+        message:
+          "This deployment doesn't require a key — the backend accepts anonymous requests, so you can skip this.",
+      }
+    }
+  } catch {
+    return {
+      ok: false,
+      message:
+        "Could not reach the backend to validate the key. Check that the API is running and try again.",
+    }
+  }
   if (!JWT_SHAPE.test(trimmed)) {
     return {
       ok: false,
       message:
-        "That doesn't look like a Supabase JWT (expected three dot-separated segments). Copy it from the Supabase dashboard.",
+        "That's not a Supabase access token. The backend verifies a signed-in user's JWT (three dot-separated segments, starts with `eyJ`) — not a `sb_publishable_…` project API key.",
     }
   }
   try {
@@ -231,10 +259,10 @@ export const validateSupabaseKey = async (
       return {
         ok: false,
         message:
-          "The backend rejected the key. Make sure it's a current key from the Supabase dashboard.",
+          "The backend rejected the token. It must be a current, unexpired access token for this project's Supabase instance.",
       }
     }
-    return { ok: true, message: "Key accepted by the backend." }
+    return { ok: true, message: "Token accepted by the backend." }
   } catch {
     return {
       ok: false,
@@ -315,30 +343,26 @@ export const hasValidAnthropicKey = (
 export const boundFetch = ((input: RequestInfo | URL, init?: RequestInit) =>
   globalThis.fetch(input, init)) as typeof fetch
 
-/** Thrown by {@link apiFetch} in production when no Supabase key is stored --
- * call sites surface `error.message` through their existing error paths. */
-export class MissingApiKeyError extends Error {
-  constructor() {
-    super(
-      "Supabase API key required. Add it in Settings to call the backend in production."
-    )
-    this.name = "MissingApiKeyError"
-  }
-}
-
-/** `Authorization` header for backend calls: the Supabase Bearer token in
- * production, nothing in development (backend auth is bypassed there). */
+/**
+ * `Authorization` header for backend calls: the Supabase Bearer token when
+ * one has been stored, nothing otherwise.
+ *
+ * Deliberately never throws. The public deployment runs the backend with
+ * `AUTH_REQUIRED=false` (see the root CLAUDE.md's "Auth" section), so a
+ * visitor with no Supabase session must be able to convert and browse; the
+ * key is an *optional* upgrade for a deployment that does enforce auth, not a
+ * precondition for the app to function. Whether a given call is allowed is
+ * the backend's decision to make -- surfaced as a real 401 -- not something
+ * this client should pre-empt.
+ */
 export const authHeaders = (): Record<string, string> => {
-  if (!IS_PROD) return {}
   const { value } = getApiKey("supabase")
-  if (!value) throw new MissingApiKeyError()
-  return { Authorization: `Bearer ${value}` }
+  return value ? { Authorization: `Bearer ${value}` } : {}
 }
 
 /**
  * Drop-in `fetch` replacement for corpora-api calls: merges
- * {@link authHeaders} into the request. In production with no stored key it
- * rejects with {@link MissingApiKeyError} instead of firing a doomed 401.
+ * {@link authHeaders} into the request.
  */
 export const apiFetch = async (
   input: string | URL,
@@ -352,14 +376,15 @@ export const apiFetch = async (
 }
 
 /**
- * Appends the Supabase key as a `?token=` query param in production --
+ * Appends the Supabase key as a `?token=` query param when one is stored --
  * browser `WebSocket` clients can't set custom headers on the handshake, so
  * the backend's `AuthMiddleware` accepts the token this way for `/ws` routes.
+ * Like {@link authHeaders} this is a no-op without a key rather than an
+ * error, so a tokenless deployment can still stream job status.
  */
 export const withWsAuth = (wsUrl: string): string => {
-  if (!IS_PROD) return wsUrl
   const { value } = getApiKey("supabase")
-  if (!value) throw new MissingApiKeyError()
+  if (!value) return wsUrl
   const separator = wsUrl.includes("?") ? "&" : "?"
   return `${wsUrl}${separator}token=${encodeURIComponent(value)}`
 }
