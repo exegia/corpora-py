@@ -9,6 +9,7 @@ import {
 } from "~/lib/atoms/upload-atom"
 import {
   type JobStatusMessage,
+  pollJobStatus,
   subscribeJobStatus,
 } from "~/lib/hooks/use-socket"
 import { loadPersistedUploads, savePersistedUploads } from "./persistence"
@@ -276,7 +277,40 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
     }
   }
 
-  unsubscribers.set(id, subscribeJobStatus(wsUrl, handleMessage))
+  // The WebSocket is the preferred transport (real push, no polling
+  // traffic) and is what the desktop sidecar serves. It does NOT exist on
+  // the Vercel deployment, though -- Functions don't support WebSockets, so
+  // `/convert/{id}/ws` 404s and the socket closes without ever delivering a
+  // message. Falling back on the first close-with-no-messages covers both
+  // that case and a mid-job socket drop, without giving up push where it
+  // works.
+  let sawMessage = false
+  let fallback: (() => void) | undefined
+
+  const startPolling = () => {
+    if (fallback || sawMessage) return
+    fallback = pollJobStatus(async () => {
+      const response = await apiFetch(`${API_URL}/convert/${jobId}`)
+      if (!response.ok) throw new Error(`Status check failed (${response.status})`)
+      return (await response.json()) as JobStatusMessage
+    }, handleMessage)
+  }
+
+  const closeSocket = subscribeJobStatus(
+    wsUrl,
+    (message) => {
+      sawMessage = true
+      handleMessage(message)
+    },
+    (status) => {
+      if (status === "error" || status === "closed") startPolling()
+    }
+  )
+
+  unsubscribers.set(id, () => {
+    closeSocket()
+    fallback?.()
+  })
 }
 
 export type UploadOptions = {
