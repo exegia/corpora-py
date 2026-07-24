@@ -29,7 +29,11 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http"
-import { Readable, Writable } from "node:stream"
+import { Writable } from "node:stream"
+
+// Without this, Vercel buffers the function's output and the chat's token
+// stream arrives as one blob at the end instead of streaming.
+export const config = { supportsResponseStreaming: true }
 
 const GATEWAY_BASE = "https://ai-gateway.vercel.sh/v4/ai"
 
@@ -55,6 +59,26 @@ const headerValue = (
 ): string | undefined => {
   const value = req.headers[name]
   return Array.isArray(value) ? value[0] : value
+}
+
+/**
+ * The request body as a string. Vercel's Node helpers CONSUME the incoming
+ * stream to populate `req.body` for JSON requests before the handler runs —
+ * streaming `req` upstream therefore sends nothing and the gateway waits on
+ * a body that never arrives (the hang shipped in #82). The bodies here are
+ * small JSON protocol frames, so re-serializing the parsed body (or, with
+ * helpers disabled, buffering the stream) loses nothing.
+ */
+const readBody = async (req: IncomingMessage): Promise<string> => {
+  const parsed = (req as IncomingMessage & { body?: unknown }).body
+  if (parsed !== undefined) {
+    return typeof parsed === "string" ? parsed : JSON.stringify(parsed)
+  }
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks).toString("utf8")
 }
 
 export default async function handler(
@@ -104,15 +128,7 @@ export default async function handler(
   const upstream = await fetch(`${GATEWAY_BASE}/${path}`, {
     method: req.method,
     headers,
-    ...(req.method === "POST"
-      ? {
-          // Node's stream/web ReadableStream vs the DOM lib's — same object
-          // at runtime, structurally incompatible to tsc.
-          body: Readable.toWeb(req) as unknown as ReadableStream,
-          // Required by Node's fetch to stream a request body.
-          duplex: "half" as const,
-        }
-      : {}),
+    ...(req.method === "POST" ? { body: await readBody(req) } : {}),
   })
 
   // fetch already decompressed the body — the encoding/length headers of the
