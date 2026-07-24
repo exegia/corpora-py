@@ -17,11 +17,23 @@
  *   general gateway proxy.
  *
  * Auth resolution mirrors `@ai-sdk/gateway`: an explicit AI_GATEWAY_API_KEY
- * env var wins, otherwise the deployment's OIDC token (auto-provisioned on
- * Vercel; `vercel env pull` writes one to .env.local for `vercel dev`). Local
+ * env var wins, otherwise the deployment's OIDC token. Local
  * `bun run vite:dev` doesn't run this function at all — vite.config.ts
  * proxies /api/gateway to the real gateway with the same env fallback.
+ *
+ * Written against the CLASSIC Node signature (IncomingMessage/ServerResponse)
+ * on purpose: Vercel's builder invoked the web-standard `(request: Request)`
+ * shape with a Node request anyway (`request.url` relative,
+ * `request.headers.get` undefined — FUNCTION_INVOCATION_FAILED in prod), so
+ * this depends only on the invocation style that's actually delivered.
  */
+
+import type { IncomingMessage, ServerResponse } from "node:http"
+import { Writable } from "node:stream"
+
+// Without this, Vercel buffers the function's output and the chat's token
+// stream arrives as one blob at the end instead of streaming.
+export const config = { supportsResponseStreaming: true }
 
 const GATEWAY_BASE = "https://ai-gateway.vercel.sh/v4/ai"
 
@@ -32,57 +44,106 @@ const ALLOWED = new Map([
   ["config", "GET"],
 ])
 
-export default async function handler(request: Request): Promise<Response> {
-  const segments = new URL(request.url).pathname.split("/").filter(Boolean)
+const sendJson = (
+  res: ServerResponse,
+  status: number,
+  body: Record<string, string>
+): void => {
+  res.writeHead(status, { "content-type": "application/json" })
+  res.end(JSON.stringify(body))
+}
+
+const headerValue = (
+  req: IncomingMessage,
+  name: string
+): string | undefined => {
+  const value = req.headers[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+/**
+ * The request body as a string. Vercel's Node helpers CONSUME the incoming
+ * stream to populate `req.body` for JSON requests before the handler runs —
+ * streaming `req` upstream therefore sends nothing and the gateway waits on
+ * a body that never arrives (the hang shipped in #82). The bodies here are
+ * small JSON protocol frames, so re-serializing the parsed body (or, with
+ * helpers disabled, buffering the stream) loses nothing.
+ */
+const readBody = async (req: IncomingMessage): Promise<string> => {
+  const parsed = (req as IncomingMessage & { body?: unknown }).body
+  if (parsed !== undefined) {
+    return typeof parsed === "string" ? parsed : JSON.stringify(parsed)
+  }
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks).toString("utf8")
+}
+
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  const pathname = (req.url ?? "").split("?")[0] ?? ""
+  const segments = pathname.split("/").filter(Boolean)
   const path = segments[segments.length - 1] ?? ""
 
-  if (ALLOWED.get(path) !== request.method) {
-    return Response.json(
-      { error: `Unsupported gateway route: ${request.method} ${path}` },
-      { status: 404 }
-    )
+  if (ALLOWED.get(path) !== req.method) {
+    sendJson(res, 404, {
+      error: `Unsupported gateway route: ${req.method} ${path}`,
+    })
+    return
   }
 
-  const modelId = request.headers.get("ai-language-model-id")
+  const modelId = headerValue(req, "ai-language-model-id")
   if (path === "language-model" && (!modelId || !ALLOWED_MODELS.has(modelId))) {
-    return Response.json(
-      {
-        error: `This demo only serves the free model(s): ${[...ALLOWED_MODELS].join(", ")}. Bring your own Anthropic key in Settings for anything else.`,
-      },
-      { status: 403 }
-    )
+    sendJson(res, 403, {
+      error: `This demo only serves the free model(s): ${[...ALLOWED_MODELS].join(", ")}. Bring your own Anthropic key in Settings for anything else.`,
+    })
+    return
   }
 
   const token =
     process.env.AI_GATEWAY_API_KEY ?? process.env.VERCEL_OIDC_TOKEN
   if (!token) {
-    return Response.json(
-      { error: "AI Gateway credential is not configured on this deployment." },
-      { status: 503 }
-    )
+    sendJson(res, 503, {
+      error: "AI Gateway credential is not configured on this deployment.",
+    })
+    return
   }
 
   // Forward only the gateway-protocol headers plus content-type; the
   // browser's own authorization header (a dummy value, see chat-view.tsx) is
   // deliberately replaced with the deployment credential.
   const headers = new Headers()
-  for (const [name, value] of request.headers) {
+  for (const [name, value] of Object.entries(req.headers)) {
     if (name.startsWith("ai-") || name === "content-type") {
-      headers.set(name, value)
+      const single = Array.isArray(value) ? value[0] : value
+      if (single !== undefined) headers.set(name, single)
     }
   }
   headers.set("authorization", `Bearer ${token}`)
 
   const upstream = await fetch(`${GATEWAY_BASE}/${path}`, {
-    method: request.method,
+    method: req.method,
     headers,
-    body: request.body,
-    // Required by Node's fetch to stream a request body.
-    ...(request.body ? { duplex: "half" as const } : {}),
+    ...(req.method === "POST" ? { body: await readBody(req) } : {}),
   })
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: upstream.headers,
-  })
+  // fetch already decompressed the body — the encoding/length headers of the
+  // compressed wire form would corrupt the re-served response.
+  const responseHeaders: Record<string, string> = {}
+  for (const [name, value] of upstream.headers) {
+    if (!["content-encoding", "content-length", "transfer-encoding"].includes(name)) {
+      responseHeaders[name] = value
+    }
+  }
+  res.writeHead(upstream.status, responseHeaders)
+
+  if (upstream.body) {
+    await upstream.body.pipeTo(Writable.toWeb(res))
+  } else {
+    res.end()
+  }
 }
