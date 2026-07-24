@@ -1,8 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import type { MetaDescriptor } from "react-router"
 import {
   CheckCircle2,
-  Info,
   KeyRound,
   Loader2,
   ShieldAlert,
@@ -23,14 +22,11 @@ import {
 import { Input } from "~/components/ui/input"
 import {
   clearApiKey,
-  IS_PROD,
   markApiKeyStatus,
   setApiKey,
   useApiKeys,
   validateAnthropicKey,
   validateHfKey,
-  validateSupabaseKey,
-  backendRequiresAuth,
   type ApiKeyEntry,
   type ApiKeyName,
   type ValidationResult,
@@ -196,26 +192,6 @@ function KeySection({
 
 export default function Settings() {
   const keys = useApiKeys()
-  // Asked, not assumed: whether the token is needed depends on the backend
-  // this build points at (`AUTH_REQUIRED`), which the frontend can't know at
-  // build time. `undefined` until the probe answers.
-  const [authRequired, setAuthRequired] = useState<boolean | undefined>(
-    undefined
-  )
-
-  useEffect(() => {
-    let cancelled = false
-    void backendRequiresAuth()
-      .then((required) => {
-        if (!cancelled) setAuthRequired(required)
-      })
-      .catch(() => {
-        /* Unreachable backend tells us nothing — leave the copy neutral. */
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -256,35 +232,6 @@ export default function Settings() {
       />
 
       <KeySection
-        name="supabase"
-        entry={keys.supabase}
-        title={
-          authRequired === false
-            ? "Supabase access token (not needed)"
-            : "Supabase access token (optional)"
-        }
-        icon={<KeyRound className="size-5" aria-hidden="true" />}
-        description={
-          <>
-            {authRequired === false && (
-              <>
-                <strong>This backend accepts anonymous requests</strong> —
-                converting and browsing work without a token, so you can leave
-                this empty.{" "}
-              </>
-            )}
-            Needed only against a backend running{" "}
-            <code>AUTH_REQUIRED=true</code>, which verifies a signed-in user’s{" "}
-            <em>access token</em> (a JWT starting <code>eyJ</code>) — not a{" "}
-            <code>sb_publishable_…</code> project API key.
-          </>
-        }
-        inputLabel="Enter Supabase access token"
-        placeholder="eyJ…"
-        validate={validateSupabaseKey}
-      />
-
-      <KeySection
         name="anthropic"
         entry={keys.anthropic}
         title="Anthropic API key"
@@ -313,16 +260,6 @@ export default function Settings() {
         validate={validateAnthropicKey}
       />
 
-      {!IS_PROD && (
-        <Alert variant="info" role="note">
-          <Info className="size-4" aria-hidden="true" />
-          <AlertTitle>Development mode</AlertTitle>
-          <AlertDescription>
-            Backend authentication is bypassed in development, so the Supabase
-            token is optional here.
-          </AlertDescription>
-        </Alert>
-      )}
     </div>
   )
 }
