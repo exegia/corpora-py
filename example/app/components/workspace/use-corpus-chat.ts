@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { ToolLoopAgent, isStepCount, type ModelMessage } from "ai"
-import { createAnthropic } from "@ai-sdk/anthropic"
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp"
 import { API_URL } from "~/lib/types/socket"
-import {
-  ANTHROPIC_BROWSER_HEADERS,
-  authHeaders,
-  boundFetch,
-  getApiKey,
-  hasValidAnthropicKey,
-  useApiKeys,
-} from "~/lib/settings"
+import { agentModelId, createAgentModel } from "~/lib/agent-model"
+import { authHeaders, boundFetch, hasValidAnthropicKey, useApiKeys } from "~/lib/settings"
 
 import { loadGraphModelDoc } from "./graph-model"
 import {
@@ -22,32 +15,24 @@ import {
 } from "./types"
 
 /**
- * The workspace chat brain, with two modes behind one `useChat`-shaped
- * surface (`messages`, `status`, `sendMessage`, `live`):
+ * The workspace chat brain: a `ToolLoopAgent` running in the webview, loaded
+ * with the Context-Fabric graph-model doc and the corpora-api MCP tools
+ * (`corpus_*` — content, node inspect, node annotate), behind a
+ * `useChat`-shaped surface (`messages`, `status`, `sendMessage`, `ownKey`).
+ * Its job: audit whether converted nodes carry the right type (slot vs
+ * non-slot, word vs clause vs paragraph, ...) and record corrections via
+ * `corpus_node_annotate`.
  *
- * - **Live agent** (an Anthropic key is saved + validated in Settings): a
- *   `ToolLoopAgent` running in the webview against the user's own key, loaded
- *   with the Context-Fabric graph-model doc and the corpora-api MCP tools
- *   (`corpus_*` — content, node inspect, node annotate). Its job: audit
- *   whether converted nodes carry the right type (slot vs non-slot, word vs
- *   clause vs paragraph, ...) and record corrections via
- *   `corpus_node_annotate`.
- * - **Mock** (no key): the original canned word-streamed replies, so the UI
- *   stays fully demo-able offline.
+ * The model is picked per run by `createAgentModel` (see `~/lib/agent-model`):
+ * the user's own Anthropic key when one is saved + validated in Settings,
+ * otherwise the free demo model through this deployment's `/api/gateway`
+ * proxy — the same two modes as the `/chat` route's `ChatView`.
  *
  * Conversation state is in-memory only; nothing is persisted.
  */
 
-/** Direct-API Anthropic model the agent runs on. */
-export const AGENT_MODEL = "claude-sonnet-5"
-
 /** Tool-loop ceiling — inspect + annotate a handful of nodes, not run away. */
 const MAX_STEPS = 12
-
-const THINK_MS = 500
-const STREAM_MS = 35
-
-// ── Mock reply (no-key fallback) ────────────────────────────────────────────
 
 const SEED_MESSAGES: ChatMessage[] = [
   {
@@ -58,37 +43,16 @@ const SEED_MESSAGES: ChatMessage[] = [
         type: "text",
         text:
           "Hi — I'm the corpus assistant. Attach a passage and ask me to " +
-          "check its node type (slot vs non-slot, word/clause/paragraph…). " +
-          "Right now no AI key is set, so I can only give mock answers — " +
-          "add an Anthropic API key in Settings to let me inspect and " +
-          "correct the graph for real.",
+          "check its node type (slot vs non-slot, word/clause/paragraph…): " +
+          "I inspect the graph over MCP and record corrections. Add an " +
+          "Anthropic API key in Settings to switch from the free demo " +
+          "model to Claude.",
       },
     ],
   },
 ]
 
-const mockReply = (text: string, references: CorpusReference[]): string => {
-  if (references.length > 0) {
-    const refs = references.map((r) => r.ref).join(", ")
-    return (
-      `Mock answer about ${refs}: with an Anthropic API key saved in ` +
-      `Settings I would inspect ${
-        references.length > 1 ? "these nodes" : "this node"
-      } over MCP (otype, slot span, features), compare against the ` +
-      `Context-Fabric graph model, and record a correction with ` +
-      `corpus_node_annotate if the converted type is wrong.`
-    )
-  }
-  if (text.trim().length > 0) {
-    return (
-      "This is a mock response — no AI key is configured. Add an Anthropic " +
-      "API key in Settings and I'll audit corpus nodes for real."
-    )
-  }
-  return "Send some text or attach a passage reference to see a reply."
-}
-
-// ── Live agent plumbing ─────────────────────────────────────────────────────
+// ── Agent plumbing ──────────────────────────────────────────────────────────
 
 const systemPrompt = (corpusFilename: string, graphModelDoc: string): string =>
   `You are the corpus curation assistant inside the Corpora desktop app.
@@ -174,23 +138,12 @@ export type SendMessageInput = {
 
 export function useCorpusChat(corpusId: string) {
   const keys = useApiKeys()
-  const live = hasValidAnthropicKey(keys)
+  const ownKey = hasValidAnthropicKey(keys)
   const [messages, setMessages] = useState<ChatMessage[]>(SEED_MESSAGES)
   const [status, setStatus] = useState<ChatStatus>("ready")
-  const timersRef = useRef<number[]>([])
-  // Model-side conversation history (live mode) — parallel to the UI list.
+  // Model-side conversation history — parallel to the UI list.
   const modelMessagesRef = useRef<ModelMessage[]>([])
   const corpusFilename = `${corpusId}.corpus`
-
-  useEffect(
-    () => () => {
-      for (const timer of timersRef.current) {
-        window.clearTimeout(timer)
-        window.clearInterval(timer)
-      }
-    },
-    []
-  )
 
   const appendUserMessage = useCallback(
     (text: string, references: CorpusReference[]) => {
@@ -209,52 +162,6 @@ export function useCorpusChat(corpusId: string) {
     },
     []
   )
-
-  // ── Mock path ─────────────────────────────────────────────────────────────
-
-  const sendMock = useCallback(
-    (text: string, references: CorpusReference[]) => {
-      const words = mockReply(text, references).split(" ")
-      const assistantId = makeId()
-
-      const thinkTimer = window.setTimeout(() => {
-        setStatus("streaming")
-        setMessages((prev) => [
-          ...prev,
-          { id: assistantId, role: "assistant", parts: [] },
-        ])
-
-        let revealed = 0
-        const streamTimer = window.setInterval(() => {
-          revealed += 1
-          const done = revealed >= words.length
-          const parts: MessagePart[] = [
-            { type: "text", text: words.slice(0, revealed).join(" ") },
-            ...(done
-              ? references.map((reference): MessagePart => ({
-                  type: "data-corpusReference",
-                  data: reference,
-                }))
-              : []),
-          ]
-          setMessages((prev) =>
-            prev.map((message) =>
-              message.id === assistantId ? { ...message, parts } : message
-            )
-          )
-          if (done) {
-            window.clearInterval(streamTimer)
-            setStatus("ready")
-          }
-        }, STREAM_MS)
-        timersRef.current.push(streamTimer)
-      }, THINK_MS)
-      timersRef.current.push(thinkTimer)
-    },
-    []
-  )
-
-  // ── Live agent path ───────────────────────────────────────────────────────
 
   const sendLive = useCallback(
     async (text: string, references: CorpusReference[]) => {
@@ -294,14 +201,8 @@ export function useCorpusChat(corpusId: string) {
           )
         )
 
-        const anthropic = createAnthropic({
-          apiKey: getApiKey("anthropic").value,
-          headers: ANTHROPIC_BROWSER_HEADERS,
-          fetch: boundFetch,
-        })
-
         const agent = new ToolLoopAgent({
-          model: anthropic(AGENT_MODEL),
+          model: createAgentModel(ownKey),
           instructions: systemPrompt(corpusFilename, graphModelDoc),
           tools,
           stopWhen: isStepCount(MAX_STEPS),
@@ -400,7 +301,7 @@ export function useCorpusChat(corpusId: string) {
         setStatus("ready")
       }
     },
-    [corpusFilename]
+    [corpusFilename, ownKey]
   )
 
   // ── Public surface ────────────────────────────────────────────────────────
@@ -409,11 +310,10 @@ export function useCorpusChat(corpusId: string) {
     ({ text, references = [] }: SendMessageInput) => {
       if (!appendUserMessage(text, references)) return
       setStatus("submitted")
-      if (live) void sendLive(text, references)
-      else sendMock(text, references)
+      void sendLive(text, references)
     },
-    [appendUserMessage, live, sendLive, sendMock]
+    [appendUserMessage, sendLive]
   )
 
-  return { messages, status, sendMessage, live }
+  return { messages, status, sendMessage, ownKey, model: agentModelId(ownKey) }
 }

@@ -293,9 +293,9 @@ export default function Settings() {
           <>
             <strong>Optional.</strong> Upgrades the AI assistant in Chat and
             the corpus viewer to Claude: a real agent that inspects your
-            corpus&apos;s graph nodes over MCP. Without a key, Chat runs on a
-            free demo model (and the corpus viewer&apos;s panel on a mock
-            assistant). The key is sent directly from this app to Anthropic —
+            corpus&apos;s graph nodes over MCP. Without a key, both run on a
+            free demo model. The key is sent directly from this app to
+            Anthropic —
             create one under{" "}
             <a
               href="https://console.anthropic.com/settings/keys"
