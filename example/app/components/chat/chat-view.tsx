@@ -3,6 +3,7 @@ import { useChat } from "@ai-sdk/react"
 import {
   DirectChatTransport,
   ToolLoopAgent,
+  createGateway,
   isStepCount,
   type ChatTransport,
   type UIMessage,
@@ -44,21 +45,37 @@ import {
   ANTHROPIC_BROWSER_HEADERS,
   boundFetch,
   getApiKey,
+  hasValidAnthropicKey,
+  useApiKeys,
 } from "~/lib/settings"
 import { corpusDisplayName, type LoadedCorpus } from "./corpus-load"
 import { suggestionsFor, welcomeMessage, welcomeText } from "./welcome"
 
 /**
  * The chat phase: a Vercel AI Elements chat over the loaded corpus. The agent
- * (`ToolLoopAgent` + the corpus's MCP tools) runs in-process in the webview
- * against the user's own Anthropic key — `DirectChatTransport` bridges it to
- * `useChat`, so there is no server chat endpoint. The conversation opens with
- * a locally-built assistant message summarizing the loaded corpus plus
- * corpus-specific suggestion chips.
+ * (`ToolLoopAgent` + the corpus's MCP tools) runs in-process in the webview —
+ * `DirectChatTransport` bridges it to `useChat`, so there is no server chat
+ * endpoint. The conversation opens with a locally-built assistant message
+ * summarizing the loaded corpus plus corpus-specific suggestion chips.
+ *
+ * Two model modes, decided per run by whether a validated Anthropic key is in
+ * Settings:
+ *
+ * - **Own key** — the user's Anthropic key, called directly from the browser
+ *   (`AGENT_MODEL`). Nothing rides on the demo's infrastructure.
+ * - **Free demo** — no key needed: a $0/token model served through this
+ *   deployment's `/api/gateway` proxy (see `api/gateway/[path].ts`), which
+ *   holds the Vercel AI Gateway credential server-side and refuses every
+ *   model but `FREE_AGENT_MODEL`. The `apiKey` passed to `createGateway`
+ *   here is a knowingly public placeholder the proxy replaces — it exists
+ *   only because the provider requires one.
  */
 
 /** Tool-loop ceiling — enough to read a few passages, not run away. */
 const MAX_STEPS = 12
+
+/** The $0/token model the public demo serves through /api/gateway. */
+export const FREE_AGENT_MODEL = "poolside/laguna-s-2.1-free"
 
 const systemPrompt = (corpus: LoadedCorpus): string =>
   `You are the corpus chat assistant inside the Corpora desktop app.
@@ -99,14 +116,28 @@ export function ChatView({
   corpus: LoadedCorpus
   onChangeCorpus: () => void
 }) {
+  // Live: saving a key in Settings mid-conversation rebuilds the transport
+  // on the user's own model; clearing it drops back to the free demo model.
+  const keys = useApiKeys()
+  const ownKey = hasValidAnthropicKey(keys)
+
   const transport = useMemo(() => {
-    const anthropic = createAnthropic({
-      apiKey: getApiKey("anthropic").value,
-      headers: ANTHROPIC_BROWSER_HEADERS,
-      fetch: boundFetch,
-    })
+    const model = ownKey
+      ? createAnthropic({
+          apiKey: getApiKey("anthropic").value,
+          headers: ANTHROPIC_BROWSER_HEADERS,
+          fetch: boundFetch,
+        })(AGENT_MODEL)
+      : createGateway({
+          baseURL: `${window.location.origin}/api/gateway`,
+          // Replaced by the proxy's real credential server-side; a non-empty
+          // value is required or the provider tries (and fails) to resolve
+          // an OIDC token in the browser.
+          apiKey: "corpora-free-demo",
+          fetch: boundFetch,
+        })(FREE_AGENT_MODEL)
     const agent = new ToolLoopAgent({
-      model: anthropic(AGENT_MODEL),
+      model,
       instructions: systemPrompt(corpus),
       tools: corpus.tools,
       stopWhen: isStepCount(MAX_STEPS),
@@ -119,7 +150,7 @@ export function ChatView({
       onError: (error) =>
         error instanceof Error ? error.message : String(error),
     }) as ChatTransport<UIMessage>
-  }, [corpus])
+  }, [corpus, ownKey])
 
   const { messages, sendMessage, status, stop, error, clearError } = useChat({
     id: corpus.filename,
@@ -144,6 +175,17 @@ export function ChatView({
           <h3 className="truncate font-medium">{corpusDisplayName(corpus)}</h3>
           <Badge variant="secondary" className="shrink-0 font-mono text-xs">
             {corpus.filename}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="shrink-0 text-xs"
+            title={
+              ownKey
+                ? `Using your own Anthropic key (${AGENT_MODEL})`
+                : `Free demo model (${FREE_AGENT_MODEL}) — add an Anthropic key in Settings to switch to ${AGENT_MODEL}`
+            }
+          >
+            {ownKey ? "your key" : "free demo model"}
           </Badge>
         </div>
         <Button

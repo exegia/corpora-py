@@ -291,11 +291,12 @@ export default function Settings() {
         icon={<Sparkles className="size-5 text-amber-500" aria-hidden="true" />}
         description={
           <>
-            Powers the AI assistant in the corpus viewer&apos;s chat panel: a
-            real agent that inspects your corpus&apos;s graph nodes over MCP and
-            records node-type corrections. Until a key is saved and validated,
-            the chat runs a mock assistant. The key is sent directly from this
-            app to Anthropic — create one under{" "}
+            <strong>Optional.</strong> Upgrades the AI assistant in Chat and
+            the corpus viewer to Claude: a real agent that inspects your
+            corpus&apos;s graph nodes over MCP. Without a key, Chat runs on a
+            free demo model (and the corpus viewer&apos;s panel on a mock
+            assistant). The key is sent directly from this app to Anthropic —
+            create one under{" "}
             <a
               href="https://console.anthropic.com/settings/keys"
               target="_blank"
