@@ -1,15 +1,7 @@
 import { useEffect, useRef, useState } from "react"
-import { type MetaDescriptor, useNavigate } from "react-router"
-import { BubblesIcon, KeyRound, MessagesSquare } from "lucide-react"
+import { type MetaDescriptor } from "react-router"
+import { MessagesSquare } from "lucide-react"
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "~/components/ui/empty"
 import {
   ChatPlaceholder,
   ChatView,
@@ -21,7 +13,6 @@ import {
   type LoadStepId,
 } from "~/components/chat"
 import { filenameToId } from "~/lib/corpus-detail"
-import { hasValidAnthropicKey, useApiKeys } from "~/lib/settings"
 
 export function meta(): MetaDescriptor[] {
   return [
@@ -47,16 +38,12 @@ type Phase =
   | { name: "ready"; corpus: LoadedCorpus }
 
 export default function Chat() {
-  const navigate = useNavigate()
-  const keys = useApiKeys()
-  // Picking and loading a corpus needs no visitor credential: the list comes
+  // Nothing here is gated on a visitor credential: the corpus list comes
   // from the backend's `GET /storage` (read with the SERVER's own Hub token,
-  // same as Explore) and the MCP load runs through the backend too. Only the
-  // assistant itself needs a key -- the app calls the Anthropic API directly
-  // from the browser with the user's own key, there is no proxy in between --
-  // so the key gates just the final ChatView, not the select/load flow.
-  const anthropicReady = hasValidAnthropicKey(keys)
-
+  // same as Explore), the MCP load runs through the backend too, and the
+  // assistant itself defaults to the free demo model served through this
+  // deployment's /api/gateway proxy. A validated Anthropic key in Settings
+  // upgrades the model — inside ChatView, not here.
   const [phase, setPhase] = useState<Phase>({ name: "select" })
   // Monotonic token: a stale in-flight load (user navigated back, picked
   // another corpus, or unmounted) sees a newer token and discards itself.
@@ -154,50 +141,13 @@ export default function Chat() {
         </ChatPlaceholder>
       )}
 
-      {phase.name === "ready" &&
-        (anthropicReady ? (
-          <ChatView
-            key={phase.corpus.filename}
-            corpus={phase.corpus}
-            onChangeCorpus={backToSelect}
-          />
-        ) : (
-          // Corpus loaded, assistant locked: the moment a validated key lands
-          // in Settings (useApiKeys is live), this flips to the real ChatView
-          // with the already-loaded corpus -- no reload, no re-pick.
-          <ChatPlaceholder inputPlaceholder="Add your Anthropic API key in Settings to start chatting…">
-            <Empty className="border-0">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <BubblesIcon className="size-6" aria-hidden="true" />
-                </EmptyMedia>
-                <EmptyTitle>
-                  {filenameToId(phase.corpus.filename)} is loaded — add a key to
-                  chat
-                </EmptyTitle>
-                <EmptyDescription>
-                  {keys.anthropic.status === "invalid"
-                    ? "The saved Anthropic key failed validation. Update or replace it in Settings to unlock the assistant."
-                    : "The assistant runs on the Anthropic API with your own key, straight from this browser. Save and validate one in Settings to start the conversation."}
-                </EmptyDescription>
-              </EmptyHeader>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Button
-                  onClick={() => navigate("/settings")}
-                  className="gap-1.5"
-                  data-cuelume-press
-                  data-cuelume-release
-                >
-                  <KeyRound className="size-4" aria-hidden="true" />
-                  Open Settings
-                </Button>
-                <Button variant="outline" onClick={backToSelect}>
-                  Change corpus
-                </Button>
-              </div>
-            </Empty>
-          </ChatPlaceholder>
-        ))}
+      {phase.name === "ready" && (
+        <ChatView
+          key={phase.corpus.filename}
+          corpus={phase.corpus}
+          onChangeCorpus={backToSelect}
+        />
+      )}
     </div>
   )
 }
