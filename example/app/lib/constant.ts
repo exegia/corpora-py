@@ -58,7 +58,7 @@ export const MENU_ITEMS: MenuItem[] = [
   // the features they unlock (e.g. Explore) are disabled.
   {
     label: "Settings",
-    description: "Manage the Hugging Face and Supabase API keys.",
+    description: "Manage the Hugging Face and Anthropic API keys.",
     icon: SettingsIcon,
     to: "/settings",
   },
