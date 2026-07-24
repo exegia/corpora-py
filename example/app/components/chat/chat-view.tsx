@@ -3,12 +3,10 @@ import { useChat } from "@ai-sdk/react"
 import {
   DirectChatTransport,
   ToolLoopAgent,
-  createGateway,
   isStepCount,
   type ChatTransport,
   type UIMessage,
 } from "ai"
-import { createAnthropic } from "@ai-sdk/anthropic"
 import { AlertTriangle, ArrowLeft, X } from "lucide-react"
 import {
   Conversation,
@@ -40,14 +38,12 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import { AGENT_MODEL } from "~/components/workspace/use-corpus-chat"
 import {
-  ANTHROPIC_BROWSER_HEADERS,
-  boundFetch,
-  getApiKey,
-  hasValidAnthropicKey,
-  useApiKeys,
-} from "~/lib/settings"
+  AGENT_MODEL,
+  FREE_AGENT_MODEL,
+  createAgentModel,
+} from "~/lib/agent-model"
+import { hasValidAnthropicKey, useApiKeys } from "~/lib/settings"
 import { corpusDisplayName, type LoadedCorpus } from "./corpus-load"
 import { suggestionsFor, welcomeMessage, welcomeText } from "./welcome"
 
@@ -59,23 +55,13 @@ import { suggestionsFor, welcomeMessage, welcomeText } from "./welcome"
  * summarizing the loaded corpus plus corpus-specific suggestion chips.
  *
  * Two model modes, decided per run by whether a validated Anthropic key is in
- * Settings:
- *
- * - **Own key** — the user's Anthropic key, called directly from the browser
- *   (`AGENT_MODEL`). Nothing rides on the demo's infrastructure.
- * - **Free demo** — no key needed: a $0/token model served through this
- *   deployment's `/api/gateway` proxy (see `api/gateway/[path].ts`), which
- *   holds the Vercel AI Gateway credential server-side and refuses every
- *   model but `FREE_AGENT_MODEL`. The `apiKey` passed to `createGateway`
- *   here is a knowingly public placeholder the proxy replaces — it exists
- *   only because the provider requires one.
+ * Settings — own key (direct Anthropic) vs the free demo model through this
+ * deployment's `/api/gateway` proxy. The choice lives in
+ * `~/lib/agent-model`, shared with the corpus workspace chat.
  */
 
 /** Tool-loop ceiling — enough to read a few passages, not run away. */
 const MAX_STEPS = 12
-
-/** The $0/token model the public demo serves through /api/gateway. */
-export const FREE_AGENT_MODEL = "poolside/laguna-s-2.1-free"
 
 const systemPrompt = (corpus: LoadedCorpus): string =>
   `You are the corpus chat assistant inside the Corpora desktop app.
@@ -122,22 +108,8 @@ export function ChatView({
   const ownKey = hasValidAnthropicKey(keys)
 
   const transport = useMemo(() => {
-    const model = ownKey
-      ? createAnthropic({
-          apiKey: getApiKey("anthropic").value,
-          headers: ANTHROPIC_BROWSER_HEADERS,
-          fetch: boundFetch,
-        })(AGENT_MODEL)
-      : createGateway({
-          baseURL: `${window.location.origin}/api/gateway`,
-          // Replaced by the proxy's real credential server-side; a non-empty
-          // value is required or the provider tries (and fails) to resolve
-          // an OIDC token in the browser.
-          apiKey: "corpora-free-demo",
-          fetch: boundFetch,
-        })(FREE_AGENT_MODEL)
     const agent = new ToolLoopAgent({
-      model,
+      model: createAgentModel(ownKey),
       instructions: systemPrompt(corpus),
       tools: corpus.tools,
       stopWhen: isStepCount(MAX_STEPS),

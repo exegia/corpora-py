@@ -17,10 +17,10 @@ import { API_URL } from "~/lib/types/socket"
  *   when it isn't. The public deployment and local dev both run the backend
  *   with `AUTH_REQUIRED=false`, so the app has to work with no key at all; a
  *   key only matters against a backend that does enforce auth.
- * - Anthropic API key -- powers the real AI agent in the corpus workspace
- *   chat (`components/workspace/use-corpus-chat.ts`), which calls the
- *   Anthropic API directly from the webview. Without a validated key the chat
- *   falls back to its mock assistant.
+ * - Anthropic API key -- upgrades both chats (the `/chat` route and the
+ *   corpus workspace panel) to Claude, called directly from the webview with
+ *   the visitor's own key. Without a validated key they run on the free demo
+ *   model through `/api/gateway` (see `~/lib/agent-model`).
  *
  * Storage: `sessionStorage`, scoped to the tab/session -- keys never touch
  * localStorage, URLs, or logs. Error messages built here deliberately never

@@ -27,15 +27,15 @@ import type {
   ToolActivityPart,
 } from "./types"
 import { PREMADE_PROMPTS } from "./premade-prompts"
-import { AGENT_MODEL, useCorpusChat } from "./use-corpus-chat"
+import { useCorpusChat } from "./use-corpus-chat"
 import { useWorkspace } from "./workspace-context"
 
 /**
  * The AI chat panel (right pane): header with collapse control, scrollable
  * message log, attachment chips, and a composer following the AI SDK UI
  * conventions (Enter sends, Shift+Enter breaks). The brain is
- * `useCorpusChat`: a real node-auditing agent when an Anthropic key is set in
- * Settings, a mock assistant otherwise.
+ * `useCorpusChat`: a node-auditing agent on the user's own Anthropic key when
+ * one is set in Settings, on the free demo model otherwise.
  */
 export function ChatPanel() {
   const {
@@ -49,12 +49,13 @@ export function ChatPanel() {
     setChatOpen,
     announce,
   } = useWorkspace()
-  const { messages, status, sendMessage, live } = useCorpusChat(corpusId)
+  const { messages, status, sendMessage, ownKey, model } =
+    useCorpusChat(corpusId)
   const [input, setInput] = useState("")
   const logRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Keep the log pinned to the latest message while the mock reply streams.
+  // Keep the log pinned to the latest message while the reply streams.
   useEffect(() => {
     const log = logRef.current
     if (log) log.scrollTop = log.scrollHeight
@@ -116,12 +117,12 @@ export function ChatPanel() {
           <Badge
             variant="secondary"
             title={
-              live
-                ? `Live agent (${AGENT_MODEL}) with corpus MCP tools`
-                : "No Anthropic key set — add one in Settings for the live agent"
+              ownKey
+                ? `Your own Anthropic key (${model}) with corpus MCP tools`
+                : `Free demo model (${model}) — add an Anthropic key in Settings to switch to Claude`
             }
           >
-            {live ? AGENT_MODEL : "mock"}
+            {model}
           </Badge>
         </div>
         <Button
