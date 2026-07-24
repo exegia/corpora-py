@@ -4,11 +4,14 @@ import { API_URL } from "~/lib/types/socket"
 /**
  * API-key settings store + auth-aware fetch wrapper.
  *
- * Two keys are managed from the Settings page (`routes/settings.tsx`):
+ * Three keys are managed from the Settings page (`routes/settings.tsx`):
  *
- * - Hugging Face API key -- gates the Explore features (`routes/explore.tsx`
- *   hides its browse/search UI until a key has been saved AND validated
- *   against `https://huggingface.co/api/whoami-v2`).
+ * - Hugging Face API key -- OPTIONAL. Browsing/downloading published corpora
+ *   (Explore, the chat corpus picker) is deliberately ungated: those reads go
+ *   through the backend's `GET /storage`, which talks to the Hub with the
+ *   SERVER's own credentials. A saved key is validated against
+ *   `https://huggingface.co/api/whoami-v2` and kept for features that need
+ *   the visitor's own Hub identity; nothing currently sends it anywhere else.
  * - Supabase API key -- OPTIONAL. Attached by {@link apiFetch} as an
  *   `Authorization: Bearer` header whenever one is stored, and simply omitted
  *   when it isn't. The public deployment and local dev both run the backend
@@ -156,8 +159,9 @@ export const clearApiKey = (name: ApiKeyName): void => {
   refreshSnapshot()
 }
 
-/** True once a Hugging Face key has been saved AND validated -- the gate the
- * Explore features check before rendering/fetching. */
+/** True once a Hugging Face key has been saved AND validated. No longer a
+ * gate on anything -- Explore/Chat browse anonymously through the backend --
+ * but kept for features that need the visitor's own Hub identity. */
 export const hasValidHfKey = (keys: ApiKeysSnapshot = getSnapshot()): boolean =>
   keys.hf.value !== "" && keys.hf.status === "valid"
 

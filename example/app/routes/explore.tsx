@@ -4,7 +4,6 @@ import {
   Download,
   ExternalLink,
   FileSpreadsheet,
-  KeyRound,
   RefreshCw,
   Search,
   SearchX,
@@ -25,7 +24,7 @@ import {
 import { Input } from "~/components/ui/input"
 import { Skeleton } from "~/components/ui/skeleton"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
-import { apiFetch, hasValidHfKey, useApiKeys } from "~/lib/settings"
+import { apiFetch } from "~/lib/settings"
 import { API_URL } from "~/lib/types/socket"
 import { cn } from "~/lib/utils"
 
@@ -105,11 +104,12 @@ export default function Explore() {
     }
   }
 
-  // Explore is gated on a saved-and-validated Hugging Face API key (see
-  // routes/settings.tsx) -- without one, nothing is fetched or listed.
-  const keys = useApiKeys()
-  const hfReady = hasValidHfKey(keys)
-
+  // Deliberately NOT gated on a visitor credential: the corpus list comes
+  // from the backend's `GET /storage` (read with the SERVER's own Hub
+  // token), so browsing is open to everyone. Writes are a separate story --
+  // the backend refuses them under `HF_READ_ONLY=true` and the write UI
+  // hides itself via `useCapabilities().hubWritable` (see corpus/detail.tsx
+  // and convert/result-actions.tsx).
   const load = () => {
     setState({ status: "loading" })
     void fetchStoredCorpora().then(setState)
@@ -117,8 +117,8 @@ export default function Explore() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- load() is stable
   useEffect(() => {
-    if (hfReady) load()
-  }, [hfReady])
+    load()
+  }, [])
 
   const corpora = state.status === "ready" ? state.corpora : []
   const filtered = useMemo(() => {
@@ -129,56 +129,7 @@ export default function Explore() {
         corpus.filename.toLowerCase().includes(needle) ||
         corpus.repo_id.toLowerCase().includes(needle)
     )
-  }, [query])
-
-  if (!hfReady) {
-    return (
-      <div className="flex w-full flex-col gap-6">
-        <div>
-          <h2 className="text-2xl font-semibold">
-            Explore{" "}
-            <Badge variant="secondary" className="py-1.5 text-xl">
-              .corpus
-            </Badge>
-          </h2>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Browse, search, and download the Context-Fabric <code>.corpus</code>{" "}
-            archives published to the Hugging Face Hub.
-          </p>
-        </div>
-        <Card>
-          <CardContent>
-            <Empty className="border-2 border-dashed">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <HuggingFaceIcon className="size-6" />
-                </EmptyMedia>
-                <EmptyTitle>
-                  {keys.hf.status === "invalid"
-                    ? "Hugging Face API key is invalid"
-                    : "Hugging Face API key required"}
-                </EmptyTitle>
-                <EmptyDescription>
-                  {keys.hf.status === "invalid"
-                    ? "The saved key failed validation. Update or replace it in Settings to re-enable Explore."
-                    : "Explore is disabled until a Hugging Face API key is saved and validated in Settings."}
-                </EmptyDescription>
-              </EmptyHeader>
-              <Button
-                onClick={() => navigate("/settings")}
-                className="gap-1.5"
-                data-cuelume-press
-                data-cuelume-release
-              >
-                <KeyRound className="size-4" aria-hidden="true" />
-                Open Settings
-              </Button>
-            </Empty>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  }, [query, corpora])
 
   return (
     <div className="flex w-full flex-col gap-6">
