@@ -311,7 +311,11 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       logs: jobId
         ? [
             {
-              text: `Job ${jobId} created — tracking status over WebSocket`,
+              // Transport-agnostic on purpose: the manager prefers the
+              // status WebSocket but falls back to polling GET /convert/{id}
+              // (see trackJob in manager.ts), and the console can't tell
+              // which one is active.
+              text: `Job ${jobId} created — tracking conversion status`,
               tone: "success",
             },
           ]
