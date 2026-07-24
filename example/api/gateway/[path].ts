@@ -106,7 +106,9 @@ export default async function handler(
     headers,
     ...(req.method === "POST"
       ? {
-          body: Readable.toWeb(req) as ReadableStream,
+          // Node's stream/web ReadableStream vs the DOM lib's — same object
+          // at runtime, structurally incompatible to tsc.
+          body: Readable.toWeb(req) as unknown as ReadableStream,
           // Required by Node's fetch to stream a request body.
           duplex: "half" as const,
         }
