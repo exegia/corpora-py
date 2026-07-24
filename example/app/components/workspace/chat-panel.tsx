@@ -15,6 +15,7 @@ import {
   Wrench,
   X,
 } from "lucide-react"
+import { MessageResponse } from "~/components/ai-elements/message"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Textarea } from "~/components/ui/textarea"
@@ -323,16 +324,16 @@ function ChatMessageBubble({
       {text && (
         <div
           className={cn(
-            "rounded-xl px-3 py-2 text-sm whitespace-pre-wrap",
+            "rounded-xl px-3 py-2 text-sm",
             isUser
-              ? "rounded-br-sm bg-primary text-primary-foreground"
+              ? "rounded-br-sm bg-primary whitespace-pre-wrap text-primary-foreground"
               : "rounded-bl-sm bg-muted text-foreground"
           )}
         >
           <span className="sr-only">
             {isUser ? "You said: " : "Assistant: "}
           </span>
-          {text}
+          {isUser ? text : <MessageResponse>{text}</MessageResponse>}
         </div>
       )}
 
