@@ -105,9 +105,14 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # lazily/guarded specifically so this is safe) and REPL/serving extras
 # (jedi, parso, uvloop, watchfiles). Verified: 145 MB site-packages, app
 # imports, full suite green.
-# Caveats on Vercel Functions: no WebSockets (/convert/{id}/ws — poll instead)
-# and the in-memory JobManager is per-instance; the container image (above)
-# remains the deployment for heavy/long-running conversion work.
+# Caveats on Vercel Functions: WebSockets half-work (/convert/{id}/ws
+# handshakes and pushes the current status, but the idle socket is killed
+# mid-job on long conversions — clients must fall back to polling on any
+# pre-terminal close, which also keeps a request in flight so the frozen
+# instance keeps advancing the job; see trackJob in
+# example/app/lib/uploads/manager.ts) and the in-memory JobManager is
+# per-instance; the container image (above) remains the deployment for
+# heavy/long-running conversion work.
 vercel deploy          # manual preview deploy from a linked checkout
 vercel deploy --prod   # manual production deploy
 

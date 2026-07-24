@@ -202,7 +202,7 @@ export default function CorpusConvert() {
     setCurrentUploadId(null)
 
     if (!file.name.toLowerCase().endsWith(".zip")) {
-      setCurrentUploadId(await uploadFile(file))
+      setCurrentUploadId(uploadFile(file))
       return
     }
 
@@ -214,7 +214,7 @@ export default function CorpusConvert() {
       case "tf":
       case "fallback":
         setCurrentUploadId(
-          await uploadFile(file, {
+          uploadFile(file, {
             sourceFormat: "tf_zip",
             inspection: result.notes,
           })
@@ -222,7 +222,7 @@ export default function CorpusConvert() {
         return
       case "tei":
         setCurrentUploadId(
-          await uploadFile(file, {
+          uploadFile(file, {
             sourceFormat: "tei_zip",
             inspection: result.notes,
           })
@@ -236,9 +236,7 @@ export default function CorpusConvert() {
           )
           return
         }
-        setCurrentUploadId(
-          await uploadFile(extracted, { inspection: result.notes })
-        )
+        setCurrentUploadId(uploadFile(extracted, { inspection: result.notes }))
       }
     }
   }
@@ -249,11 +247,9 @@ export default function CorpusConvert() {
     setRejection(null)
   }
 
-  const handleRetry = async () => {
+  const handleRetry = () => {
     if (!currentUploadId) return
-    const retried = retryUpload(currentUploadId)
-    if (retried) setCurrentUploadId(await retried)
-    else setCurrentUploadId(null)
+    setCurrentUploadId(retryUpload(currentUploadId) ?? null)
   }
 
   return (
