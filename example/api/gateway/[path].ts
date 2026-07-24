@@ -33,7 +33,12 @@ const ALLOWED = new Map([
 ])
 
 export default async function handler(request: Request): Promise<Response> {
-  const segments = new URL(request.url).pathname.split("/").filter(Boolean)
+  // Base required: Vercel's Node runtime hands web handlers a RELATIVE
+  // `request.url` (e.g. "/api/gateway/language-model?path=…"), which a
+  // bare `new URL(...)` rejects with ERR_INVALID_URL.
+  const segments = new URL(request.url, "http://gateway.internal").pathname
+    .split("/")
+    .filter(Boolean)
   const path = segments[segments.length - 1] ?? ""
 
   if (ALLOWED.get(path) !== request.method) {
