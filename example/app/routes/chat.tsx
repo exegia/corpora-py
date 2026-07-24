@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { type MetaDescriptor, useNavigate } from "react-router"
-import { BubblesIcon, Check, KeyRound, MessagesSquare, X } from "lucide-react"
+import { BubblesIcon, KeyRound, MessagesSquare } from "lucide-react"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
@@ -21,11 +21,7 @@ import {
   type LoadStepId,
 } from "~/components/chat"
 import { filenameToId } from "~/lib/corpus-detail"
-import {
-  hasValidAnthropicKey,
-  hasValidHfKey,
-  useApiKeys,
-} from "~/lib/settings"
+import { hasValidAnthropicKey, useApiKeys } from "~/lib/settings"
 
 export function meta(): MetaDescriptor[] {
   return [
@@ -53,9 +49,13 @@ type Phase =
 export default function Chat() {
   const navigate = useNavigate()
   const keys = useApiKeys()
-  const hfReady = hasValidHfKey(keys)
+  // Picking and loading a corpus needs no visitor credential: the list comes
+  // from the backend's `GET /storage` (read with the SERVER's own Hub token,
+  // same as Explore) and the MCP load runs through the backend too. Only the
+  // assistant itself needs a key -- the app calls the Anthropic API directly
+  // from the browser with the user's own key, there is no proxy in between --
+  // so the key gates just the final ChatView, not the select/load flow.
   const anthropicReady = hasValidAnthropicKey(keys)
-  const ready = hfReady && anthropicReady
 
   const [phase, setPhase] = useState<Phase>({ name: "select" })
   // Monotonic token: a stale in-flight load (user navigated back, picked
@@ -119,56 +119,7 @@ export default function Chat() {
         </p>
       </div>
 
-      {!ready && (
-        <ChatPlaceholder inputPlaceholder="Add your API keys in Settings to start chatting…">
-          <Empty className="border-0">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <BubblesIcon className="size-6" aria-hidden="true" />
-              </EmptyMedia>
-              <EmptyTitle>API keys required</EmptyTitle>
-              <EmptyDescription>
-                Chat needs a validated Hugging Face key (to list the published
-                corpora) and a validated Anthropic key (to run the assistant).
-              </EmptyDescription>
-            </EmptyHeader>
-            <ul
-              className="flex flex-col gap-1 text-sm"
-              aria-label="Key status"
-            >
-              {(
-                [
-                  ["Hugging Face", hfReady],
-                  ["Anthropic", anthropicReady],
-                ] as const
-              ).map(([label, ok]) => (
-                <li key={label} className="flex items-center gap-2">
-                  {ok ? (
-                    <Check
-                      className="size-4 text-green-600"
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <X className="size-4 text-destructive" aria-hidden="true" />
-                  )}
-                  {label} key {ok ? "ready" : "missing or unvalidated"}
-                </li>
-              ))}
-            </ul>
-            <Button
-              onClick={() => navigate("/settings")}
-              className="gap-1.5"
-              data-cuelume-press
-              data-cuelume-release
-            >
-              <KeyRound className="size-4" aria-hidden="true" />
-              Open Settings
-            </Button>
-          </Empty>
-        </ChatPlaceholder>
-      )}
-
-      {ready && phase.name === "select" && (
+      {phase.name === "select" && (
         <ChatPlaceholder inputPlaceholder="Select a corpus to start chatting…">
           <div className="flex flex-col gap-5">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -189,7 +140,7 @@ export default function Chat() {
         </ChatPlaceholder>
       )}
 
-      {ready && phase.name === "loading" && (
+      {phase.name === "loading" && (
         <ChatPlaceholder
           inputPlaceholder={`Loading ${filenameToId(phase.filename)}…`}
         >
@@ -203,13 +154,50 @@ export default function Chat() {
         </ChatPlaceholder>
       )}
 
-      {ready && phase.name === "ready" && (
-        <ChatView
-          key={phase.corpus.filename}
-          corpus={phase.corpus}
-          onChangeCorpus={backToSelect}
-        />
-      )}
+      {phase.name === "ready" &&
+        (anthropicReady ? (
+          <ChatView
+            key={phase.corpus.filename}
+            corpus={phase.corpus}
+            onChangeCorpus={backToSelect}
+          />
+        ) : (
+          // Corpus loaded, assistant locked: the moment a validated key lands
+          // in Settings (useApiKeys is live), this flips to the real ChatView
+          // with the already-loaded corpus -- no reload, no re-pick.
+          <ChatPlaceholder inputPlaceholder="Add your Anthropic API key in Settings to start chatting…">
+            <Empty className="border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <BubblesIcon className="size-6" aria-hidden="true" />
+                </EmptyMedia>
+                <EmptyTitle>
+                  {filenameToId(phase.corpus.filename)} is loaded — add a key to
+                  chat
+                </EmptyTitle>
+                <EmptyDescription>
+                  {keys.anthropic.status === "invalid"
+                    ? "The saved Anthropic key failed validation. Update or replace it in Settings to unlock the assistant."
+                    : "The assistant runs on the Anthropic API with your own key, straight from this browser. Save and validate one in Settings to start the conversation."}
+                </EmptyDescription>
+              </EmptyHeader>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  onClick={() => navigate("/settings")}
+                  className="gap-1.5"
+                  data-cuelume-press
+                  data-cuelume-release
+                >
+                  <KeyRound className="size-4" aria-hidden="true" />
+                  Open Settings
+                </Button>
+                <Button variant="outline" onClick={backToSelect}>
+                  Change corpus
+                </Button>
+              </div>
+            </Empty>
+          </ChatPlaceholder>
+        ))}
     </div>
   )
 }

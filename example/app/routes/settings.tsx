@@ -234,9 +234,11 @@ export default function Settings() {
         icon={<HuggingFaceIcon className="size-5" />}
         description={
           <>
-            Enables the Explore features for datasets and repositories published
-            to the Hugging Face Hub. Until a key is saved and validated, Explore
-            stays disabled. Create a token under{" "}
+            <strong>Optional.</strong> Browsing, downloading, and chatting over
+            the published corpora works without a key — the backend reads the
+            Hugging Face Hub with its own credentials (read-only on the public
+            demo, so publishing from here is disabled either way). Save a token
+            only if a feature asks for your own Hub identity; create one under{" "}
             <a
               href="https://huggingface.co/settings/tokens"
               target="_blank"

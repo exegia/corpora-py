@@ -129,8 +129,13 @@ vercel deploy --prod   # manual production deploy
 # anonymous visitors, and HF_READ_ONLY=true locks the Hub so the now-tokenless
 # public can't mutate it (see "Auth"/HF_READ_ONLY below). Both must be set
 # together -- AUTH_REQUIRED=false without HF_READ_ONLY=true would hand the
-# public Hub uploads and deletes. See example/README.md
-# ("Deploy the web example to Vercel") for the one-time project setup.
+# public Hub uploads and deletes. Also set HF_HOME=/tmp/huggingface on the
+# API project: huggingface_hub's cache (incl. the xet chunk store) defaults
+# to ~/.cache/huggingface, which is read-only on Vercel Functions, so without
+# it every stored-corpus read (GET /storage/{f}/manifest|index|content|
+# download) 500s with OSError 30 the moment hf_hub_download runs. See
+# example/README.md ("Deploy the web example to Vercel") for the one-time
+# project setup.
 ```
 
 ## Architecture

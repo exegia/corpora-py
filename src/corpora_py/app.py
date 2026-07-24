@@ -104,7 +104,16 @@ register_corpus_detail_tools(mcp, read_only=settings.hf_read_only)
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).
-_mcp_app = mcp.http_app(path="/")
+#
+# `stateless_http=True` because this app also runs on Vercel Functions, where
+# requests fan out across (frozen and re-created) instances: the default
+# transport issues an `mcp-session-id` on initialize and stores the session
+# in THAT instance's memory, so any follow-up landing elsewhere 404s with
+# "Session not found" and browser MCP clients (the example app's chat) can
+# never get past connect. Every tool this server exposes is a self-contained
+# request/response read anyway, so per-session server state buys nothing --
+# stateless serves the sidecar and local dev identically.
+_mcp_app = mcp.http_app(path="/", stateless_http=True)
 
 
 @asynccontextmanager
