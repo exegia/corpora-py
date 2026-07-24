@@ -36,6 +36,20 @@
       "autoPort": true
     },
     {
+      "name": "example-app-prod-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_URL=https://corpora-py.vercel.app",
+        "bun",
+        "run",
+        "--cwd",
+        "example",
+        "vite:dev"
+      ],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
       "name": "cf-mcp-sse",
       "runtimeExecutable": "uv",
       "runtimeArgs": [

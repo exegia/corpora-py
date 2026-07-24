@@ -278,17 +278,22 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
   }
 
   // The WebSocket is the preferred transport (real push, no polling
-  // traffic) and is what the desktop sidecar serves. It does NOT exist on
-  // the Vercel deployment, though -- Functions don't support WebSockets, so
-  // `/convert/{id}/ws` 404s and the socket closes without ever delivering a
-  // message. Falling back on the first close-with-no-messages covers both
-  // that case and a mid-job socket drop, without giving up push where it
-  // works.
-  let sawMessage = false
+  // traffic) and is what the desktop sidecar serves. On the Vercel
+  // deployment it is unreliable in a sneaky way: the handshake succeeds and
+  // the current status is pushed, but a long conversion then sits idle for
+  // minutes (the server only pushes on status change, and sends no pings),
+  // so the proxy/function duration limit kills the socket MID-JOB. Any
+  // close or error before a terminal status therefore falls back to
+  // polling -- which on Vercel also keeps a request in flight, without
+  // which the frozen function instance stops advancing the conversion
+  // thread at all. Only a close after "succeeded"/"failed" (the server
+  // closing a finished stream, mirrored by subscribeJobStatus) means
+  // tracking is genuinely done.
+  let settled = false
   let fallback: (() => void) | undefined
 
   const startPolling = () => {
-    if (fallback || sawMessage) return
+    if (fallback || settled) return
     fallback = pollJobStatus(async () => {
       const response = await apiFetch(`${API_URL}/convert/${jobId}`)
       if (!response.ok) throw new Error(`Status check failed (${response.status})`)
@@ -299,7 +304,9 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
   const closeSocket = subscribeJobStatus(
     wsUrl,
     (message) => {
-      sawMessage = true
+      if (message.status === "succeeded" || message.status === "failed") {
+        settled = true
+      }
       handleMessage(message)
     },
     (status) => {
@@ -342,11 +349,15 @@ type ConvertResponse = { job_id: string; status_url: string; ws_url: string }
  * `uploadAtom`, keyed by a client-generated id, and its own
  * `/convert/{job_id}/ws` subscription (`use-socket.ts`) tracking that job's
  * status through to completion.
+ *
+ * Returns the entry id SYNCHRONOUSLY, with the entry already in the atom in
+ * "uploading" -- the POST itself runs in the background. A view that tracks
+ * the returned id therefore shows the upload from its first byte; the old
+ * shape (resolving the id only after `POST /convert` responded) left the UI
+ * with nothing to render for the whole upload of a large file, which read
+ * as "I dropped a file and nothing happened".
  */
-export const uploadFile = async (
-  file: File,
-  options: UploadOptions = {}
-): Promise<string> => {
+export const uploadFile = (file: File, options: UploadOptions = {}): string => {
   const id = createId()
   files.set(id, { file, options })
 
@@ -366,6 +377,15 @@ export const uploadFile = async (
     }
   })
 
+  void performUpload(id, file, options)
+  return id
+}
+
+const performUpload = async (
+  id: string,
+  file: File,
+  options: UploadOptions
+): Promise<void> => {
   try {
     const sourceFormat = options.sourceFormat ?? detectSourceFormat(file.name)
     updateEntry(id, (draft) => {
@@ -412,8 +432,6 @@ export const uploadFile = async (
       draft.error = error instanceof Error ? error.message : String(error)
     })
   }
-
-  return id
 }
 
 export const deleteUpload = (id: string): void => {
@@ -425,7 +443,7 @@ export const deleteUpload = (id: string): void => {
   })
 }
 
-export const retryUpload = (id: string): Promise<string> | undefined => {
+export const retryUpload = (id: string): string | undefined => {
   const cached = files.get(id)
   deleteUpload(id)
   // Retrying mints a fresh id via uploadFile() rather than reusing `id` --
