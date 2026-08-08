@@ -266,24 +266,23 @@ clients can't set custom headers on the handshake).
 - **`AUTH_REQUIRED`** (`common.utils.config.Settings.auth_required`, default `True`) — set to
   `false` for local dev. When `True` with no JWKS URL configured (`PROJECT_REF` /
   `SUPABASE_JWKS_URL` unset), requests fail closed (401), not open.
-- **`HF_READ_ONLY`** (`common.utils.config.Settings.hf_read_only`, default `False`) — the *write* guard,
-  deliberately **decoupled** from `AUTH_REQUIRED`. Turning auth off (public demo) would otherwise open Hub
-  *writes* to everyone; setting `HF_READ_ONLY=true` refuses every Hub mutation across both API surfaces at
-  once. Enforced in three layers: (1) the authoritative chokepoint — `CorpusStorage.upload`/`.delete`
+- **`HF_READ_ONLY`** (`common.utils.config.Settings.hf_read_only`, default `False`) — the *write* guard, deliberately
+  **decoupled** from `AUTH_REQUIRED`. Turning auth off (public demo) would otherwise open Hub *writes* to everyone;
+  setting `HF_READ_ONLY=true` refuses every Hub mutation across both API surfaces at once. Enforced in three layers: (1)
+  the authoritative chokepoint — `CorpusStorage.upload`/`.delete`
   (`admin.services.storage`) raise `ReadOnlyStorageError`, and *every* write funnels through them (the
-  manifest/annotation PATCHes re-upload via `_republish`), so all write paths are blocked by construction;
-  (2) a fast `require_writable` FastAPI dependency (`storage_api`) returns **403** on the write routes before
-  any Hub I/O; (3) `register_storage_tools`/`register_corpus_detail_tools` skip the 4 **write** MCP tools
-  (`storage_upload_corpus`, `storage_delete_corpus`, `corpus_manifest_update`, `corpus_node_annotate`) so a
-  public client never sees a tool it could mutate with. Left `False` on the desktop sidecar and local dev
-  (including `AUTH_REQUIRED=false` local dev), which stay fully writable — so the owner keeps publishing
-  locally to the same Hub repo the public demo reads. See `packages/admin/src/admin/services/CLAUDE.md`.
-  There is deliberately **no** per-case exception to this — the public demo converts, downloads, and
-  explores, and never writes to the Hub at all.
+  manifest/annotation PATCHes re-upload via `_republish`), so all write paths are blocked by construction; (2) a fast
+  `require_writable` FastAPI dependency (`storage_api`) returns **403** on the write routes before any Hub I/O; (3)
+  `register_storage_tools`/`register_corpus_detail_tools` skip the 4 **write** MCP tools (`storage_upload_corpus`,
+  `storage_delete_corpus`, `corpus_manifest_update`, `corpus_node_annotate`) so a public client never sees a tool it
+  could mutate with. Left `False` on the desktop sidecar and local dev (including `AUTH_REQUIRED=false` local dev),
+  which stay fully writable — so the owner keeps publishing locally to the same Hub repo the public demo reads. See
+  `packages/admin/src/admin/services/CLAUDE.md`. There is deliberately **no** per-case exception to this — the public
+  demo converts, downloads, and explores, and never writes to the Hub at all.
 - **Nothing in this repo writes to Supabase.** Supabase appears only as a JWT *issuer* whose signatures
-  `common.utils.jwt_auth` verifies against the public JWKS; there is no Supabase client, no service-role
-  key, and no table this app can touch (see "Dropped/missing functionality" above). An anonymous
-  deployment therefore has no Supabase write surface to lock down.
+  `common.utils.jwt_auth` verifies against the public JWKS; there is no Supabase client, no service-role key, and no
+  table this app can touch (see "Dropped/missing functionality" above). An anonymous deployment therefore has no
+  Supabase write surface to lock down.
 - Decoded JWT claims land in `scope["state"]["user"]` and are used by
   `ConversionJob.is_visible_to()` (`admin.services.jobs`) to scope `GET /convert/{id}`,
   `/download`, and `/ws` to the job's own submitter (the JWT `sub` claim, recorded on the job at
@@ -294,25 +293,36 @@ clients can't set custom headers on the handshake).
 
 ### CI/CD
 
-On PR merge: the `bump` job auto-increments the patch version in **all** workspace
-`pyproject.toml` files simultaneously, commits back with `[skip ci]`, and pushes a `vX.Y.Z`
-tag. The `build` and `publish` jobs then run against that tag, building and publishing to PyPI via OIDC
-trusted publishing (no stored token). **Only `corpora-py` is published**: its wheel is self-contained —
+**The branch and release model lives in `.github/WORKFLOW.md` — read that first.** In short:
+`<type>/<slug>` → PR → `release/vX.Y.Z` → PR → `dev` → tag `vX.Y.Z`. There is no `main`. The version is chosen once,
+when `make release-branch` cuts `release/vX.Y.Z` and writes X.Y.Z into all four
+`pyproject.toml` files; there is no longer any auto-bump-on-merge (the old `bump` job and
+`scripts/smart_version_tagging.py` are gone). Every CI step is a `make` target — `make ci`, `make pack`,
+`make pr-guard` — so the pipeline is reproducible locally.
+
+`make tag-release` pushes the tag that drives everything downstream, and it **must** run as the automation GitHub App:
+events raised by `GITHUB_TOKEN` do not start workflow runs, and the `Publishing` tag ruleset separately refuses tag
+creation from any actor not on its bypass list. Both are handled — see WORKFLOW.md.
+
+The tag then runs `publish.yml`, which builds and publishes to PyPI via OIDC trusted publishing (no stored token).
+**Only `corpora-py` is published**: its wheel is self-contained —
 `[tool.hatch.build.targets.wheel]` in the root `pyproject.toml` bundles the source of `corpora-common`,
-`corpora-mcp` and `corpora-admin` into the single `corpora-py` distribution, and the three packages'
-third-party deps are flattened into `corpora-py`'s own `[project.dependencies]` (there are no `corpora-*`
-runtime deps). The three remain workspace members — installed editable via the `dev` dependency-group for
-local dev/tests, and still independently buildable — but are **not** published to PyPI (so
-`pip install corpora-mcp`/`-admin`/`-common` from PyPI is intentionally not a thing; install `corpora-py`).
-Only a `corpora-py` trusted publisher (PyPI project + workflow `publish.yml` + environment `pypi`) is needed.
+`corpora-mcp` and `corpora-admin` into the single `corpora-py` distribution, and the three packages' third-party deps
+are flattened into `corpora-py`'s own `[project.dependencies]` (there are no `corpora-*`
+runtime deps). The three remain workspace members — installed editable via the `dev` dependency-group for local
+dev/tests, and still independently buildable — but are **not** published to PyPI (so
+`pip install corpora-mcp`/`-admin`/`-common` from PyPI is intentionally not a thing; install `corpora-py`). Only a
+`corpora-py` trusted publisher (PyPI project + workflow `publish.yml` + environment `pypi`) is needed.
 
 The `build-sidecar` workflow builds the same four wheels, then bundles them per-platform (macOS arm64/x64, Windows) into
 a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun apps. The bundle step runs
 `python -m scripts.build --skip-build` and resolves workspace deps from `dist/` via `--find-links` (no PyPI needed).
 
-`.github/workflows/test.yml` runs `uv run pytest` on every push/PR — as of this writing there are **no test files
-anywhere in the repo** (`tests/` doesn't exist), so this currently collects 0 items and passes trivially rather than
-verifying anything.
+Testing runs in two places. The `check` job in `pr.yml` runs `make ci` (`uv sync` + `make lint-check` +
+`make test` — 364 tests as of this writing) on one runner, single-job on purpose: it is a *required status check* on
+`dev`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
+`check` the ruleset names, which would leave every PR unmergeable. The breadth that used to live in
+`test.yml` (ubuntu + macOS × 3.13/3.14) moved to `matrix.yml`, which runs on every release-branch push and weekly.
 
 ## Demo App
 
