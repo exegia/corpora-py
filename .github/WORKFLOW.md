@@ -99,15 +99,18 @@ have nothing to list.
 
 ### Deploys are not here
 
-There is exactly one Vercel project — **`corpora-py`** (team `corpora-apps`),
-the API at the repo root — and it is wired to Vercel's **Git integration**. It
+Two Vercel projects deploy from this repo, both on Vercel's **Git
+integration** — `corpora-py` (Root Directory `.`, the API) and
+`corpora-py-example` (Root Directory `example`, the demo SPA). The integration
 already gives a preview per branch push and production on the trunk, so there
 is no deploy job and no `VERCEL_TOKEN` in this repo. `vercel.yml` remains as a
 manual, `workflow_dispatch`-only lever for out-of-band redeploys.
 
-(The `corpora-py-example` project that once served `example/` has been deleted.
-A stale `example/.vercel/project.json` may still be lying around locally; it is
-gitignored and points at a project that 404s.)
+> Do not trust the Vercel **MCP** here: its `list_projects` reports only
+> `corpora-py` and `get_project` 404s on `corpora-py-example` by both id and
+> name, even though that project is live. Use the `vercel` CLI, or
+> `gh api repos/exegia/corpora-py/deployments --jq '.[]|"\(.environment) \(.ref)"'`
+> to see which branch feeds which environment.
 
 ### The tag must not be created by `GITHUB_TOKEN`
 
@@ -151,10 +154,18 @@ exist, so nothing fires.
    ```
 2. **Make `main` the default branch** (Settings → General). Dependabot and new
    PRs retarget automatically.
-3. **Repoint the `corpora-py` Vercel project's production branch to `main`**
-   (Project → Settings → Git → Production Branch, currently `next`). Do this
-   *before* step 5 — `next` is live production for the API today, and deleting
-   it while it is still the production branch is the one ordering that bites.
+3. **Repoint BOTH Vercel projects' production branch to `main`** (Project →
+   Settings → Git → Production Branch). `corpora-py` was on `next`;
+   `corpora-py-example` was on `dev`. Do both *before* step 5 — deleting a
+   branch that is still some project's production branch is the one ordering
+   that bites, and it is easy to move one and forget the other.
+
+   Verify with, for each project name:
+   ```bash
+   gh api 'repos/exegia/corpora-py/deployments?per_page=30' \
+     --jq '.[]|select(.environment|startswith("Production"))|"\(.environment)\t\(.ref)"' | sort -u
+   ```
+   Every `Production – *` row must show a commit that is on `main`.
 4. **Apply the rulesets**, then delete the superseded one:
    ```bash
    make rulesets-apply
@@ -199,10 +210,16 @@ is `make pr-guard TRUNK=some-branch ...`.
 
 ## Secrets
 
-| Name                                               | Where      | Used by                     |
-| -------------------------------------------------- | ---------- | --------------------------- |
-| `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY` | repository | opening PRs, branches, tags |
-| `CLAUDE_CODE_OAUTH_TOKEN`                          | repository | the AI review (optional)    |
+| Name                                               | Where            | Used by                     |
+| -------------------------------------------------- | ---------------- | --------------------------- |
+| `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY` | **organisation** | opening PRs, branches, tags |
+| `CLAUDE_CODE_OAUTH_TOKEN`                          | **organisation** | the AI review (optional)    |
+
+All three are **organisation** secrets on `exegia`, inherited by this repo —
+`gh api repos/exegia/corpora-py/actions/secrets` returns an empty list and is
+not evidence they are missing; use `gh api orgs/exegia/actions/secrets`. The
+backing App is `corpora-ui-automation` (Integration `4425676`), installed
+org-wide with `contents: write` + `pull_requests: write`.
 
 PyPI needs no secret — `publish.yml` uses OIDC trusted publishing against the
 `pypi` environment. **That binding names the workflow file**, so renaming
@@ -211,4 +228,4 @@ PyPI needs no secret — `publish.yml` uses OIDC trusted publishing against the
 Without `CLAUDE_CODE_OAUTH_TOKEN` the review job skips with a note in the job
 summary rather than failing. The automation App is **not** optional:
 `pr-merged.yml`, `release` and `next-release` all fail at their first step
-without it, and neither secret exists on this repository yet.
+without it.
