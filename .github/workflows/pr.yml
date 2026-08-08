@@ -1,7 +1,7 @@
 # Everything that runs *before* a merge.
 #
 #   <type>/<slug>  ->  release/vX.Y.Z    guard + check + AI review
-#   release/vX.Y.Z ->  dev               guard + check + package artifact
+#   release/vX.Y.Z ->  main              guard + check + package artifact
 #
 # Draft PRs only get the guard. The full suite starts at `ready_for_review`
 # and re-runs on every push after that.
@@ -11,7 +11,7 @@ on:
   pull_request:
     types: [ opened, reopened, ready_for_review, synchronize ]
     branches:
-      - dev
+      - main
       - "release/v*"
 
 concurrency:
@@ -34,8 +34,8 @@ jobs:
       # `event.pull_request.base.ref`, NOT `github.base_ref`: when a PR is part
       # of a GitHub stack, `github.base_ref` reports the stack's ultimate base
       # rather than the PR's own parent. This repo's model is inherently a
-      # stack (<type>/<slug> -> release/vX.Y.Z -> dev), so on every stacked
-      # feature PR `github.base_ref` reads 'dev' and the guard rejects it for
+      # stack (<type>/<slug> -> release/vX.Y.Z -> main), so on every stacked
+      # feature PR `github.base_ref` reads 'main' and the guard rejects it for
       # not being a release branch. The payload's PR object is authoritative.
       - name: Check base, branch name and title
         env:
@@ -57,11 +57,11 @@ jobs:
   # ships as one self-contained wheel that bundles every workspace member's
   # source, and the tag pushed after this merge is what triggers the PyPI
   # publish. If `uv build` cannot produce that wheel here, the publish would
-  # fail after the merge, on protected dev.
+  # fail after the merge, on protected main.
   package:
     name: package
     # See the guard job for why this is not `github.base_ref`.
-    if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'dev' }}
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'main' }}
     needs: check
     runs-on: ubuntu-latest
     steps:

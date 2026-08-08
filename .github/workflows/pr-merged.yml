@@ -1,10 +1,10 @@
 # A commit landed on a release branch — normally a feature PR merging in.
-# Keep the release's draft PR into dev up to date.
+# Keep the release's draft PR into main up to date.
 #
 # Triggered by `push`, not `pull_request: [closed]`. This repo's PRs form a
-# GitHub stack (<type>/<slug> -> release/vX.Y.Z -> dev), and for a stacked PR
+# GitHub stack (<type>/<slug> -> release/vX.Y.Z -> main), and for a stacked PR
 # GitHub matches `on.pull_request.branches` against the stack's *ultimate* base
-# (dev) rather than the PR's own parent, so a `release/v*` filter would never
+# (main) rather than the PR's own parent, so a `release/v*` filter would never
 # match and this workflow would silently never run — a merged feature would
 # leave the release notes stale with nothing to show it had been skipped. A
 # push filter matches the ref that actually moved, which is not rewritten.
@@ -20,7 +20,7 @@
 # Runs as the automation GitHub App rather than GITHUB_TOKEN: a PR opened with
 # GITHUB_TOKEN cannot trigger further workflows, so the release PR's own
 # guard/check/package would never start — and those are the required checks on
-# dev, so the PR would be permanently unmergeable.
+# main, so the PR would be permanently unmergeable.
 name: Release branch updated
 
 on:
@@ -50,7 +50,7 @@ jobs:
           app-id: ${{ secrets.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
 
-      # Full history: the release notes are a `git log dev..release/vX.Y.Z`.
+      # Full history: the release notes are a `git log main..release/vX.Y.Z`.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0

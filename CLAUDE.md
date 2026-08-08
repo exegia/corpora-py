@@ -116,16 +116,22 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 vercel deploy          # manual preview deploy from a linked checkout
 vercel deploy --prod   # manual production deploy
 
-# ── Second Vercel project: the web example (corpora-py-example.vercel.app) ────
-# The React Router app in example/ (ssr:false → static SPA) is deployed as a
-# SEPARATE Vercel project on this same repo (Root Directory = example, config
-# in example/vercel.json: framework:null, buildCommand `react-router build`,
-# outputDirectory dist/client, SPA catch-all rewrite). Both projects share the
-# repo's Git integration and production branch (dev), so a push that redeploys
-# this API also redeploys the web example — no GitHub Actions, no chaining.
-# VITE_API_URL (build-time, Vite-inlined) must point at the API's prod URL.
-# Public-demo backend config (set on the corpora-py API project, not the
-# example project): AUTH_REQUIRED=false opens conversion/reads/queries to
+# ── There is exactly ONE Vercel project: corpora-py (team corpora-apps) ───────
+# Verified 2026-08-08: `corpora-py` (prj_B4qhl4nI3D6QQ41vPcRwLCUUipk9) is the
+# team's only project, its Production Branch is `next` (every target=production
+# deployment has githubCommitRef=next), and its domains are
+# corpora-api.vercel.app / corpora-py-corpora-apps.vercel.app /
+# corpora-py-git-next-corpora-apps.vercel.app.
+# The SECOND project that used to serve the example/ SPA — `corpora-py-example`
+# (prj_2GHE9fFRa2Ap2Dn9RdnTQ28ZBv6a) — HAS BEEN DELETED; that id now 404s. A
+# stale example/.vercel/project.json may linger locally (gitignored). Anything
+# below or in example/README.md describing a two-project setup, a separate
+# Root Directory = example deploy, or VITE_API_URL wiring between them is
+# historical: the example app is not deployed anywhere right now.
+# Under the branch model in .github/WORKFLOW.md the production branch becomes
+# `main`; it is still `next` until that migration runs.
+# Public-demo backend config (set on the corpora-py API project):
+# AUTH_REQUIRED=false opens conversion/reads/queries to
 # anonymous visitors, and HF_READ_ONLY=true locks the Hub so the now-tokenless
 # public can't mutate it (see "Auth"/HF_READ_ONLY below). Both must be set
 # together -- AUTH_REQUIRED=false without HF_READ_ONLY=true would hand the
@@ -294,7 +300,10 @@ clients can't set custom headers on the handshake).
 ### CI/CD
 
 **The branch and release model lives in `.github/WORKFLOW.md` — read that first.** In short:
-`<type>/<slug>` → PR → `release/vX.Y.Z` → PR → `dev` → tag `vX.Y.Z`. There is no `main`. The version is chosen once,
+`<type>/<slug>` → PR → `release/vX.Y.Z` → PR → `main` → tag `vX.Y.Z`. Three branch kinds and no others: `main`
+(production, protected), `release/vX.Y.Z` (next/staging, protected), and `<type>/<slug>` feature branches. The old
+`dev` and `next` branches are retired — **but the migration has not run yet** (this repo still has `dev`/`next` and no
+`main`, so the pipeline is inert until it does; the steps are in `.github/WORKFLOW.md`). The version is chosen once,
 when `make release-branch` cuts `release/vX.Y.Z` and writes X.Y.Z into all four
 `pyproject.toml` files; there is no longer any auto-bump-on-merge (the old `bump` job and
 `scripts/smart_version_tagging.py` are gone). Every CI step is a `make` target — `make ci`, `make pack`,
@@ -320,7 +329,7 @@ a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun 
 
 Testing runs in two places. The `check` job in `pr.yml` runs `make ci` (`uv sync` + `make lint-check` +
 `make test` — 364 tests as of this writing) on one runner, single-job on purpose: it is a *required status check* on
-`dev`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
+`main` and `release/v*`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
 `check` the ruleset names, which would leave every PR unmergeable. The breadth that used to live in
 `test.yml` (ubuntu + macOS × 3.13/3.14) moved to `matrix.yml`, which runs on every release-branch push and weekly.
 

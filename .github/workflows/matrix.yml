@@ -1,7 +1,7 @@
 # Cross-platform, cross-version coverage.
 #
 # `check` in pr.yml is deliberately a single job on one runner: it is a
-# required status check on dev, and a matrixed job reports contexts like
+# required status check on main, and a matrixed job reports contexts like
 # "check (macos-latest, 3.14)" rather than the plain "check" the ruleset names,
 # which would leave every PR unmergeable. This workflow keeps the breadth the
 # old test.yml had — ubuntu + macOS across the supported Python versions —

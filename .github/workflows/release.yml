@@ -1,4 +1,4 @@
-# A release PR landed on dev: tag it, then open the next release branch.
+# A release PR landed on main: tag it, then open the next release branch.
 #
 # Nothing is re-tested here — the exact tree being released already passed
 # `check` and `package` on the release PR.
@@ -23,7 +23,7 @@ name: Release
 on:
   pull_request:
     types: [ closed ]
-    branches: [ dev ]
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       bump:
@@ -57,7 +57,7 @@ jobs:
       # Full history: `gh release --generate-notes` needs the preceding tags.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: dev
+          ref: main
           fetch-depth: 0
           fetch-tags: true
           token: ${{ steps.app-token.outputs.token }}
@@ -92,10 +92,13 @@ jobs:
       # Full history and tags: `make next-version` reads the newest vX.Y.Z tag.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: dev
+          ref: main
           fetch-depth: 0
           fetch-tags: true
           token: ${{ steps.app-token.outputs.token }}
+
+      # `make release-branch` re-locks: uv.lock pins the workspace versions.
+      - uses: ./.github/actions/setup
 
       - name: Open the next release branch
         env:

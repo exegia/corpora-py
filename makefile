@@ -196,9 +196,8 @@ publish-dispatch: ## Dispatch publish workflow without a version bump.
 # The branch model lives in .github/WORKFLOW.md. Every CI step is one target
 # here, so anything the pipeline does can be reproduced locally.
 
-# The long-lived branch. `dev` rather than `main` — this repo's default branch
-# is already dev and two Vercel projects deploy off it.
-TRUNK              ?= dev
+# The long-lived branch. Production; protected; PRs only, from release/vX.Y.Z.
+TRUNK              ?= main
 
 # Bump used when opening the next release branch.
 BUMP               ?= minor
@@ -321,6 +320,11 @@ release-pr: ## Open or refresh the draft release PR into $(TRUNK) (env: BRANCH).
 	fi; \
 	rm -f "$$body"
 
+# uv.lock pins each workspace member's version, so the bump has to be re-locked
+# and committed alongside the pyproject files. (`uv sync --frozen` tolerates the
+# mismatch — measured, not assumed — so this is not a hard failure; it is that
+# the committed lock would claim 0.1.3 while the packages say 0.2.0, and the
+# plain `uv sync` in `make ci` then rewrites uv.lock and leaves CI dirty.)
 release-branch: ## Cut release/v<next> from $(TRUNK) with the version bumped (env: VERSION, BUMP).
 	@set -eu; \
 	git fetch --quiet --force --tags origin "$(TRUNK):refs/remotes/origin/$(TRUNK)"; \
@@ -331,7 +335,8 @@ release-branch: ## Cut release/v<next> from $(TRUNK) with the version bumped (en
 	fi; \
 	git checkout --quiet -B "$$branch" origin/$(TRUNK); \
 	$(MAKE) -s --no-print-directory version-set VERSION="$$version"; \
-	git add $(PYPROJECTS); \
+	uv lock --quiet; \
+	git add $(PYPROJECTS) uv.lock; \
 	git commit --quiet -m "chore(release): open v$$version"; \
 	git push --quiet -u origin "$$branch"; \
 	echo "opened $$branch"

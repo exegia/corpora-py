@@ -1,5 +1,5 @@
 {
-  "name": "Protect dev and next branches",
+  "name": "Protect release branches",
   "target": "branch",
   "enforcement": "active",
   "bypass_actors": [
@@ -32,34 +32,34 @@
       "actor_id": 1236702,
       "actor_type": "Integration",
       "bypass_mode": "always"
+    },
+    {
+      "actor_id": 4425676,
+      "actor_type": "Integration",
+      "bypass_mode": "always"
     }
   ],
   "conditions": {
     "ref_name": {
       "include": [
-        "refs/heads/dev"
+        "refs/heads/release/v*"
       ],
       "exclude": []
     }
   },
   "rules": [
     {
-      "type": "deletion"
-    },
-    {
       "type": "non_fast_forward"
     },
     {
       "type": "pull_request",
       "parameters": {
-        "dismiss_stale_reviews_on_push": true,
+        "dismiss_stale_reviews_on_push": false,
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_approving_review_count": 0,
-        "required_review_thread_resolution": true,
-        "allowed_merge_methods": [
-          "merge"
-        ]
+        "required_review_thread_resolution": false,
+        "allowed_merge_methods": ["squash", "merge"]
       }
     },
     {
@@ -72,12 +72,9 @@
           },
           {
             "context": "check"
-          },
-          {
-            "context": "package"
           }
         ],
-        "strict_required_status_checks_policy": true
+        "strict_required_status_checks_policy": false
       }
     }
   ]
