@@ -199,10 +199,16 @@ is `make pr-guard TRUNK=some-branch ...`.
 
 ## Secrets
 
-| Name                                               | Where      | Used by                     |
-| -------------------------------------------------- | ---------- | --------------------------- |
-| `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY` | repository | opening PRs, branches, tags |
-| `CLAUDE_CODE_OAUTH_TOKEN`                          | repository | the AI review (optional)    |
+| Name                                               | Where            | Used by                     |
+| -------------------------------------------------- | ---------------- | --------------------------- |
+| `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY` | **organisation** | opening PRs, branches, tags |
+| `CLAUDE_CODE_OAUTH_TOKEN`                          | **organisation** | the AI review (optional)    |
+
+All three are **organisation** secrets on `exegia`, inherited by this repo —
+`gh api repos/exegia/corpora-py/actions/secrets` returns an empty list and is
+not evidence they are missing; use `gh api orgs/exegia/actions/secrets`. The
+backing App is `corpora-ui-automation` (Integration `4425676`), installed
+org-wide with `contents: write` + `pull_requests: write`.
 
 PyPI needs no secret — `publish.yml` uses OIDC trusted publishing against the
 `pypi` environment. **That binding names the workflow file**, so renaming
@@ -211,4 +217,4 @@ PyPI needs no secret — `publish.yml` uses OIDC trusted publishing against the
 Without `CLAUDE_CODE_OAUTH_TOKEN` the review job skips with a note in the job
 summary rather than failing. The automation App is **not** optional:
 `pr-merged.yml`, `release` and `next-release` all fail at their first step
-without it, and neither secret exists on this repository yet.
+without it.
