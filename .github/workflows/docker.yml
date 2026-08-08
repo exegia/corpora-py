@@ -4,14 +4,17 @@ name: Docker
 #   ghcr.io/exegia/corpora-py — umbrella (MCP server + admin tools, full)
 #
 # Triggers:
-#   - Push to main → tags: latest, sha-<short>
+#   - Push to dev (the trunk) → tags: latest, sha-<short>
 #   - Push of a vX.Y.Z tag → tags: latest, vX.Y.Z, X.Y, X
-#   - Pull request → build only (no push), for CI validation
+#   - Pull request into dev → build only (no push), for CI validation
 #   - workflow_dispatch → manual run with optional push toggle
+#
+# `main` does not exist in this repo; these filters named it and so had never
+# fired on a branch push. See .github/WORKFLOW.md for the branch model.
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev ]
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-*"
@@ -26,7 +29,7 @@ on:
       - ".github/workflows/docker.yml"
 
   pull_request:
-    branches: [ main ]
+    branches: [ dev ]
     paths:
       - "Dockerfile*"
       - "packages/**"

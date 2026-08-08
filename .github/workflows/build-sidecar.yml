@@ -82,7 +82,7 @@ jobs:
           - platform: macos-arm64
             runner: macos-14 # Apple Silicon
           - platform: macos-x64
-            runner: macos-13 # Intel (use macos-latest-large if macos-13 is retired)
+            runner: macos-15-intel # macos-13 was retired; this is the x64 image
           - platform: windows-x64
             runner: windows-latest
 
