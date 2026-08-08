@@ -116,20 +116,27 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 vercel deploy          # manual preview deploy from a linked checkout
 vercel deploy --prod   # manual production deploy
 
-# ── There is exactly ONE Vercel project: corpora-py (team corpora-apps) ───────
-# Verified 2026-08-08: `corpora-py` (prj_B4qhl4nI3D6QQ41vPcRwLCUUipk9) is the
-# team's only project, its Production Branch is `next` (every target=production
-# deployment has githubCommitRef=next), and its domains are
-# corpora-api.vercel.app / corpora-py-corpora-apps.vercel.app /
-# corpora-py-git-next-corpora-apps.vercel.app.
-# The SECOND project that used to serve the example/ SPA — `corpora-py-example`
-# (prj_2GHE9fFRa2Ap2Dn9RdnTQ28ZBv6a) — HAS BEEN DELETED; that id now 404s. A
-# stale example/.vercel/project.json may linger locally (gitignored). Anything
-# below or in example/README.md describing a two-project setup, a separate
-# Root Directory = example deploy, or VITE_API_URL wiring between them is
-# historical: the example app is not deployed anywhere right now.
-# Under the branch model in .github/WORKFLOW.md the production branch becomes
-# `main`; it is still `next` until that migration runs.
+# ── TWO Vercel projects deploy from this repo (team corpora-apps) ─────────────
+# Verified 2026-08-08 via `vercel project ls` + the GitHub deployments API:
+#   1. corpora-py         prj_B4qhl4nI3D6QQ41vPcRwLCUUipk9  Root Directory `.`
+#      Python/FastAPI API. Production Branch: `main` (repointed 2026-08-08 from
+#      `next`). Aliases: api.exegia.co, corpora-api.vercel.app,
+#      corpora-py-corpora-apps.vercel.app.
+#   2. corpora-py-example prj_2GHE9fFRa2Ap2Dn9RdnTQ28ZBv6a  Root Directory
+#      `example`. The React Router SPA, live at corpora-py-example.vercel.app.
+#      Production Branch: STILL `dev` as of 2026-08-08 — it has NOT been moved
+#      to `main`. Do not delete `dev` until it is; that would drop the demo's
+#      production deploys.
+# Both share the repo's Git integration, so one push builds both — no GitHub
+# Actions, no chaining. VITE_API_URL (build-time, Vite-inlined) points the SPA
+# at the API's prod URL. The open release/vX.Y.Z branch is the staging URL.
+#
+# TOOLING TRAP: the Vercel *MCP* `list_projects` returns only `corpora-py`, and
+# `get_project` 404s on corpora-py-example by both id and name. Those answers
+# are wrong — the project is live. Use the `vercel` CLI (`vercel project ls`,
+# `vercel project inspect <name> --scope corpora-apps`) or
+# `gh api repos/exegia/corpora-py/deployments --jq '.[]|"\(.environment) \(.ref)"'`
+# to see which branch feeds which environment.
 # Public-demo backend config (set on the corpora-py API project):
 # AUTH_REQUIRED=false opens conversion/reads/queries to
 # anonymous visitors, and HF_READ_ONLY=true locks the Hub so the now-tokenless
