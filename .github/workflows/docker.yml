@@ -18,9 +18,10 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-*"
     paths:
-      # Only rebuild when relevant files change
-      - "Dockerfile*"
-      - "docker-compose.yml"
+      # Only rebuild when relevant files change. Every Dockerfile lives under
+      # dockerfiles/ — a root "Dockerfile*" pattern matches nothing here, which
+      # is why this workflow never fired on tags either.
+      - "dockerfiles/**"
       - "packages/**"
       - "src/**"
       - "pyproject.toml"
@@ -30,7 +31,7 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - "Dockerfile*"
+      - "dockerfiles/**"
       - "packages/**"
       - "src/**"
       - "pyproject.toml"
@@ -60,7 +61,7 @@ jobs:
       matrix:
         image:
           - name: corpora-py
-            dockerfile: Dockerfile
+            dockerfile: dockerfiles/Dockerfile
             description: "Corpora platform — MCP server + admin tools (full umbrella)"
 
     steps:
