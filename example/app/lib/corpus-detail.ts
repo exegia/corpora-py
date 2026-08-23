@@ -133,6 +133,13 @@ export type SectionQuery = {
   limit?: number
 }
 
+/** One slot under a content passage. */
+export type PassageToken = {
+  text: string
+  after: string
+  node: number
+}
+
 /** A single passage in a content response. */
 export type Passage = {
   ref: string
@@ -140,6 +147,7 @@ export type Passage = {
   /** Graph node id of the passage (added by newer backends; optional so the
    * client tolerates older API responses without it). */
   node?: number
+  tokens?: PassageToken[]
 }
 
 /** `GET /storage/{filename}/content`. */

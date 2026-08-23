@@ -205,9 +205,13 @@ def test_get_content_whole_corpus_paginates(client):
     assert body["limit"] == 2
     assert body["next_offset"] == 2
     assert len(body["passages"]) == 2
-    assert all(set(p) == {"node", "ref", "text"} for p in body["passages"])
+    assert all(set(p) >= {"node", "ref", "text", "tokens"} for p in body["passages"])
     assert all(isinstance(p["node"], int) for p in body["passages"])
     assert body["passages"][0]["text"]  # non-empty
+    tokens = body["passages"][0]["tokens"]
+    assert tokens
+    assert all(set(t) >= {"text", "after", "node"} for t in tokens)
+    assert all(isinstance(t["node"], int) for t in tokens)
 
 
 def test_get_content_last_page_has_no_next_offset(client):
@@ -314,6 +318,10 @@ def test_get_node_shape(client):
     assert isinstance(body["features"], dict)
     assert body["annotation"] is None
     assert set(body["node_types"]) >= {"book", "paragraph", "word"}
+    assert isinstance(body["context"], list)
+    assert body["occurrences"] >= 1
+    assert body["occurrences_in_section"] >= 1
+    assert body["occurrences_in_section"] <= body["occurrences"]
 
 
 def test_get_node_slot_node(client):
@@ -327,6 +335,9 @@ def test_get_node_slot_node(client):
     assert body["otype"] == "word"
     assert body["is_slot"] is True
     assert body["first_slot"] == body["last_slot"] == slot
+    assert body["context"]
+    assert any(row["otype"] == "paragraph" for row in body["context"])
+    assert body["occurrences"] >= 1
 
 
 def test_get_node_unknown_node_is_404(client):

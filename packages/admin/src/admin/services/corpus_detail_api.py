@@ -125,7 +125,11 @@ class NodeAnnotation(BaseModel):
 
 @router.get("/{filename}/nodes/{node}")
 async def get_corpus_node(filename: str, node: int) -> dict[str, Any]:
-    """Inspect one graph node: type, slot span, text, features, annotation."""
+    """Inspect one graph node: type, slot span, text, features, annotation.
+
+    Also returns ``context`` (embedding parents), ``occurrences`` and
+    ``occurrences_in_section`` for the reader's inspect panel.
+    """
     return await _run(lambda: get_node(filename, node))
 
 
@@ -174,7 +178,11 @@ async def get_corpus_content(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50),
 ) -> dict[str, Any]:
-    """Return paginated passages under `ref` (or the whole corpus if omitted)."""
+    """Return paginated passages under `ref` (or the whole corpus if omitted).
+
+    Each passage includes ``tokens``: ``{text, after, node}`` so the reader
+    can inspect the clicked word instead of guessing ``first_slot + n``.
+    """
     return await _run(
         lambda: get_content(filename, ref=ref, fmt=fmt, offset=offset, limit=limit)
     )
