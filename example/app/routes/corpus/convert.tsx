@@ -300,6 +300,7 @@ export default function CorpusConvert() {
                   />
                   {view === "completed" && entry.corpusName && (
                     <CompletedResult
+                      displayName={entry.displayName}
                       corpusName={entry.corpusName}
                       corpusSize={entry.corpusSize}
                       saved={entry.status === "success"}

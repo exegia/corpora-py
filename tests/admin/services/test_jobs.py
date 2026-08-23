@@ -140,6 +140,14 @@ class TestToDict:
         # can show the library name in its UI from the moment it submits.
         assert _job(name="My Doc").to_dict()["result_filename"] == "my-doc.corpus"
 
+    def test_result_filename_uses_display_name_when_set(self):
+        # Once the worker thread sets `display_name` (the human-readable
+        # title from the source, see issue #109), the preview
+        # `result_filename` is slugified from it -- so the on-disk archive
+        # name follows the human title, not the upload filename stem.
+        job = _job(name="summa-theologia-1200-ENG", display_name="Summa Theologiae")
+        assert job.to_dict()["result_filename"] == "summa-theologiae.corpus"
+
     def test_result_filename_graph_json_for_ingest_job(self):
         # `/ingest` jobs record a bare detected-suffix string, not a
         # SourceFormat -- their result is a graph.json, not a .corpus.
@@ -159,6 +167,13 @@ class TestToDict:
             result_path=Path("/r/my-doc-abcd1234.corpus"),
         )
         assert job.to_dict()["result_filename"] == "my-doc-abcd1234.corpus"
+
+    def test_display_name_exposed(self):
+        # `display_name` is the human-readable title from the source (issue
+        # #109); `None` until the worker sets it, then present on the
+        # running/succeeded status.
+        assert _job().to_dict()["display_name"] is None
+        assert _job(display_name="Summa Theologiae").to_dict()["display_name"] == "Summa Theologiae"
 
     def test_download_ready_requires_success_and_path(self):
         job = _job(status=JobStatus.SUCCEEDED, result_path=Path("/r/x.corpus"))
@@ -282,6 +297,20 @@ class TestLog:
 
     def test_unknown_job_id_is_noop(self):
         make_manager().log("nope", "message")  # must not raise
+
+
+class TestSetDisplayName:
+    def test_sets_display_name_on_job(self):
+        manager = make_manager(DeferredExecutor())
+        job = manager.submit(
+            source_format=SourceFormat.PLAIN, name="d", fn=lambda: Path("x")
+        )
+        assert job.display_name is None
+        manager.set_display_name(job.id, "Summa Theologiae")
+        assert job.display_name == "Summa Theologiae"
+
+    def test_unknown_job_id_is_noop(self):
+        make_manager().set_display_name("nope", "title")  # must not raise
 
 
 class TestShutdown:
