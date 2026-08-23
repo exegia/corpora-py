@@ -436,3 +436,20 @@ def test_read_only_still_allows_manifest_read(client, monkeypatch):
 
     monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
     assert client.get(f"/storage/{ARCHIVE_NAME}/manifest").status_code == 200
+
+
+# ── Versions ───────────────────────────────────────────────────────────────────
+
+
+def test_get_versions_has_a_current_row(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/versions")
+    assert resp.status_code == 200
+    versions = resp.json()["versions"]
+    assert versions
+    assert any(row.get("current") for row in versions)
+    assert all({"id", "label", "title", "at", "current", "notes"} <= set(row) for row in versions)
+
+
+def test_restore_is_501(client):
+    resp = client.post(f"/storage/{ARCHIVE_NAME}/restore")
+    assert resp.status_code == 501

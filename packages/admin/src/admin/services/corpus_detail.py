@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import subprocess
 import tempfile
 import threading
 import zipfile
@@ -698,6 +699,73 @@ def _build_sections(api: Any) -> dict[str, Any] | None:
         items.append(item)
 
     return {"levels": levels, "items": items}
+
+
+def get_versions(filename: str) -> dict[str, Any]:
+    """Version timeline for the Activity tab.
+
+    Prefers a ``history.yml`` sidecar, then the archive's ``.git/`` log, then
+    a single synthetic row from the manifest — so Vercel packages without git
+    still have one honest "Converted" entry.
+    """
+    cached = _ensure_extracted(filename)
+    sidecar = cached.extract_dir / "history.yml"
+    if sidecar.is_file():
+        try:
+            data = yaml.safe_load(sidecar.read_text()) or {}
+        except (OSError, yaml.YAMLError):
+            data = {}
+        sidecar_versions = data.get("versions") if isinstance(data, dict) else None
+        if isinstance(sidecar_versions, list) and sidecar_versions:
+            return {"versions": sidecar_versions}
+
+    versions: list[dict[str, Any]] = []
+    git_dir = cached.extract_dir / ".git"
+    if git_dir.is_dir() and shutil.which("git"):
+        try:
+            proc = subprocess.run(
+                ["git", "log", "--format=%H%x09%cI%x09%s"],
+                cwd=cached.extract_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            lines = [line for line in proc.stdout.splitlines() if line.strip()]
+            total = len(lines)
+            for index, line in enumerate(lines):
+                sha, at, title = (line.split("\t", 2) + ["", "", ""])[:3]
+                versions.append(
+                    {
+                        "id": sha[:12] or f"commit-{index}",
+                        "sha": sha or None,
+                        "label": "v1.0" if index == total - 1 else f"v1.{total - 1 - index}",
+                        "title": title or "Snapshot",
+                        "at": at,
+                        "current": index == 0,
+                        "notes": [],
+                    }
+                )
+        except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+            logger.debug("git log failed for %s: %s", filename, exc)
+
+    if not versions:
+        try:
+            manifest = get_manifest(filename)
+        except CorpusNotFoundError:
+            manifest = {}
+        name = manifest.get("name")
+        versions.append(
+            {
+                "id": "packaged",
+                "sha": None,
+                "label": str(manifest.get("version") or "v1.0"),
+                "title": "Converted",
+                "at": str(manifest.get("written_date") or ""),
+                "current": True,
+                "notes": [str(name)] if name else [],
+            }
+        )
+    return {"versions": versions}
 
 
 def get_index(filename: str) -> dict[str, Any]:
