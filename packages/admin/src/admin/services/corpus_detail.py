@@ -92,6 +92,37 @@ class _Cached:
 _cache: dict[str, _Cached] = {}
 _lock = threading.Lock()
 
+# Archives supplied directly (e.g. a conversion job's result on disk) instead of
+# fetched from the Hub. safe-name -> local .corpus path. Checked by
+# `_ensure_extracted` before it tries `corpus_storage.download`, so job-scoped
+# detail reads work without Hub storage being configured at all. Guarded by
+# `_lock` alongside `_cache`.
+_local_archives: dict[str, Path] = {}
+
+
+def register_local_archive(name: str, archive_path: Path) -> str:
+    """Serve detail reads from a local ``.corpus`` instead of the Hub.
+
+    Registers ``archive_path`` under a safe cache key derived from ``name`` so
+    that ``_ensure_extracted`` extracts it directly (no Hub download). Returns
+    the key the caller should pass to ``get_manifest`` / ``get_index`` / … —
+    identical to how a Hub filename is passed. Re-registering the same key just
+    re-points the path and drops any stale cached extraction.
+    """
+    key = _safe_name(name)
+    with _lock:
+        _local_archives[key] = Path(archive_path)
+        _cache.pop(key, None)
+    return key
+
+
+def unregister_local_archive(name: str) -> None:
+    """Drop a local-archive registration and its cached extraction."""
+    key = _safe_name(name)
+    with _lock:
+        _local_archives.pop(key, None)
+        _cache.pop(key, None)
+
 
 def _safe_name(filename: str) -> str:
     """Normalize to a flat ``<name>.corpus`` filename, rejecting path escapes.
@@ -124,6 +155,7 @@ def _ensure_extracted(filename: str) -> _Cached:
         cached = _cache.get(name)
         if cached is not None:
             return cached
+        local_archive = _local_archives.get(name)
 
         work = _HUB_CACHE_ROOT / name
         download_dir = work / "download"
@@ -132,12 +164,20 @@ def _ensure_extracted(filename: str) -> _Cached:
             shutil.rmtree(extract_dir, ignore_errors=True)
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        # Raises CorpusNotFoundError / StorageNotConfiguredError / StorageError,
-        # which the callers map to 404 / 503 / 502.
-        archive = corpus_storage.download(name, dest_dir=download_dir)
+        if local_archive is not None:
+            # Job-scoped read: extract the on-disk result directly, no Hub I/O.
+            if not local_archive.is_file():
+                raise CorpusNotFoundError(
+                    f"Local archive not found: {local_archive!s}"
+                )
+            archive_path: Path = local_archive
+        else:
+            # Hub read. Raises CorpusNotFoundError / StorageNotConfiguredError /
+            # StorageError, which the callers map to 404 / 503 / 502.
+            archive_path = corpus_storage.download(name, dest_dir=download_dir)
 
         extract_dir.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(archive) as zf:
+        with zipfile.ZipFile(archive_path) as zf:
             _safe_extract(zf, extract_dir)
 
         cached = _Cached(extract_dir=extract_dir)
@@ -170,10 +210,13 @@ def invalidate(filename: str) -> None:
     name = _safe_name(filename)
     with _lock:
         cached = _cache.pop(name, None)
+        is_local = name in _local_archives
     work = _HUB_CACHE_ROOT / name
     shutil.rmtree(work, ignore_errors=True)
     if cached is not None:
         logger.debug("Invalidated corpus-detail cache for %s", name)
+    if is_local:
+        logger.debug("Keeping local-archive registration for %s", name)
 
 
 # ── Section-reference helpers (adapted from corpora_mcp.server) ────────────────
