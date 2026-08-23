@@ -31,6 +31,7 @@ from .corpus_detail import (
     get_index,
     get_manifest,
     get_node,
+    get_sections,
     update_manifest,
 )
 from .storage import (
@@ -139,8 +140,30 @@ async def patch_corpus_node(
 
 @router.get("/{filename}/index")
 async def get_corpus_index(filename: str) -> dict[str, Any]:
-    """Return the archive's toc, section structure, and node-type counts."""
+    """Return the archive's toc, section structure, and node-type stats.
+
+    ``node_types`` entries include ``avg_slots`` and ``is_slot``. Each section
+    item includes ``child_count``, ``words`` (slot span), and ``truncated``
+    when the nested children list was capped. Deeper / remaining children:
+    ``GET /storage/{filename}/sections``.
+    """
     return await _run(lambda: get_index(filename))
+
+
+@router.get("/{filename}/sections")
+async def get_corpus_sections(
+    filename: str,
+    parent: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50),
+) -> dict[str, Any]:
+    """Paginated section children under ``parent`` (top-level if omitted).
+
+    Lowest-level sections return no items — use ``/content`` for passages.
+    """
+    return await _run(
+        lambda: get_sections(filename, parent=parent, offset=offset, limit=limit)
+    )
 
 
 @router.get("/{filename}/content")

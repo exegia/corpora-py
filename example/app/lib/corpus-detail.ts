@@ -75,12 +75,21 @@ export type EditableManifestField = (typeof EDITABLE_MANIFEST_FIELDS)[number]
 export type IndexChild = {
   title: string
   ref: string
+  otype?: string
+  child_count?: number
+  nodes?: number
+  words?: number | null
 }
 
 /** A top-level index item (e.g. a book or section) with its children. */
 export type IndexItem = {
   title: string
   ref: string
+  otype?: string
+  child_count?: number
+  nodes?: number
+  words?: number | null
+  truncated?: boolean
   children: IndexChild[]
 }
 
@@ -92,6 +101,8 @@ export type IndexSections = {
 export type NodeType = {
   type: string
   count: number
+  avg_slots?: number
+  is_slot?: boolean
 }
 
 /** `GET /storage/{filename}/index`. */

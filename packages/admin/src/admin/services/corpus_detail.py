@@ -58,8 +58,9 @@ _HUB_CACHE_ROOT = Path(tempfile.gettempdir()) / "corpora-admin-corpus-detail-cac
 
 # How many child sections (chapters/pages) to list per top-level index item
 # before truncating -- a big book can have thousands of chapters and the detail
-# view only needs a navigable slice.
+# view only needs a navigable slice. `GET …/sections` is the paginated follow-up.
 _MAX_CHILDREN = 500
+_MAX_SECTION_PAGE = 200
 
 # Manifest keys a PATCH is allowed to touch (all optional strings). Kept here so
 # the REST/MCP surfaces and this module agree on the editable subset.
@@ -185,6 +186,67 @@ def _section_ref(node: int, api: Any) -> str:
         return ref or str(node)
     except Exception:
         return str(node)
+
+
+def _slot_span(api: Any, node: int) -> int | None:
+    """How many slots `node` covers, or None if it has no oslots."""
+    otype = api.F.otype.v(node)
+    if otype is None:
+        return None
+    if otype == api.F.otype.slotType:
+        return 1
+    try:
+        slots = api.E.oslots.s(node)
+    except Exception:  # noqa: BLE001 - some nodes have no slot embedding
+        return None
+    if not slots:
+        return None
+    return int(slots[-1]) - int(slots[0]) + 1
+
+
+def _node_type_stats(api: Any) -> list[dict[str, Any]]:
+    """Per-otype counts with mean slot span and a slot-type flag."""
+    slot_type = api.F.otype.slotType
+    rows: list[dict[str, Any]] = []
+    for otype in api.F.otype.all or ():
+        nodes = list(api.F.otype.s(otype))
+        if otype == slot_type:
+            avg = 1.0
+        else:
+            spans = [span for n in nodes if (span := _slot_span(api, n)) is not None]
+            avg = (sum(spans) / len(spans)) if spans else 0.0
+        rows.append(
+            {
+                "type": otype,
+                "count": len(nodes),
+                "avg_slots": round(avg, 1),
+                "is_slot": otype == slot_type,
+            }
+        )
+    return rows
+
+
+def _section_entry(
+    api: Any,
+    node: int,
+    *,
+    grandchild_type: str | None = None,
+) -> dict[str, Any]:
+    """One section row: identity, slot span, and how many section-children it has."""
+    ref = _section_ref(node, api)
+    otype = api.F.otype.v(node)
+    if grandchild_type:
+        child_count = len(list(api.L.d(node, otype=grandchild_type)))
+    else:
+        child_count = 0
+    return {
+        "title": _section_label(node, api) or ref,
+        "ref": ref,
+        "otype": str(otype or ""),
+        "child_count": child_count,
+        "nodes": child_count,
+        "words": _slot_span(api, node),
+    }
 
 
 def _section_label(node: int, api: Any) -> str:
@@ -481,41 +543,41 @@ def annotate_node(
 # ── Index ─────────────────────────────────────────────────────────────────────
 
 
+def _section_levels(api: Any) -> list[str]:
+    try:
+        return list(api.T.sectionTypes)
+    except Exception:
+        return []
+
+
 def _build_sections(api: Any) -> dict[str, Any] | None:
     """Top-level section nodes with their immediate child sections, or None."""
-    try:
-        levels = list(api.T.sectionTypes)
-    except Exception:
-        levels = []
+    levels = _section_levels(api)
     if not levels:
         return None
 
     top_type = levels[0]
     child_type = levels[1] if len(levels) > 1 else None
+    grandchild_type = levels[2] if len(levels) > 2 else None
 
     items: list[dict[str, Any]] = []
     for node in api.F.otype.s(top_type):
-        children: list[dict[str, str]] = []
-        if child_type is not None:
-            for child in api.L.d(node, otype=child_type)[:_MAX_CHILDREN]:
-                child_ref = _section_ref(child, api)
-                children.append(
-                    {"title": _section_label(child, api) or child_ref, "ref": child_ref}
-                )
-        item_ref = _section_ref(node, api)
-        items.append(
-            {
-                "title": _section_label(node, api) or item_ref,
-                "ref": item_ref,
-                "children": children,
-            }
-        )
+        child_nodes = list(api.L.d(node, otype=child_type)) if child_type else []
+        total = len(child_nodes)
+        children = [
+            _section_entry(api, child, grandchild_type=grandchild_type)
+            for child in child_nodes[:_MAX_CHILDREN]
+        ]
+        item = _section_entry(api, node, grandchild_type=child_type)
+        item["children"] = children
+        item["truncated"] = total > _MAX_CHILDREN
+        items.append(item)
 
     return {"levels": levels, "items": items}
 
 
 def get_index(filename: str) -> dict[str, Any]:
-    """Return the archive's toc, section structure, and node-type counts."""
+    """Return the archive's toc, section structure, and node-type stats."""
     cached = _ensure_extracted(filename)
     toc_path = cached.extract_dir / "toc.yml"
     toc = yaml.safe_load(toc_path.read_text()) if toc_path.is_file() else None
@@ -524,11 +586,76 @@ def get_index(filename: str) -> dict[str, Any]:
     if api is None:
         return {"toc": toc, "sections": None, "node_types": []}
 
-    node_types = [
-        {"type": t, "count": len(api.F.otype.s(t))} for t in (api.F.otype.all or ())
-    ]
-    sections = _build_sections(api)
-    return {"toc": toc, "sections": sections, "node_types": node_types}
+    return {
+        "toc": toc,
+        "sections": _build_sections(api),
+        "node_types": _node_type_stats(api),
+    }
+
+
+def get_sections(
+    filename: str,
+    parent: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Paginated section children under `parent` (or top-level if omitted).
+
+    Used by Structure to load levels deeper than the two-level index without
+    treating content passages as the next otype. `parent` is a section ref
+    from the index. Lowest-level sections return an empty item list — the
+    client should then call ``/content``.
+    """
+    limit = max(1, min(int(limit), _MAX_SECTION_PAGE))
+    offset = max(0, int(offset))
+
+    api = _load_api(filename)
+    empty = {
+        "parent": parent,
+        "levels": [],
+        "items": [],
+        "total": 0,
+        "offset": offset,
+        "limit": limit,
+        "next_offset": None,
+    }
+    if api is None:
+        return empty
+
+    levels = _section_levels(api)
+    if not levels:
+        return {**empty, "levels": levels}
+
+    if parent:
+        node = _resolve_section_node(api, parent, levels)
+        if node is None:
+            raise CorpusNotFoundError(
+                f"Section reference {parent!r} not found in {_safe_name(filename)}"
+            )
+        otype = api.F.otype.v(node)
+        idx = levels.index(otype) if otype in levels else -1
+        child_type = levels[idx + 1] if 0 <= idx < len(levels) - 1 else None
+        grandchild_type = levels[idx + 2] if 0 <= idx < len(levels) - 2 else None
+        nodes = list(api.L.d(node, otype=child_type)) if child_type else []
+    else:
+        child_type = levels[0]
+        grandchild_type = levels[1] if len(levels) > 1 else None
+        nodes = list(api.F.otype.s(child_type))
+
+    total = len(nodes)
+    page = nodes[offset : offset + limit]
+    next_offset = offset + limit if offset + limit < total else None
+    return {
+        "parent": parent,
+        "levels": levels,
+        "items": [
+            _section_entry(api, node, grandchild_type=grandchild_type) for node in page
+        ],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "next_offset": next_offset,
+    }
 
 
 # ── Content ───────────────────────────────────────────────────────────────────
