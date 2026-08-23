@@ -82,7 +82,7 @@ works the moment it is linked:
 
 1. **Create the project** from this GitHub repo → set **Root Directory** to
    `example`. Vercel reads `example/vercel.json` from there.
-2. **Production Branch** → `dev` (match the API project so both promote
+2. **Production Branch** → `main` (match the API project so both promote
    production on the same push).
 3. **Environment variable** — add `VITE_API_URL = https://corpora-py.vercel.app`
    (Production + Preview). This is **build-time**: Vite inlines it, so it must

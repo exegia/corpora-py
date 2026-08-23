@@ -291,5 +291,35 @@ corpora-py/
 │   ├── Dockerfile.admin    # Admin/converter-only image, corpora-admin
 │   └── docker-compose.yml
 └── .github/
-    └── workflows/            # test/build/publish/docker CI (see .github/workflows/*.yml)
+    └── workflows/            # test/build/publish/docker CI (see .github/WORKFLOW.md)
 ```
+
+## Branching, CI, and releases
+
+Same model as [corpora-web](https://github.com/exegia/corpora-web): this repo
+is a **package** (PyPI + sidecars hang off the `vX.Y.Z` tag) that also deploys
+to Vercel production from `main` via Git integration. Full details:
+[`.github/WORKFLOW.md`](.github/WORKFLOW.md).
+
+```
+feat/add-parser ──PR──> dev ──(daily/manual)──> next ──cut──> release/vX.Y.Z ──PR──> main
+                   (deleted on merge)         (preview)                    (tag + PyPI)
+```
+
+| Flow | What happens |
+| --- | --- |
+| `<type>/<slug>` → PR to `dev` | `guard` (branch name + conventional-commit PR title), `check` (lint, typecheck, test), and an AI review once the PR is ready for review |
+| **Promote to next** (22:00 UTC or manual) | Opens `dev` → `next` with a version from line-count churn (`< 100` patch, `100–999` minor, `≥ 1000` major) and auto-merges after CI |
+| Push to `next` | Vercel preview (Git integration); cuts or refreshes `release/vX.Y.Z`; the draft PR into `main` is opened or updated |
+| `release/vX.Y.Z` → PR to `main` | `guard` also asserts `pyproject.toml` matches the branch version; `package` uploads the publishable wheel as an artifact |
+| Release PR merged | Tags `vX.Y.Z`, publishes a GitHub Release (PyPI + sidecars hang off the tag), syncs `main` back into `next` and `dev`, deletes leftover branches |
+
+Exactly one release branch is in flight at a time. `main` takes PRs only from
+`release/vX.Y.Z`; the ruleset requires the `guard`, `check` and `package`
+checks. `dev` and `next` require `guard` and `check`. Branches into `dev` (or
+an in-flight `release/v*`) are `<type>/<slug>`; `next` only accepts `dev`;
+`main` only accepts `release/vX.Y.Z` matching the root `pyproject.toml`
+version.
+
+Every CI step is a `make` target, so anything CI does can be reproduced
+locally — `make ci` is what runs on a PR. `make help` lists the rest.
