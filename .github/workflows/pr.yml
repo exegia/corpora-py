@@ -1,10 +1,13 @@
 # Everything that runs *before* a merge.
 #
-#   <type>/<slug>  ->  release/vX.Y.Z    guard + check + AI review
+#   <type>/<slug>  ->  dev               guard + check + AI review
+#   <type>/<slug>  ->  release/vX.Y.Z    same (last-minute fixes on an in-flight release)
+#   dev            ->  next              guard + check
 #   release/vX.Y.Z ->  main              guard + check + package artifact
 #
 # Draft PRs only get the guard. The full suite starts at `ready_for_review`
-# and re-runs on every push after that.
+# and re-runs on every push after that. The promote PR (dev → next) is opened
+# ready, not draft, so check can run and auto-merge can land.
 name: PR
 
 on:
@@ -12,6 +15,8 @@ on:
     types: [ opened, reopened, ready_for_review, synchronize ]
     branches:
       - main
+      - next
+      - dev
       - "release/v*"
 
 concurrency:
@@ -33,10 +38,8 @@ jobs:
       #
       # `event.pull_request.base.ref`, NOT `github.base_ref`: when a PR is part
       # of a GitHub stack, `github.base_ref` reports the stack's ultimate base
-      # rather than the PR's own parent. This repo's model is inherently a
-      # stack (<type>/<slug> -> release/vX.Y.Z -> main), so on every stacked
-      # feature PR `github.base_ref` reads 'main' and the guard rejects it for
-      # not being a release branch. The payload's PR object is authoritative.
+      # rather than the PR's own parent. Feature PRs into `dev` stacked on a
+      # release PR into `main` would otherwise look like they target `main`.
       - name: Check base, branch name and title
         env:
           BASE: ${{ github.event.pull_request.base.ref }}
@@ -77,7 +80,7 @@ jobs:
   review:
     name: review
     # See the guard job for why this is not `github.base_ref`.
-    if: ${{ !github.event.pull_request.draft && startsWith(github.event.pull_request.base.ref, 'release/') }}
+    if: ${{ !github.event.pull_request.draft && (github.event.pull_request.base.ref == 'dev' || startsWith(github.event.pull_request.base.ref, 'release/')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

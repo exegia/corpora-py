@@ -7,8 +7,8 @@
 # old test.yml had — ubuntu + macOS across the supported Python versions —
 # where it does not collide with a required context:
 #
-#   * every push to a release branch, so a macOS- or 3.14-only break surfaces
-#     while the release is still accumulating rather than on the release PR;
+#   * every push to `next` or a release branch, so a macOS- or 3.14-only break
+#     surfaces on staging / the in-flight RC rather than on the release PR;
 #   * weekly, to catch upstream dependency drift on an untouched tree;
 #   * on demand.
 name: Matrix
@@ -16,6 +16,7 @@ name: Matrix
 on:
   push:
     branches:
+      - next
       - "release/v*"
   schedule:
     # Every Sunday at 8:05 UTC.
