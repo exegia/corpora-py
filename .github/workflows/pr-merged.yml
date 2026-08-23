@@ -1,5 +1,5 @@
-# A commit landed on a release branch — normally a feature PR merging in.
-# Keep the release's draft PR into main up to date.
+# The release branch was cut or refreshed from `next`. Keep its draft PR
+# into main up to date.
 #
 # Triggered by `push`, not `pull_request: [closed]`. This repo's PRs form a
 # GitHub stack (<type>/<slug> -> release/vX.Y.Z -> main), and for a stacked PR

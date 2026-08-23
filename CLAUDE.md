@@ -124,12 +124,14 @@ vercel deploy --prod   # manual production deploy
 #      corpora-py-corpora-apps.vercel.app.
 #   2. corpora-py-example prj_2GHE9fFRa2Ap2Dn9RdnTQ28ZBv6a  Root Directory
 #      `example`. The React Router SPA, live at corpora-py-example.vercel.app.
-#      Production Branch: STILL `dev` as of 2026-08-08 — it has NOT been moved
-#      to `main`. Do not delete `dev` until it is; that would drop the demo's
-#      production deploys.
+#      Production Branch: `main` (same as the API). `dev` and `next` are
+#      integration lanes, not production branches — deleting them would not
+#      drop production, but do not point either project's Production Branch
+#      at them.
 # Both share the repo's Git integration, so one push builds both — no GitHub
 # Actions, no chaining. VITE_API_URL (build-time, Vite-inlined) points the SPA
-# at the API's prod URL. The open release/vX.Y.Z branch is the staging URL.
+# at the API's prod URL. `next` is the staging URL; an in-flight release/v*
+# also gets a preview.
 #
 # TOOLING TRAP: the Vercel *MCP* `list_projects` returns only `corpora-py`, and
 # `get_project` 404s on corpora-py-example by both id and name. Those answers
@@ -304,17 +306,27 @@ clients can't set custom headers on the handshake).
   sides to compare. Mismatches return the same 404 as an unknown job id (not 403), so a client can't use the distinction
   to enumerate other users' job ids.
 
+### Pull requests
+
+CI runs `make pr-guard` over the base, the branch name and the **PR title**.
+Commit *subjects* in this family may carry an emoji (`🔧 ci: …`) — a PR title
+must not. The guard matches `<type>: summary` from the first character.
+
+Branches into `dev` (or an in-flight `release/v*`) must read `<type>/<slug>`,
+lowercase; `next` only accepts `dev` (or `chore/sync-main-into-next`); `main`
+only accepts `release/vX.Y.Z` matching the root `pyproject.toml` version.
+
+**Retitling a red PR does not re-run the guard.** `.github/workflows/pr.yml`
+fires on `opened / reopened / ready_for_review / synchronize` — not `edited`.
+Close and reopen the PR to get a fresh payload.
+
 ### CI/CD
 
 **The branch and release model lives in `.github/WORKFLOW.md` — read that first.** In short:
-`<type>/<slug>` → PR → `release/vX.Y.Z` → PR → `main` → tag `vX.Y.Z`. Three branch kinds and no others: `main`
-(production, protected), `release/vX.Y.Z` (next/staging, protected), and `<type>/<slug>` feature branches. The old
-`dev` and `next` branches are retired — **but the migration has not run yet** (this repo still has `dev`/`next` and no
-`main`, so the pipeline is inert until it does; the steps are in `.github/WORKFLOW.md`). The version is chosen once,
-when `make release-branch` cuts `release/vX.Y.Z` and writes X.Y.Z into all four
-`pyproject.toml` files; there is no longer any auto-bump-on-merge (the old `bump` job and
-`scripts/smart_version_tagging.py` are gone). Every CI step is a `make` target — `make ci`, `make pack`,
-`make pr-guard` — so the pipeline is reproducible locally.
+`<type>/<slug>` → PR → `dev` → (daily/manual promote) → `next` → cut `release/vX.Y.Z` → PR → `main` → tag `vX.Y.Z`.
+Feature PRs target `dev`. **Promote to next** (22:00 UTC or manual) classifies the bump from line-count churn
+and cuts the next `release/v*`. `main` does not cut the next version. Every CI step is a `make` target —
+`make ci`, `make pack`, `make pr-guard` — so the pipeline is reproducible locally.
 
 `make tag-release` pushes the tag that drives everything downstream, and it **must** run as the automation GitHub App:
 events raised by `GITHUB_TOKEN` do not start workflow runs, and the `Publishing` tag ruleset separately refuses tag
@@ -336,9 +348,9 @@ a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun 
 
 Testing runs in two places. The `check` job in `pr.yml` runs `make ci` (`uv sync` + `make lint-check` +
 `make test` — 364 tests as of this writing) on one runner, single-job on purpose: it is a *required status check* on
-`main` and `release/v*`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
+`main`, `dev`, `next` and `release/v*`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
 `check` the ruleset names, which would leave every PR unmergeable. The breadth that used to live in
-`test.yml` (ubuntu + macOS × 3.13/3.14) moved to `matrix.yml`, which runs on every release-branch push and weekly.
+`test.yml` (ubuntu + macOS × 3.13/3.14) moved to `matrix.yml`, which runs on every push to `next` or a release branch, and weekly.
 
 ## Demo App
 
