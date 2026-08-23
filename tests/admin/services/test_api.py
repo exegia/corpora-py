@@ -46,10 +46,9 @@ class TestCreateConversion:
         job_id = _post(client).json()["job_id"]
         assert manager.get(job_id).owner is None
 
-    def test_xml_has_no_converter_422(self, client):
+    def test_xml_format_is_accepted(self, client):
         response = _post(client, source_format="xml")
-        assert response.status_code == 422
-        assert "No converter registered" in response.json()["detail"]
+        assert response.status_code == 202
 
     def test_unknown_format_rejected_by_validation(self, client):
         assert _post(client, source_format="docx").status_code == 422
