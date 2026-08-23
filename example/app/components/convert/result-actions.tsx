@@ -11,6 +11,8 @@ import { cn } from "~/lib/utils"
 import { FileTypeIcon } from "./file-icon"
 
 interface CompletedResultProps {
+  /** Human-readable title from the source (issue #109); falls back to corpusName. */
+  displayName?: string
   corpusName: string
   corpusSize?: number
   /** Already saved to disk ("success") vs. downloaded and awaiting save ("ready"). */
@@ -30,6 +32,7 @@ interface CompletedResultProps {
 
 /** Completion state: success message, output file, and next actions. */
 export function CompletedResult({
+  displayName,
   corpusName,
   corpusSize,
   saved,
@@ -73,9 +76,14 @@ export function CompletedResult({
           iconClassName="size-5"
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" title={corpusName}>
-            {corpusName}
+          <p className="truncate text-sm font-medium" title={displayName ?? corpusName}>
+            {displayName ?? corpusName}
           </p>
+          {displayName && (
+            <p className="truncate text-xs text-muted-foreground" title={corpusName}>
+              {corpusName}
+            </p>
+          )}
           {corpusSize !== undefined && (
             <p className="text-xs text-muted-foreground">
               {formatBytes(corpusSize)}
