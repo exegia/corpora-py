@@ -186,7 +186,11 @@ def register_corpus_detail_tools(mcp: Any, *, read_only: bool = False) -> None:
         node_types = index.get("node_types") or []
         if node_types:
             lines.append("Node types:")
-            lines += [f"  {nt['type']:<20} {nt['count']:>10,}" for nt in node_types]
+            lines += [
+                f"  {nt['type']:<20} {nt['count']:>10,}  avg_slots={nt.get('avg_slots', '—')}"
+                + ("  slot" if nt.get("is_slot") else "")
+                for nt in node_types
+            ]
 
         sections = index.get("sections")
         if sections:
