@@ -32,6 +32,7 @@ from .corpus_detail import (
     get_manifest,
     get_node,
     get_sections,
+    get_versions,
     update_manifest,
 )
 from .storage import (
@@ -140,6 +141,21 @@ async def patch_corpus_node(
     """Record a node-type correction in the archive's annotations sidecar."""
     updates = payload.model_dump(exclude_unset=True)
     return await _run(lambda: annotate_node(filename, node, **updates))
+
+
+@router.get("/{filename}/versions")
+async def get_corpus_versions(filename: str) -> dict[str, Any]:
+    """Version timeline: history.yml, else git log, else one packaged row."""
+    return await _run(lambda: get_versions(filename))
+
+
+@router.post("/{filename}/restore")
+async def restore_corpus_version(filename: str) -> dict[str, Any]:
+    """Reserved. Restore is not implemented — 501 so the UI can stay honest."""
+    raise HTTPException(
+        status_code=501,
+        detail=f"Restore is not implemented for {filename}.",
+    )
 
 
 @router.get("/{filename}/index")
