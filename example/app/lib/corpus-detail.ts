@@ -75,12 +75,21 @@ export type EditableManifestField = (typeof EDITABLE_MANIFEST_FIELDS)[number]
 export type IndexChild = {
   title: string
   ref: string
+  otype?: string
+  child_count?: number
+  nodes?: number
+  words?: number | null
 }
 
 /** A top-level index item (e.g. a book or section) with its children. */
 export type IndexItem = {
   title: string
   ref: string
+  otype?: string
+  child_count?: number
+  nodes?: number
+  words?: number | null
+  truncated?: boolean
   children: IndexChild[]
 }
 
@@ -92,6 +101,8 @@ export type IndexSections = {
 export type NodeType = {
   type: string
   count: number
+  avg_slots?: number
+  is_slot?: boolean
 }
 
 /** `GET /storage/{filename}/index`. */
@@ -99,6 +110,27 @@ export type CorpusIndex = {
   toc: Record<string, unknown> | null
   sections: IndexSections | null
   node_types: NodeType[]
+}
+
+/** One row in a `/sections` page — same shape as an `IndexChild`. */
+export type SectionItem = IndexChild
+
+/** `GET /storage/{filename}/sections`. */
+export type SectionResponse = {
+  parent: string | null
+  levels: string[]
+  items: SectionItem[]
+  total: number
+  offset: number
+  limit: number
+  next_offset: number | null
+}
+
+/** Options for {@link fetchSections} — mirrors the sections query params. */
+export type SectionQuery = {
+  parent?: string | null
+  offset?: number
+  limit?: number
 }
 
 /** A single passage in a content response. */
@@ -214,6 +246,20 @@ export const patchManifest = async (
 export const fetchIndex = async (id: string): Promise<CorpusIndex> => {
   const response = await apiFetch(`${storagePath(id)}/index`)
   return parseJson<CorpusIndex>(response)
+}
+
+export const fetchSections = async (
+  id: string,
+  query: SectionQuery = {},
+): Promise<SectionResponse> => {
+  const params = new URLSearchParams()
+  if (query.parent != null && query.parent !== "")
+    params.set("parent", query.parent)
+  if (query.offset != null) params.set("offset", String(query.offset))
+  if (query.limit != null) params.set("limit", String(query.limit))
+  const suffix = params.toString() ? `?${params.toString()}` : ""
+  const response = await apiFetch(`${storagePath(id)}/sections${suffix}`)
+  return parseJson<SectionResponse>(response)
 }
 
 export const fetchContent = async (

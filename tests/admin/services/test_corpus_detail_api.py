@@ -161,15 +161,35 @@ def test_get_index_shape(client):
     assert sections["levels"] == ["book"]
     assert len(sections["items"]) == 1
     item = sections["items"][0]
-    assert set(item) >= {"title", "ref", "children"}
+    assert set(item) >= {
+        "title",
+        "ref",
+        "children",
+        "otype",
+        "child_count",
+        "nodes",
+        "words",
+        "truncated",
+    }
     # Single-level corpus: top items have no child sections.
     assert item["children"] == []
+    assert item["child_count"] == 0
+    assert item["truncated"] is False
+    assert item["otype"] == "book"
+    assert isinstance(item["words"], int) and item["words"] > 0
 
     node_types = body["node_types"]
-    assert all(set(nt) == {"type", "count"} for nt in node_types)
+    assert all(
+        set(nt) >= {"type", "count", "avg_slots", "is_slot"} for nt in node_types
+    )
     counts = {nt["type"]: nt["count"] for nt in node_types}
     assert counts["book"] == 1
     assert counts["paragraph"] == 5
+    by_type = {nt["type"]: nt for nt in node_types}
+    assert by_type["word"]["is_slot"] is True
+    assert by_type["word"]["avg_slots"] == 1
+    assert by_type["book"]["is_slot"] is False
+    assert by_type["book"]["avg_slots"] >= 1
 
 
 # ── Content ────────────────────────────────────────────────────────────────────
@@ -230,6 +250,41 @@ def test_index_ref_round_trips_into_content(client):
     assert body["ref"] == ref
     assert body["total"] == 5
     assert body["passages"]
+
+
+def test_get_sections_lists_top_level(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/sections")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["parent"] is None
+    assert body["levels"] == ["book"]
+    assert body["total"] == 1
+    assert body["next_offset"] is None
+    item = body["items"][0]
+    assert item["otype"] == "book"
+    assert item["child_count"] == 0
+    assert set(item) >= {"title", "ref", "otype", "child_count", "nodes", "words"}
+
+
+def test_get_sections_unknown_parent_is_404(client):
+    assert (
+        client.get(
+            f"/storage/{ARCHIVE_NAME}/sections",
+            params={"parent": "Nonexistent 999"},
+        ).status_code
+        == 404
+    )
+
+
+def test_get_sections_lowest_level_has_no_children(client):
+    index = client.get(f"/storage/{ARCHIVE_NAME}/index").json()
+    ref = index["sections"]["items"][0]["ref"]
+    body = client.get(
+        f"/storage/{ARCHIVE_NAME}/sections", params={"parent": ref}
+    ).json()
+    assert body["parent"] == ref
+    assert body["items"] == []
+    assert body["total"] == 0
 
 
 # ── Nodes (GET) ────────────────────────────────────────────────────────────────
