@@ -10,6 +10,15 @@ export type JobStatusMessage = {
   id: string
   source_format: string
   name: string
+  /**
+   * The human-readable title derived from the source document's own
+   * metadata (TEI `titleStmt`, PDF `info.title`, HTML `<title>`, EPUB
+   * `dc:title`), falling back to the request `name` / filename stem (see
+   * issue #109). `null` until the worker thread extracts it; set on the
+   * running/succeeded status. This is what `manifest.name` carries and what
+   * a library should display -- prefer it over `name` when present.
+   */
+  display_name: string | null
   status: JobStatus
   created_at: number
   started_at: number | null
@@ -19,6 +28,16 @@ export type JobStatusMessage = {
   logs: string[]
   /** Last coarse stage message the server logged for this job, or null if none yet. */
   last_log: string | null
+  /**
+   * The human-readable filename the client should store the result under
+   * (always `*.corpus` for /convert jobs, `*.graph.json` for /ingest jobs).
+   * Derived from the display name (or the request `name` before the title
+   * is known), not the upload filename -- so a client that stores only
+   * this field never persists the original source file as the library
+   * object (see issues #108/#109). Stable across the job's lifetime; the
+   * download route's `Content-Disposition` echoes it back.
+   */
+  result_filename: string
   download_ready: boolean
 }
 

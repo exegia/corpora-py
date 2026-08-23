@@ -48,6 +48,14 @@ The archive format (`manifest.yml`, `toc.yml`, `assets/`, `.git/`,
 external vault by the Corpora team. Before changing manifest/toc shape in `convert_to_corpus.py`, consult the current
 schema definition with the team or check the app's schema loader to understand the expected format.
 
+`convert_to_corpus` validates the archive it just wrote against the required top-level layout
+(`manifest.yml`, `toc.yml`, `corpora/`) and raises `CorpusArchiveError` if any member is missing (issue #108). A
+converter that returns a malformed zip can never reach a client's library: the error surfaces in the job's `error`
+field as `"Conversion failed: CorpusArchiveError (job id X)"`, the job ends `FAILED`, and `/convert/{id}/download`
+returns 409 (not the broken archive). `assets/` and `.git/` are deliberately not in the required set -- assets is
+empty when the source has no cover/thumbnail, and `.git/` is skipped on runtimes without a `git` binary (see
+`_git_snapshot`).
+
 ## Known gaps (converter-side)
 
 Service-side gaps (progress reporting, job registry, archive cleanup) live in
