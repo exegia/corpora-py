@@ -169,6 +169,46 @@ export type ContentQuery = {
   limit?: number
 }
 
+/** One embedding parent in a node's containment chain (`L.u`, nearest first). */
+export type NodeContextEntry = {
+  node: number
+  otype: string
+  ref: string
+}
+
+/** `GET /storage/{filename}/nodes/{node}` — one graph node's detail. */
+export type CorpusNode = {
+  node: number
+  otype: string
+  is_slot: boolean
+  first_slot: number | null
+  last_slot: number | null
+  features: Record<string, string>
+  section_ref: string
+  text: string
+  annotation: { otype?: string; note?: string; converted_otype?: string } | null
+  node_types: string[]
+  context: NodeContextEntry[]
+  occurrences: number
+  occurrences_in_section: number
+}
+
+/** One row in a version timeline. */
+export type VersionEntry = {
+  id: string
+  sha: string | null
+  label: string
+  title: string
+  at: string
+  current: boolean
+  notes: string[]
+}
+
+/** `GET /storage/{filename}/versions` — version timeline for Activity. */
+export type CorpusVersions = {
+  versions: VersionEntry[]
+}
+
 // ── Pure helpers (no API_URL / fetch — safe to unit-test in isolation) ───────
 
 /**
@@ -284,6 +324,18 @@ export const fetchContent = async (
   return parseJson<ContentResponse>(response)
 }
 
+/** `GET /storage/{filename}/nodes/{node}` — inspect one graph node. */
+export const fetchNode = async (id: string, node: number): Promise<CorpusNode> => {
+  const response = await apiFetch(`${storagePath(id)}/nodes/${node}`)
+  return parseJson<CorpusNode>(response)
+}
+
+/** `GET /storage/{filename}/versions` — version timeline for Activity. */
+export const fetchVersions = async (id: string): Promise<CorpusVersions> => {
+  const response = await apiFetch(`${storagePath(id)}/versions`)
+  return parseJson<CorpusVersions>(response)
+}
+
 /** Human-friendly label for an editable manifest field. */
 export const manifestFieldLabel = (field: EditableManifestField): string => {
   switch (field) {
@@ -322,4 +374,68 @@ export const buildManifestPatch = (
     if (next !== prev) patch[field] = next
   }
   return patch
+}
+
+// ── Job-scoped detail reads ──────────────────────────────────────────────────
+// `/convert/{jobId}/{manifest,index,sections,content,nodes,versions}` serve the
+// same response shapes as `/storage/{filename}/…` but read the conversion
+// result straight off disk — so the web client can explore a freshly-converted
+// corpus without publishing it to Hugging Face first.
+
+/** Base path for a job's detail endpoints. */
+const jobPath = (jobId: string): string =>
+  `${API_URL}/convert/${encodeURIComponent(jobId)}`
+
+/** `GET /convert/{jobId}/manifest` — same shape as `fetchManifest`. */
+export const fetchJobManifest = async (jobId: string): Promise<Manifest> => {
+  const response = await apiFetch(`${jobPath(jobId)}/manifest`)
+  return parseJson<Manifest>(response)
+}
+
+/** `GET /convert/{jobId}/index` — same shape as `fetchIndex`. */
+export const fetchJobIndex = async (jobId: string): Promise<CorpusIndex> => {
+  const response = await apiFetch(`${jobPath(jobId)}/index`)
+  return parseJson<CorpusIndex>(response)
+}
+
+/** `GET /convert/{jobId}/sections` — same shape as `fetchSections`. */
+export const fetchJobSections = async (
+  jobId: string,
+  query: SectionQuery = {},
+): Promise<SectionResponse> => {
+  const params = new URLSearchParams()
+  if (query.parent != null && query.parent !== "")
+    params.set("parent", query.parent)
+  if (query.offset != null) params.set("offset", String(query.offset))
+  if (query.limit != null) params.set("limit", String(query.limit))
+  const suffix = params.toString() ? `?${params.toString()}` : ""
+  const response = await apiFetch(`${jobPath(jobId)}/sections${suffix}`)
+  return parseJson<SectionResponse>(response)
+}
+
+/** `GET /convert/{jobId}/content` — same shape as `fetchContent`. */
+export const fetchJobContent = async (
+  jobId: string,
+  query: ContentQuery = {},
+): Promise<ContentResponse> => {
+  const params = new URLSearchParams()
+  if (query.ref != null && query.ref !== "") params.set("ref", query.ref)
+  if (query.fmt != null && query.fmt !== "") params.set("fmt", query.fmt)
+  if (query.offset != null) params.set("offset", String(query.offset))
+  if (query.limit != null) params.set("limit", String(query.limit))
+  const suffix = params.toString() ? `?${params.toString()}` : ""
+  const response = await apiFetch(`${jobPath(jobId)}/content${suffix}`)
+  return parseJson<ContentResponse>(response)
+}
+
+/** `GET /convert/{jobId}/nodes/{node}` — same shape as `fetchNode`. */
+export const fetchJobNode = async (jobId: string, node: number): Promise<CorpusNode> => {
+  const response = await apiFetch(`${jobPath(jobId)}/nodes/${node}`)
+  return parseJson<CorpusNode>(response)
+}
+
+/** `GET /convert/{jobId}/versions` — version timeline for the Activity tab. */
+export const fetchJobVersions = async (jobId: string): Promise<CorpusVersions> => {
+  const response = await apiFetch(`${jobPath(jobId)}/versions`)
+  return parseJson<CorpusVersions>(response)
 }

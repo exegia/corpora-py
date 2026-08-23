@@ -28,13 +28,23 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers import PARSERS
 from ..parsers.schema import SourceFormat
+from .corpus_detail import (
+    get_content,
+    get_index,
+    get_manifest,
+    get_node,
+    get_sections,
+    get_versions,
+    register_local_archive,
+)
+from .corpus_detail_api import _run as _run_detail
 from .jobs import (
     _CORPUS_SUFFIX,
     ConversionJob,
@@ -407,3 +417,93 @@ async def download_conversion(job_id: str, request: Request) -> FileResponse:
         filename=job.result_path.name,
         media_type="application/zip",
     )
+
+
+# ── Job-scoped corpus detail ──────────────────────────────────────────────────
+# `/convert/{job_id}/manifest|index|sections|content|nodes/{node}|versions`
+# serve the same shapes as `/storage/{filename}/…` but read the conversion
+# result straight off disk (no Hub). 409 unless the job succeeded; 404 for an
+# unknown / foreign job id (same visibility rule as poll + download). Lets
+# corpora-web explore a freshly-converted corpus without publishing it.
+
+
+def _job_corpus_key(job_id: str) -> str:
+    """Stable cache key for a job's result archive (``job-<id>.corpus``)."""
+    return f"job-{job_id}"
+
+
+def _resolve_succeeded(job_id: str, request: Request) -> Path:
+    """Return the result archive path for a succeeded, visible job or raise 404 / 409."""
+    job = _not_found_unless_visible(job_manager.get(job_id), request)
+    if job.status != JobStatus.SUCCEEDED or job.result_path is None:
+        raise HTTPException(
+            status_code=409, detail=f"Job is {job.status.value}, not ready"
+        )
+    return job.result_path
+
+
+@router.get("/{job_id}/manifest")
+async def get_job_manifest(job_id: str, request: Request) -> dict[str, Any]:
+    """Return the converted archive's ``manifest.yml``."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    return await _run_detail(lambda: get_manifest(key))
+
+
+@router.get("/{job_id}/index")
+async def get_job_index(job_id: str, request: Request) -> dict[str, Any]:
+    """Return the converted archive's toc, section structure, and node-type stats."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    return await _run_detail(lambda: get_index(key))
+
+
+@router.get("/{job_id}/sections")
+async def get_job_sections(
+    job_id: str,
+    request: Request,
+    parent: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50),
+) -> dict[str, Any]:
+    """Paginated section children under ``parent`` (top-level if omitted)."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    return await _run_detail(
+        lambda: get_sections(key, parent=parent, offset=offset, limit=limit)
+    )
+
+
+@router.get("/{job_id}/content")
+async def get_job_content(
+    job_id: str,
+    request: Request,
+    ref: str | None = Query(default=None),
+    fmt: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50),
+) -> dict[str, Any]:
+    """Return paginated passages under ``ref`` (or the whole corpus if omitted)."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    return await _run_detail(
+        lambda: get_content(key, ref=ref, fmt=fmt, offset=offset, limit=limit)
+    )
+
+
+@router.get("/{job_id}/nodes/{node}")
+async def get_job_node(
+    job_id: str, node: int, request: Request
+) -> dict[str, Any]:
+    """Inspect one graph node in the converted archive."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    return await _run_detail(lambda: get_node(key, node))
+
+
+@router.get("/{job_id}/versions")
+async def get_job_versions(job_id: str, request: Request) -> dict[str, Any]:
+    """Return the converted archive's version timeline."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    return await _run_detail(lambda: get_versions(key))
