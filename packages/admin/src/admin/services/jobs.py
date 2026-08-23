@@ -21,6 +21,7 @@ percentage: the conversion pipeline has no progress hook.
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -49,6 +50,51 @@ _TERMINAL_STATUSES = (JobStatus.SUCCEEDED, JobStatus.FAILED)
 # `ConversionJob.logs`'s docstring) -- this cap is a defensive backstop, not
 # a real limit anything is expected to hit.
 _MAX_LOG_LINES = 50
+
+# Suffix per pipeline: `/convert` jobs package a `.corpus` archive, `/ingest`
+# jobs write a `graph.json`. `result_filename` (`to_dict` below) and the
+# `Content-Disposition` filename on the download routes both end in this
+# suffix, so a client never persists the original source filename as the
+# library object (see issue #108).
+_CORPUS_SUFFIX = ".corpus"
+_GRAPH_SUFFIX = ".graph.json"
+
+# One or more non-alphanumeric characters collapsed to a single dash. Used
+# by `_slugify` to turn a free-form `name` ("Summa Theologiae 1200 ENG") into
+# a flat, safe filename stem ("summa-theologiae-1200-eng").
+_SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify(name: str) -> str:
+    """Reduce a free-form `name` to a flat, filename-safe slug.
+
+    Lowercases, collapses every non-alphanumeric run to a single `-`, and
+    strips leading/trailing dashes. Returns ``""`` for an empty/whitespace/
+    punctuation-only input -- callers fall back to the job id in that case.
+    """
+    return _SLUG_NON_ALNUM.sub("-", (name or "").strip().lower()).strip("-")
+
+
+def result_filename_for(
+    name: str,
+    source_format: SourceFormat | str,
+    *,
+    job_id: str = "",
+) -> str:
+    """The human-readable filename a client should store the result under.
+
+    Always ends in ``.corpus`` for `/convert` jobs (a `SourceFormat`) and
+    ``.graph.json`` for `/ingest` jobs (a bare detected-suffix string). The
+    stem is `_slugify(name)`; falls back to the job id when `name` is empty
+    or has no alphanumeric content. This is what `to_dict()` exposes as
+    `result_filename` and what the download routes set as
+    `Content-Disposition` -- so a client that stores only this filename
+    never persists the original source file as the library object.
+    """
+    slug = _slugify(name) or _slugify(job_id) or job_id
+    if isinstance(source_format, SourceFormat):
+        return f"{slug}{_CORPUS_SUFFIX}"
+    return f"{slug}{_GRAPH_SUFFIX}"
 
 
 class JobQueueFullError(Exception):
@@ -88,6 +134,21 @@ class ConversionJob:
     owner: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        # The on-disk `result_path.name` (e.g. `job-abc123.corpus`) is a
+        # server-internal unique id, not a useful library filename. The
+        # `result_filename` we expose is derived from the user-supplied
+        # `name` and always ends in `.corpus` for /convert jobs -- so a
+        # client that stores only this field never persists the original
+        # source file as the library object (see issue #108). When
+        # `result_path` is set we still prefer its name, since a collision-
+        # aware `_run_conversion` may have appended a uniqueness suffix to
+        # the on-disk file that the client must echo back on download.
+        if self.result_path is not None:
+            result_filename = self.result_path.name
+        else:
+            result_filename = result_filename_for(
+                self.name, self.source_format, job_id=self.id
+            )
         return {
             "id": self.id,
             "source_format": self.source_format.value
@@ -101,6 +162,7 @@ class ConversionJob:
             "error": self.error,
             "logs": list(self.logs),
             "last_log": self.logs[-1] if self.logs else None,
+            "result_filename": result_filename,
             "download_ready": self.status == JobStatus.SUCCEEDED
             and self.result_path is not None,
         }

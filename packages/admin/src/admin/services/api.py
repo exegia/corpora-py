@@ -33,7 +33,15 @@ from fastapi.responses import FileResponse
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers.schema import SourceFormat
-from .jobs import ConversionJob, JobQueueFullError, JobStatus, job_manager
+from .jobs import (
+    _CORPUS_SUFFIX,
+    ConversionJob,
+    JobQueueFullError,
+    JobStatus,
+    _slugify,
+    job_manager,
+    result_filename_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +137,28 @@ async def _save_upload(upload: UploadFile, dest_dir: Path) -> Path:
     return dest
 
 
+def _resolve_corpus_path(name: str, job_id: str) -> tuple[Path, str]:
+    """Pick the on-disk `.corpus` path and its exposed filename for one job.
+
+    The stem is `_slugify(name)` (e.g. `"Summa Theologiae 1200 ENG"` ->
+    `"summa-theologiae-1200-eng"`), falling back to the job id when `name`
+    has no alphanumeric content. If a file with that name already exists in
+    `_RESULTS_ROOT` (two jobs with the same `name` finishing close together,
+    or a re-run of an idempotent job), a short uuid suffix is appended to
+    keep the on-disk files unique -- the exposed `result_filename` tracks
+    that suffix so a client echoing it back on download matches the actual
+    archive. The filename always ends in `.corpus` (see issue #108).
+    """
+    _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = result_filename_for(name, SourceFormat.PLAIN, job_id=job_id)
+    path = _RESULTS_ROOT / filename
+    if path.exists():
+        stem = _slugify(name) or _slugify(job_id) or job_id
+        filename = f"{stem}-{uuid.uuid4().hex[:8]}{_CORPUS_SUFFIX}"
+        path = _RESULTS_ROOT / filename
+    return path, filename
+
+
 def _run_conversion(
     *,
     source_path: Path,
@@ -175,8 +205,7 @@ def _run_conversion(
             job_id,
             "Text-Fabric dataset ready. Compiling cache and packaging .corpus archive...",
         )
-        _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
-        corpus_path = _RESULTS_ROOT / f"{work_dir.name}.corpus"
+        corpus_path, _filename = _resolve_corpus_path(name, job_id)
         result = convert_to_corpus(
             tf_dir, corpus_path, name=name, description=description
         )
@@ -272,10 +301,23 @@ async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
 
 @router.get("/{job_id}/download")
 async def download_conversion(job_id: str, request: Request) -> FileResponse:
-    """Download the finished `.corpus` archive for a succeeded job."""
+    """Download the finished `.corpus` archive for a succeeded job.
+
+    `Content-Disposition` carries the job's `result_filename` (slugified
+    from the user-supplied `name`, always ending in `.corpus`) rather than
+    the on-disk `result_path.name` -- so the client's Save-As default is the
+    human-readable library name, not the server-internal `job-<uuid>` id.
+    `media_type` is `application/zip`: a `.corpus` archive is a zip, and an
+    unknown type makes some browsers treat the download as raw bytes instead
+    of a saveable file. 409 (not 404) until `download_ready`, matching the
+    `GET /convert/{id}` contract.
+    """
     job = _not_found_unless_visible(job_manager.get(job_id), request)
     if job.status != JobStatus.SUCCEEDED or job.result_path is None:
         raise HTTPException(
             status_code=409, detail=f"Job is {job.status.value}, not ready"
         )
-    return FileResponse(job.result_path, filename=job.result_path.name)
+    filename = result_filename_for(job.name, job.source_format, job_id=job.id)
+    return FileResponse(
+        job.result_path, filename=filename, media_type="application/zip"
+    )

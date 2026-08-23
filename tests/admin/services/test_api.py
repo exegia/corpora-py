@@ -167,6 +167,43 @@ class TestDownload:
         assert response.status_code == 200
         assert response.content == b"corpus-bytes"
 
+    def test_download_content_disposition_uses_slug_filename(self, client, manager, tmp_path):
+        """The Save-As filename is the slug from `name`, not the on-disk
+        `result_path.name` -- so the client's library never persists the
+        server-internal `job-<uuid>` id (issue #108)."""
+        job_id = _post(client).json()["job_id"]
+        # Simulate a server-internal on-disk name that does NOT match the slug
+        # the client should see, and a user-supplied name with mixed case and
+        # spaces -- the slugifier has to reduce "Summa Theologiae 1200 ENG"
+        # to "summa-theologiae-1200-eng.corpus" in Content-Disposition.
+        result = tmp_path / "results" / "job-abc-123.corpus"
+        result.parent.mkdir(parents=True, exist_ok=True)
+        result.write_bytes(b"x")
+        job = manager.get(job_id)
+        job.name = "Summa Theologiae 1200 ENG"
+        job.status = JobStatus.SUCCEEDED
+        job.result_path = result
+        response = client.get(f"/convert/{job_id}/download")
+        assert response.status_code == 200
+        # `Content-Disposition` carries the slug from the user-supplied name,
+        # not `job-abc-123.corpus` (the on-disk filename).
+        cd = response.headers.get("content-disposition", "")
+        assert "summa-theologiae-1200-eng.corpus" in cd
+        assert "job-abc-123" not in cd
+
+    def test_download_media_type_is_zip(self, client, manager, tmp_path):
+        """A `.corpus` archive is a zip; the media type reflects that so
+        browsers treat the download as a saveable file, not raw bytes."""
+        job_id = _post(client).json()["job_id"]
+        result = tmp_path / "results" / "done.corpus"
+        result.parent.mkdir(parents=True, exist_ok=True)
+        result.write_bytes(b"PK\x03\x04")
+        job = manager.get(job_id)
+        job.status = JobStatus.SUCCEEDED
+        job.result_path = result
+        response = client.get(f"/convert/{job_id}/download")
+        assert response.headers["content-type"] == "application/zip"
+
     def test_unknown_job_download_404(self, client):
         assert client.get("/convert/nope/download").status_code == 404
 
@@ -214,6 +251,9 @@ class TestRunConversion:
             "convert_to_corpus",
             lambda tf_dir, corpus_path, **kw: Path(corpus_path),
         )
+        # The on-disk filename is now slugified from `name` (issue #108),
+        # not derived from the work_dir's tempfile name -- so a `name="n"`
+        # produces `n.corpus`, not `job-y.corpus`.
         result = api_module._run_conversion(
             source_path=source,
             work_dir=work_dir,
@@ -222,5 +262,91 @@ class TestRunConversion:
             description="",
             job_id="j",
         )
-        assert result == tmp_path / "results" / "job-y.corpus"
+        assert result == tmp_path / "results" / "n.corpus"
         assert not work_dir.exists()
+
+    def test_slugifies_corpus_filename_from_name(self, tmp_path, monkeypatch, manager):
+        """A free-form `name` is reduced to a flat, safe `.corpus` filename."""
+        monkeypatch.setattr(api_module, "_RESULTS_ROOT", tmp_path / "results")
+        work_dir = tmp_path / "work" / "job-slug"
+        (work_dir / "source").mkdir(parents=True)
+        (work_dir / "source" / "doc.txt").write_text("content")
+        monkeypatch.setitem(
+            api_module.CONVERTERS,
+            api_module.SourceFormat.PLAIN,
+            lambda src, out: Path(out),
+        )
+        monkeypatch.setattr(
+            api_module,
+            "convert_to_corpus",
+            lambda tf_dir, corpus_path, **kw: Path(corpus_path),
+        )
+        result = api_module._run_conversion(
+            source_path=work_dir / "source" / "doc.txt",
+            work_dir=work_dir,
+            source_format=api_module.SourceFormat.PLAIN,
+            name="Summa Theologiae 1200 ENG",
+            description="",
+            job_id="j",
+        )
+        assert result.name == "summa-theologiae-1200-eng.corpus"
+
+    def test_empty_name_falls_back_to_job_id(self, tmp_path, monkeypatch, manager):
+        monkeypatch.setattr(api_module, "_RESULTS_ROOT", tmp_path / "results")
+        work_dir = tmp_path / "work" / "job-empty"
+        (work_dir / "source").mkdir(parents=True)
+        (work_dir / "source" / "doc.txt").write_text("content")
+        monkeypatch.setitem(
+            api_module.CONVERTERS,
+            api_module.SourceFormat.PLAIN,
+            lambda src, out: Path(out),
+        )
+        monkeypatch.setattr(
+            api_module,
+            "convert_to_corpus",
+            lambda tf_dir, corpus_path, **kw: Path(corpus_path),
+        )
+        result = api_module._run_conversion(
+            source_path=work_dir / "source" / "doc.txt",
+            work_dir=work_dir,
+            source_format=api_module.SourceFormat.PLAIN,
+            name="",
+            description="",
+            job_id="fixed-id",
+        )
+        assert result.name == "fixed-id.corpus"
+
+    def test_collision_appends_short_suffix(self, tmp_path, monkeypatch, manager):
+        """Two jobs with the same `name` keep unique on-disk files."""
+        monkeypatch.setattr(api_module, "_RESULTS_ROOT", tmp_path / "results")
+        (tmp_path / "results").mkdir(parents=True)
+        # Pre-existing file at the slug-derived path simulates a sibling job
+        # that already finished -- the new call must not overwrite it.
+        (tmp_path / "results" / "my-doc.corpus").write_bytes(b"prior")
+
+        work_dir = tmp_path / "work" / "job-collide"
+        (work_dir / "source").mkdir(parents=True)
+        (work_dir / "source" / "doc.txt").write_text("content")
+        monkeypatch.setitem(
+            api_module.CONVERTERS,
+            api_module.SourceFormat.PLAIN,
+            lambda src, out: Path(out),
+        )
+        monkeypatch.setattr(
+            api_module,
+            "convert_to_corpus",
+            lambda tf_dir, corpus_path, **kw: Path(corpus_path),
+        )
+        result = api_module._run_conversion(
+            source_path=work_dir / "source" / "doc.txt",
+            work_dir=work_dir,
+            source_format=api_module.SourceFormat.PLAIN,
+            name="My Doc",
+            description="",
+            job_id="j",
+        )
+        assert result.name.startswith("my-doc-")
+        assert result.name.endswith(".corpus")
+        assert result.name != "my-doc.corpus"
+        # The prior file is untouched.
+        assert (tmp_path / "results" / "my-doc.corpus").read_bytes() == b"prior"
