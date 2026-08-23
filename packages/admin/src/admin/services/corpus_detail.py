@@ -610,7 +610,7 @@ def get_sections(
     offset = max(0, int(offset))
 
     api = _load_api(filename)
-    empty = {
+    empty: dict[str, Any] = {
         "parent": parent,
         "levels": [],
         "items": [],
