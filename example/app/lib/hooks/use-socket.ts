@@ -19,6 +19,15 @@ export type JobStatusMessage = {
   logs: string[]
   /** Last coarse stage message the server logged for this job, or null if none yet. */
   last_log: string | null
+  /**
+   * The human-readable filename the client should store the result under
+   * (always `*.corpus` for /convert jobs, `*.graph.json` for /ingest jobs).
+   * Derived from the user-supplied `name`, not the upload filename -- so a
+   * client that stores only this field never persists the original source
+   * file as the library object (see issue #108). Stable across the job's
+   * lifetime; the download route's `Content-Disposition` echoes it back.
+   */
+  result_filename: string
   download_ready: boolean
 }
 

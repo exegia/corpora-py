@@ -187,7 +187,8 @@ export const publishConversion = async (
 const handleJobSucceeded = async (
   id: string,
   jobId: string,
-  jobName: string
+  jobName: string,
+  resultFilename: string
 ): Promise<void> => {
   // Validate before downloading: the verdict annotates the conversion (the
   // "Dataset validated" stage in the console) but never gates it -- an
@@ -211,9 +212,15 @@ const handleJobSucceeded = async (
 
   try {
     const blob = await fetchCorpusBlob(jobId)
-    // `jobName` is the server-side job name (the `name` form field sent at
-    // POST /convert time), which may differ from the local file name.
-    const filename = `${jobName}.corpus`
+    // The server is the source of truth for the result filename: it
+    // derives a slug from the user-supplied `name` and always ends in
+    // `.corpus` (see issue #108). Using the server-supplied value means a
+    // reload-then-re-download (which goes through `saveUpload`'s
+    // `entry.corpusName` path) keeps the same filename, and the library
+    // never persists the original source filename as the corpus name.
+    // `jobName` is kept only as a defensive fallback for older servers
+    // that don't send `result_filename` yet.
+    const filename = resultFilename ?? `${jobName}.corpus`
 
     // The conversion succeeded, and the bytes are in hand -- from here, only
     // the local save-to-disk step can still fail, and that must never
@@ -272,7 +279,12 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
         stopTracking(id)
         break
       case "succeeded":
-        void handleJobSucceeded(id, jobId, message.name)
+        void handleJobSucceeded(
+          id,
+          jobId,
+          message.name,
+          message.result_filename
+        )
         break
     }
   }

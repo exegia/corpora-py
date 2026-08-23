@@ -108,6 +108,23 @@ suffix (e.g. `"docx"`) — formats the parser enum doesn't enumerate. The shared
 expensive; concurrent `convert()` is not documented as safe), so parallel ingest jobs serialize on
 the parse step.
 
+## Result filename + Content-Disposition (`jobs.py`, `api.py`, issue #108)
+
+Every job exposes a `result_filename` in `to_dict()` (and therefore on the WebSocket/REST status
+push): the human-readable filename a client should store the result under, always ending in
+`.corpus` for `/convert` jobs and `.graph.json` for `/ingest` jobs. The stem is `_slugify(name)`
+(lowercased, non-alphanumeric runs collapsed to a single `-`); an empty/punctuation-only `name`
+falls back to the job id. Clients must use this rather than inventing `${uploadStem}.corpus` — the
+library contract is that only `.corpus` archives appear in the list, and the stored name follows
+the user-supplied `name`, not the upload filename. `GET /convert/{id}/download`'s
+`Content-Disposition` echoes `result_filename` back (with `media_type=application/zip`, since a
+`.corpus` archive is a zip — an unknown type makes some browsers treat the download as raw bytes).
+
+The on-disk file in `_RESULTS_ROOT` is named the same way via `_resolve_corpus_path`, with a
+short uuid suffix appended on collision (two jobs with the same `name` finishing close together)
+so concurrent conversions never overwrite each other. `result_filename` tracks that suffix when
+`result_path` is set, so a client echoing it back on download matches the actual archive.
+
 ## Known gaps (service-side)
 
 **TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no

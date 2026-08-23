@@ -11,6 +11,8 @@ from admin.services.jobs import (
     JobManager,
     JobQueueFullError,
     JobStatus,
+    _slugify,
+    result_filename_for,
 )
 
 
@@ -71,10 +73,92 @@ class TestIsVisibleTo:
         assert _job(owner="alice").is_visible_to({}) is False
 
 
+class TestSlugify:
+    def test_lowercases_and_dashes_whitespace(self):
+        assert _slugify("My Doc") == "my-doc"
+
+    def test_collapses_non_alnum_runs(self):
+        assert _slugify("Summa Theologiae 1200 ENG") == "summa-theologiae-1200-eng"
+
+    def test_strips_leading_and_trailing_dashes(self):
+        assert _slugify("  ---Hello---  ") == "hello"
+
+    def test_empty_for_punctuation_only(self):
+        assert _slugify("!!!") == ""
+        assert _slugify("") == ""
+        assert _slugify("   ") == ""
+
+    def test_none_treated_as_empty(self):
+        assert _slugify(None) == ""  # type: ignore[arg-type]
+
+    def test_preserves_alphanumeric_including_digits(self):
+        assert _slugify("Book 1, v2") == "book-1-v2"
+
+
+class TestResultFilename:
+    def test_convert_job_ends_in_corpus(self):
+        assert (
+            result_filename_for("My Doc", SourceFormat.PLAIN)
+            == "my-doc.corpus"
+        )
+
+    def test_ingest_job_ends_in_graph_json(self):
+        # `/ingest` jobs record the detected suffix as a bare string, not a
+        # SourceFormat -- the result is a graph.json, not a .corpus archive.
+        assert (
+            result_filename_for("My Doc", "docx") == "my-doc.graph.json"
+        )
+
+    def test_empty_name_falls_back_to_job_id(self):
+        assert (
+            result_filename_for("", SourceFormat.PLAIN, job_id="abc-123")
+            == "abc-123.corpus"
+        )
+
+    def test_punctuation_only_name_falls_back_to_job_id(self):
+        assert (
+            result_filename_for("!!!", SourceFormat.PLAIN, job_id="abc-123")
+            == "abc-123.corpus"
+        )
+
+    def test_empty_name_and_empty_job_id_falls_back_to_empty_stem(self):
+        # The defensive final fallback: no name, no job_id -> just the suffix.
+        # Real callers always pass a job_id, so this only documents the
+        # degenerate case rather than exercising it in production.
+        assert result_filename_for("", SourceFormat.PLAIN) == ".corpus"
+
+
 class TestToDict:
     def test_owner_never_exposed(self):
         payload = _job(owner="alice").to_dict()
         assert "owner" not in payload
+
+    def test_result_filename_always_present(self):
+        # The exposed filename is derived from `name` (slugified) and the
+        # source_format type -- always ending in `.corpus` for /convert jobs
+        # (issue #108). It's available before the job finishes, so a client
+        # can show the library name in its UI from the moment it submits.
+        assert _job(name="My Doc").to_dict()["result_filename"] == "my-doc.corpus"
+
+    def test_result_filename_graph_json_for_ingest_job(self):
+        # `/ingest` jobs record a bare detected-suffix string, not a
+        # SourceFormat -- their result is a graph.json, not a .corpus.
+        job = ConversionJob(
+            id="j1", source_format="docx", name="My Doc"
+        )
+        assert job.to_dict()["result_filename"] == "my-doc.graph.json"
+
+    def test_result_filename_tracks_result_path_name_when_set(self):
+        # When `result_path` is set (the job finished), `result_filename`
+        # echoes `result_path.name` -- a collision-aware `_run_conversion`
+        # may have appended a uniqueness suffix to the on-disk file that the
+        # client must echo back on download (issue #108).
+        job = _job(
+            name="My Doc",
+            status=JobStatus.SUCCEEDED,
+            result_path=Path("/r/my-doc-abcd1234.corpus"),
+        )
+        assert job.to_dict()["result_filename"] == "my-doc-abcd1234.corpus"
 
     def test_download_ready_requires_success_and_path(self):
         job = _job(status=JobStatus.SUCCEEDED, result_path=Path("/r/x.corpus"))

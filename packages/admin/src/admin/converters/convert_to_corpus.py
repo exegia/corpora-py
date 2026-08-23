@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import uuid
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,61 @@ from cfabric import Fabric
 from .convert_to_cfm import convert_to_cfm
 
 logger = logging.getLogger(__name__)
+
+
+# The required top-level layout of every `.corpus` archive -- the contract
+# both the Corpora and Exegia apps parse (see this package's CLAUDE.md). A
+# converter that returns a zip missing any of these is broken and must never
+# reach a client's library, so `convert_to_corpus` validates the archive it
+# just wrote against this set and raises `CorpusArchiveError` on a miss (see
+# issue #108's "Reject / 422 any converter that cannot produce the archive
+# layout"). `assets/` and `.git/` are deliberately optional: assets is empty
+# when the source has no cover/thumbnail, and `.git/` is skipped on runtimes
+# without a `git` binary (see `_git_snapshot`).
+_REQUIRED_ARCHIVE_MEMBERS = frozenset({"manifest.yml", "toc.yml", "corpora/"})
+
+
+class CorpusArchiveError(Exception):
+    """Raised when a produced `.corpus` archive is missing required members.
+
+    Surfaces a converter-side failure (the pipeline ran but the zip is not a
+    valid corpus) as a distinct error type so the service layer can map it to
+    a 422 -- a client retrying with a different source format / file is a
+    plausible recovery, unlike a generic 500.
+    """
+
+
+def _validate_archive(archive_path: Path) -> None:
+    """Confirm `archive_path` carries the required `.corpus` layout.
+
+    Reads the zip's namelist and checks every member of
+    `_REQUIRED_ARCHIVE_MEMBERS` is present (a directory member may be stored
+    either as `corpora/` or as `corpora/<file>` -- the latter is the common
+    case, since `shutil.make_archive` does not emit a separate entry for the
+    root directory). Raises `CorpusArchiveError` listing every missing
+    member, so a caller sees the full breach in one shot instead of
+    re-running past one fix at a time.
+    """
+    with zipfile.ZipFile(archive_path) as zf:
+        names = zf.namelist()
+    missing: list[str] = []
+    for required in _REQUIRED_ARCHIVE_MEMBERS:
+        is_dir = required.endswith("/")
+        if is_dir:
+            # Accept either `corpora/` itself or any `corpora/<file>` member
+            # (shutil.make_archive typically emits only the file members).
+            if required not in names and not any(
+                name.startswith(required) for name in names
+            ):
+                missing.append(required)
+        elif required not in names:
+            missing.append(required)
+    if missing:
+        raise CorpusArchiveError(
+            f"Corpus archive {archive_path.name} is missing required members: "
+            f"{', '.join(sorted(missing))}. The converter pipeline produced an "
+            f"archive that does not match the .corpus layout contract."
+        )
 
 
 def _file_entry(path: Path, *, kind: str, visible: bool = True) -> dict[str, Any]:
@@ -240,5 +296,13 @@ def convert_to_corpus(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         archive = shutil.make_archive(str(output_path.with_suffix("")), "zip", root_dir=root)
         Path(archive).rename(output_path)
+
+    # Validate the archive we just wrote carries the required `.corpus`
+    # layout (`manifest.yml`, `toc.yml`, `corpora/`). A converter that
+    # returns a zip missing any of these is broken and must never reach a
+    # client's library -- fail fast, with a distinct error type the service
+    # layer maps to 422 (see issue #108). Done outside the TemporaryDirectory
+    # block so the archive is already at its final path.
+    _validate_archive(output_path)
 
     return output_path
