@@ -427,6 +427,125 @@ def get_annotations(filename: str) -> dict[str, Any]:
     return _read_annotations(cached.extract_dir)
 
 
+_IDENTITY_FEATURES = ("lemma", "lex", "word", "form", "text")
+
+
+def _feature_names(api: Any) -> set[str]:
+    try:
+        return set(api.Fall())
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _identity_feature(api: Any, node: int) -> tuple[str | None, str | None]:
+    """Best identifying feature for occurrence counts (lemma → text)."""
+    names = _feature_names(api)
+    for feat in _IDENTITY_FEATURES:
+        if feat not in names:
+            continue
+        try:
+            value = api.Fs(feat).v(node)
+        except Exception:  # noqa: BLE001
+            continue
+        if value is not None and str(value).strip():
+            return feat, str(value)
+    try:
+        text = api.T.text(node)
+    except Exception:  # noqa: BLE001
+        text = ""
+    if text and str(text).strip():
+        # Sentinel: not a real feature name, so counting uses T.text().
+        return "", str(text)
+    return None, None
+
+
+def _occurrence_counts(
+    api: Any,
+    node: int,
+    feat: str | None,
+    value: str | None,
+) -> tuple[int, int]:
+    """How many nodes of the same otype share `feat=value`, corpus-wide and in-section."""
+    if feat is None or value is None:
+        return 0, 0
+    otype = api.F.otype.v(node)
+    if otype is None:
+        return 0, 0
+    section = _section_ref(node, api)
+    corpus = 0
+    in_section = 0
+    names = _feature_names(api)
+    for other in api.F.otype.s(otype):
+        try:
+            if feat in names:
+                other_value = api.Fs(feat).v(other)
+            else:
+                other_value = api.T.text(other)
+        except Exception:  # noqa: BLE001
+            continue
+        if other_value is None or str(other_value) != value:
+            continue
+        corpus += 1
+        if _section_ref(other, api) == section:
+            in_section += 1
+    return corpus, in_section
+
+
+def _containment_chain(api: Any, node: int) -> list[dict[str, Any]]:
+    """Embedding parents (`L.u`), nearest first."""
+    try:
+        parents = list(api.L.u(node) or ())
+    except Exception:  # noqa: BLE001
+        parents = []
+    chain: list[dict[str, Any]] = []
+    for parent in parents:
+        chain.append(
+            {
+                "node": int(parent),
+                "otype": str(api.F.otype.v(parent) or ""),
+                "ref": _section_ref(parent, api),
+            }
+        )
+    return chain
+
+
+def _slot_tokens(api: Any, node: int) -> list[dict[str, Any]]:
+    """Slot-level tokens under `node` for the reader inspect mapping."""
+    slot_type = api.F.otype.slotType
+    otype = api.F.otype.v(node)
+    if otype == slot_type:
+        slots = [node]
+    else:
+        try:
+            slots = list(api.L.d(node, otype=slot_type) or ())
+        except Exception:  # noqa: BLE001
+            slots = []
+    names = _feature_names(api)
+    tokens: list[dict[str, Any]] = []
+    for slot in slots:
+        text = ""
+        if "text" in names:
+            try:
+                raw = api.Fs("text").v(slot)
+                text = str(raw) if raw is not None else ""
+            except Exception:  # noqa: BLE001
+                text = ""
+        if not text:
+            try:
+                text = api.T.text(slot) or ""
+            except Exception:  # noqa: BLE001
+                text = ""
+        after = ""
+        if "after" in names:
+            try:
+                raw_after = api.Fs("after").v(slot)
+                after = "" if raw_after is None else str(raw_after)
+            except Exception:  # noqa: BLE001
+                after = ""
+        tokens.append({"text": text, "after": after, "node": int(slot)})
+    return tokens
+
+
 def _require_api(filename: str) -> Any:
     """Load the cfabric api or raise (the node surfaces can't degrade to empty)."""
     api = _load_api(filename)
@@ -481,6 +600,8 @@ def get_node(filename: str, node: int) -> dict[str, Any]:
 
     cached = _ensure_extracted(filename)
     annotation = _read_annotations(cached.extract_dir).get("nodes", {}).get(str(node))
+    lemma_feat, lemma_value = _identity_feature(api, node)
+    corpus_n, section_n = _occurrence_counts(api, node, lemma_feat, lemma_value)
 
     return {
         "node": int(node),
@@ -494,6 +615,9 @@ def get_node(filename: str, node: int) -> dict[str, Any]:
         "features": features,
         "annotation": annotation,
         "node_types": [str(t) for t in (api.F.otype.all or ())],
+        "context": _containment_chain(api, node),
+        "occurrences": corpus_n,
+        "occurrences_in_section": section_n,
     }
 
 
@@ -749,7 +873,12 @@ def get_content(
         # `node` lets clients cherry-pick a passage's graph node (inspect /
         # annotate it) without a second ref->node resolution round-trip.
         passages.append(
-            {"node": int(node), "ref": _section_ref(node, api), "text": text}
+            {
+                "node": int(node),
+                "ref": _section_ref(node, api),
+                "text": text,
+                "tokens": _slot_tokens(api, node),
+            }
         )
 
     next_offset = offset + limit if offset + limit < total else None
