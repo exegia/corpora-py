@@ -24,6 +24,13 @@ guard runs; marking it **ready for review** starts the tests and the AI review,
 which then re-run on every push. `guard` and `check` are required, so a red
 one cannot land.
 
+**Stacked PRs** (a feature branch based on another feature branch, not `dev`
+directly) are supported: the guard validates a `<type>/<slug>` base the same
+way it validates the head, so `feat/b → feat/a → dev` passes as long as both
+branches and the title follow the convention. Merge bottom-up; each merge
+rebases the remaining stack onto `dev`. The `review` job runs on any non-draft
+PR whose base passed the guard (including stacked PRs).
+
 When it merges the branch deletes itself (repository setting) and `dev` moves
 forward. Nothing is versioned yet.
 

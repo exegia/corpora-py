@@ -13,11 +13,10 @@ name: PR
 on:
   pull_request:
     types: [ opened, reopened, ready_for_review, synchronize ]
-    branches:
-      - main
-      - next
-      - dev
-      - "release/v*"
+    # No `branches` filter: the guard job validates the base. A filter here
+    # would silently skip stacked PRs (whose immediate base is a feature
+    # branch, not dev/main/next/release) — they'd get no guard, no check,
+    # no review, and sit invisibly red.
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -79,8 +78,12 @@ jobs:
 
   review:
     name: review
-    # See the guard job for why this is not `github.base_ref`.
-    if: ${{ !github.event.pull_request.draft && (github.event.pull_request.base.ref == 'dev' || startsWith(github.event.pull_request.base.ref, 'release/')) }}
+    # `needs: guard` is the single gate for base validity — the guard's
+    # <type>/<slug> case covers stacked PRs (base is another feature branch),
+    # so there's no base-ref allowlist to maintain here. Runs on any non-draft
+    # PR whose base passed the guard.
+    needs: guard
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
