@@ -260,6 +260,16 @@ class TestSupabaseResultStore:
         results.delete(key)
         assert key not in session.objects
 
+    def test_save_overwrites_existing_head_via_put(self, results, session, tmp_path):
+        src = tmp_path / "out.corpus"
+        src.write_bytes(b"first")
+        key = results.save("j1", src)
+        src.write_bytes(b"second")
+        assert results.save("j1", src) == key
+        assert session.objects[key] == b"second"
+        put_urls = [url for method, url, _ in session.calls if method == "PUT"]
+        assert any(url.endswith(f"{BUCKET}/{key}") or key in url for url in put_urls)
+
     def test_graph_json_suffix(self, results, tmp_path):
         src = tmp_path / "out.graph.json"
         src.write_bytes(b'{"ok":true}')
