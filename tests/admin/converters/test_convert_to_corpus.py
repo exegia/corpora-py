@@ -12,6 +12,7 @@ import importlib
 import zipfile
 
 import pytest
+import yaml
 
 # `admin.converters.__init__` re-exports the *function* `convert_to_corpus`,
 # which shadows the submodule of the same name (see `test_git_snapshot.py`
@@ -99,3 +100,42 @@ class TestCorpusArchiveErrorIsExported:
 
     def test_subclass_of_exception(self):
         assert issubclass(mod.CorpusArchiveError, Exception)
+
+
+class TestHistoryYml:
+    """convert_to_corpus writes history.yml and no longer packages .git/."""
+
+    def test_archive_contains_v1_history_without_git(self, tmp_path):
+        from admin.converters._text_to_tf import convert_text_to_tf
+
+        src = tmp_path / "mini.txt"
+        src.write_text("Hello world.\n\nSecond paragraph has more words.")
+        tf_dir = convert_text_to_tf(str(src), tmp_path / "tf")
+        archive = mod.convert_to_corpus(tf_dir, tmp_path / "mini.corpus", name="Mini")
+
+        with zipfile.ZipFile(archive) as zf:
+            names = zf.namelist()
+            assert "history.yml" in names
+            assert "manifest.yml" in names
+            assert not any(n == ".git/" or n.startswith(".git/") for n in names)
+            history = yaml.safe_load(zf.read("history.yml"))
+            manifest = yaml.safe_load(zf.read("manifest.yml"))
+
+        versions = history["versions"]
+        assert len(versions) == 1
+        row = versions[0]
+        assert row["id"] == "v1.0"
+        assert row["label"] == "v1.0"
+        assert row["title"] == "Converted"
+        assert row["current"] is True
+        assert row["at"] == manifest["written_date"]
+        assert row["snapshot_key"] is None
+        assert row["author"] is None
+        assert row["approved_by"] is None
+        assert row["notes"] == []
+        assert {f["path"] for f in row["files"]} == {
+            "manifest.yml",
+            "toc.yml",
+            "corpora/",
+        }
+        assert all(f["kind"] == "added" for f in row["files"])

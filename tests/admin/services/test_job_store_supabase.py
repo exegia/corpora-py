@@ -99,6 +99,18 @@ class FakeSession:
             )
         raise AssertionError(f"unexpected {method} {url}")
 
+    def _put_object(self, url, **kwargs):
+        if self.fail_status is not None:
+            return SimpleNamespace(
+                status_code=self.fail_status, content=b"", text="nope"
+            )
+        marker = f"/storage/v1/object/{BUCKET}/"
+        path = url.split(marker, 1)[-1]
+        data = kwargs.get("data")
+        raw = data.read() if hasattr(data, "read") else data
+        self.objects[path] = raw if isinstance(raw, bytes) else raw or b""
+        return SimpleNamespace(status_code=200, content=b"", text="")
+
     def post(self, url, **kwargs):
         self.calls.append(("POST", url, kwargs))
         if self.fail_status is not None:
@@ -108,13 +120,11 @@ class FakeSession:
         if url.endswith("/storage/v1/bucket"):
             self.bucket_exists = True
             return SimpleNamespace(status_code=200, content=b"", text="")
-        # /storage/v1/object/{bucket}/{path}
-        marker = f"/storage/v1/object/{BUCKET}/"
-        path = url.split(marker, 1)[-1]
-        data = kwargs.get("data")
-        raw = data.read() if hasattr(data, "read") else data
-        self.objects[path] = raw if isinstance(raw, bytes) else raw or b""
-        return SimpleNamespace(status_code=200, content=b"", text="")
+        return self._put_object(url, **kwargs)
+
+    def put(self, url, **kwargs):
+        self.calls.append(("PUT", url, kwargs))
+        return self._put_object(url, **kwargs)
 
     def get(self, url, **kwargs):
         self.calls.append(("GET", url, kwargs))
@@ -273,3 +283,20 @@ class TestSupabaseResultStore:
     def test_rejects_path_escape_key(self, results):
         with pytest.raises(JobStoreError, match="Invalid result key"):
             results.materialize("../secret", "j1")
+
+    def test_save_snapshot_put_url(self, results, session, tmp_path):
+        src = tmp_path / "out.corpus"
+        src.write_bytes(b"archive-bytes")
+        results.save("j1", src)
+        key = results.save_snapshot("j1", src, "v1.0")
+        assert key == "conversion-jobs/j1/v1.0.corpus"
+        put_urls = [url for method, url, _ in session.calls if method == "PUT"]
+        assert any("v1.0.corpus" in url for url in put_urls)
+        assert session.objects[key] == b"archive-bytes"
+
+    def test_save_snapshot_failure_returns_none(self, results, session, tmp_path):
+        src = tmp_path / "out.corpus"
+        src.write_bytes(b"archive-bytes")
+        results.save("j1", src)
+        session.fail_status = 500
+        assert results.save_snapshot("j1", src, "v1.0") is None

@@ -13,6 +13,7 @@ from admin.services.jobs import (
     JobQueueFullError,
     JobStatus,
     JobStore,
+    JobStoreError,
     LocalResultStore,
     MemoryJobStore,
     ResultStore,
@@ -20,6 +21,7 @@ from admin.services.jobs import (
     make_job_store,
     make_result_store,
     result_filename_for,
+    snapshot_key_for,
 )
 from common.utils.config import settings
 
@@ -514,6 +516,11 @@ class DictResultStore(ResultStore):
         self.blobs[key] = Path(path).read_bytes()
         return key
 
+    def save_snapshot(self, job_id, path, label):
+        key = f"conversion-jobs/{job_id}/{label}.corpus"
+        self.blobs[key] = Path(path).read_bytes()
+        return key
+
     def materialize(self, key, job_id):
         dest = self.cache_dir / Path(key).name
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -606,6 +613,117 @@ class TestCopyingStore:
         manager.list_jobs(owner=None)
         assert manager.get("j1") is None
         assert blobs == {}
+
+
+class TestSaveSnapshot:
+    def test_local_copies_bytes(self, tmp_path):
+        store = LocalResultStore(cache_dir=tmp_path / "cache")
+        src = tmp_path / "out.corpus"
+        src.write_bytes(b"archive-bytes")
+        key = store.save_snapshot("j1", src, "v1.0")
+        assert key == "conversion-jobs/j1/v1.0.corpus"
+        dest = tmp_path / "cache" / "j1-v1.0.corpus"
+        assert dest.read_bytes() == b"archive-bytes"
+
+    def test_local_rejects_unsafe_label(self, tmp_path):
+        store = LocalResultStore(cache_dir=tmp_path)
+        src = tmp_path / "out.corpus"
+        src.write_bytes(b"x")
+        assert store.save_snapshot("j1", src, "../etc") is None
+        assert store.save_snapshot("j1", src, "v1.0/x") is None
+        assert snapshot_key_for("j1", "v1.0") == "conversion-jobs/j1/v1.0.corpus"
+
+    def test_memory_dict_store_copies_bytes(self, tmp_path):
+        blobs: dict[str, bytes] = {}
+        store = DictResultStore(tmp_path / "cache", blobs)
+        src = tmp_path / "out.corpus"
+        src.write_bytes(b"archive-bytes")
+        key = store.save_snapshot("j1", src, "v1.0")
+        assert key == "conversion-jobs/j1/v1.0.corpus"
+        assert blobs[key] == b"archive-bytes"
+
+    def test_job_manager_saves_v1_snapshot(self, tmp_path):
+        class Recording(LocalResultStore):
+            def __init__(self):
+                super().__init__(cache_dir=tmp_path / "cache")
+                self.snapshots: list[tuple[str, Path, str]] = []
+
+            def save(self, job_id, path):
+                return f"conversion-jobs/{job_id}.corpus"
+
+            def save_snapshot(self, job_id, path, label):
+                self.snapshots.append((job_id, Path(path), label))
+                return super().save_snapshot(job_id, path, label)
+
+        results = Recording()
+        manager = make_manager(results=results)
+        result = tmp_path / "out.corpus"
+        result.write_bytes(b"data")
+        job = manager.submit(
+            source_format=SourceFormat.PLAIN,
+            name="d",
+            fn=lambda: result,
+            job_id="j1",
+        )
+        assert manager.get(job.id).status == JobStatus.SUCCEEDED
+        assert results.snapshots == [("j1", result, "v1.0")]
+
+    def test_result_save_failure_fails_job(self, tmp_path):
+        class BoomSave(LocalResultStore):
+            def save(self, job_id, path):
+                raise JobStoreError("upload failed")
+
+            def save_snapshot(self, job_id, path, label):
+                raise AssertionError("snapshot must not run after save fails")
+
+        manager = make_manager(results=BoomSave())
+        result = tmp_path / "out.corpus"
+        result.write_bytes(b"data")
+        job = manager.submit(
+            source_format=SourceFormat.PLAIN, name="d", fn=lambda: result
+        )
+        fetched = manager.get(job.id)
+        assert fetched.status == JobStatus.FAILED
+        assert "JobStoreError" in fetched.error
+
+    def test_snapshot_failure_does_not_fail_job(self, tmp_path):
+        class BoomSnap(LocalResultStore):
+            def save(self, job_id, path):
+                return f"conversion-jobs/{job_id}.corpus"
+
+            def save_snapshot(self, job_id, path, label):
+                raise RuntimeError("snapshot put failed")
+
+        manager = make_manager(results=BoomSnap())
+        result = tmp_path / "out.corpus"
+        result.write_bytes(b"data")
+        job = manager.submit(
+            source_format=SourceFormat.PLAIN, name="d", fn=lambda: result
+        )
+        fetched = manager.get(job.id)
+        assert fetched.status == JobStatus.SUCCEEDED
+        assert fetched.error is None
+        assert fetched.result_key == f"conversion-jobs/{job.id}.corpus"
+
+    def test_graph_json_is_not_snapshotted(self, tmp_path):
+        class Recording(LocalResultStore):
+            def __init__(self):
+                super().__init__()
+                self.snapshots: list[str] = []
+
+            def save(self, job_id, path):
+                return f"conversion-jobs/{job_id}.graph.json"
+
+            def save_snapshot(self, job_id, path, label):
+                self.snapshots.append(label)
+                return None
+
+        results = Recording()
+        manager = make_manager(results=results)
+        result = tmp_path / "out.graph.json"
+        result.write_bytes(b"{}")
+        manager.submit(source_format="docx", name="d", fn=lambda: result)
+        assert results.snapshots == []
 
 
 class TestMakeBackends:
