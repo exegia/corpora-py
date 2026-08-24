@@ -30,6 +30,7 @@ from typing import Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
@@ -85,6 +86,81 @@ _UPLOAD_CHUNK_SIZE = 1024 * 1024
 # parsing starts. 500 MiB comfortably covers a full Bible EPUB or a large
 # scanned PDF; raise it if a legitimate source needs more.
 _MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+
+# Rendered into every conversion endpoint's /docs description (issue #104):
+# the transport guidance lives in the OpenAPI, not just this repo's CLAUDE.md,
+# because a WS-first client on a serverless deployment will hang mid-job.
+_TRANSPORT_GUIDANCE = (
+    "**Poll vs. WebSocket:** poll `GET /convert/{job_id}` as the primary "
+    "transport. `ws://…/convert/{job_id}/ws` pushes the same status object on "
+    "change, but on serverless deployments (e.g. Vercel Functions) an idle "
+    "socket can be killed mid-job **and a paused instance only advances the "
+    "job while a request is in flight** — so on any close before a terminal "
+    "status (`succeeded`/`failed`), fall back to polling; do not build a "
+    "WS-only client. Neither transport reports a percentage: the converters "
+    "have no progress hook, so `logs` carries a handful of coarse, "
+    "fixed-stage checkpoints."
+)
+
+
+class ErrorDetail(BaseModel):
+    """FastAPI's standard error body, declared so error responses codegen."""
+
+    detail: str
+
+
+class ConversionJobStatus(BaseModel):
+    """One conversion job as returned by the poll/list routes.
+
+    The exact shape of `ConversionJob.to_dict()` (`jobs.py`) — declared here
+    (not derived from the dataclass) so the OpenAPI stops being
+    `additionalProperties: true` and clients can codegen against it.
+    """
+
+    id: str
+    source_format: str = Field(
+        description="A `SourceFormat` value for `/convert` jobs; `/ingest` "
+        "jobs (same registry) carry a detected file suffix instead."
+    )
+    name: str
+    display_name: str | None = Field(
+        description="Human-readable title derived from the source document's "
+        "own metadata (fallback: the request `name` / filename stem). Set "
+        "once the job starts running."
+    )
+    status: JobStatus
+    created_at: float
+    started_at: float | None
+    finished_at: float | None
+    error: str | None = Field(description="Failure reason once `status` is `failed`.")
+    logs: list[str] = Field(
+        description="Coarse fixed-stage checkpoints, not progress — the "
+        "conversion pipeline has no percentage hook."
+    )
+    last_log: str | None
+    result_filename: str = Field(
+        description="The filename a client should persist the result under "
+        "(always ends in `.corpus` for /convert jobs); matches the "
+        "`Content-Disposition` on `/download`."
+    )
+    download_ready: bool
+
+
+class ConversionJobList(BaseModel):
+    """Page of the caller's jobs, most recent first."""
+
+    jobs: list[ConversionJobStatus]
+    total: int = Field(description="Jobs visible to the caller, ignoring pagination.")
+    offset: int
+    limit: int
+
+
+class ConversionAccepted(BaseModel):
+    """`202` body from `POST /convert`: where to watch the job from."""
+
+    job_id: str
+    status_url: str
+    ws_url: str
 
 
 def _claims(request: Request) -> dict[str, Any] | None:
@@ -307,7 +383,36 @@ def _run_conversion(
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
-@router.post("", status_code=202)
+@router.post(
+    "",
+    status_code=202,
+    response_model=ConversionAccepted,
+    responses={
+        413: {
+            "model": ErrorDetail,
+            "description": f"Upload exceeds the "
+            f"{_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
+        },
+        422: {
+            "model": ErrorDetail,
+            "description": "Invalid upload filename, or no converter is "
+            "registered for `source_format`.",
+        },
+        429: {
+            "model": ErrorDetail,
+            "description": "Job queue is full — retry after in-flight "
+            "conversions finish.",
+        },
+    },
+    description=(
+        "Upload a source document and start converting it in the background.\n\n"
+        "Returns immediately (202) with a job id — the conversion itself has "
+        "not finished yet and can take minutes for a large source (a full "
+        "Bible, a multi-hundred-page EPUB). Uploads are capped at "
+        f"{_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB (413 past that); a full "
+        "job queue answers 429.\n\n" + _TRANSPORT_GUIDANCE
+    ),
+)
 async def create_conversion(
     request: Request,
     file: UploadFile,
@@ -319,7 +424,9 @@ async def create_conversion(
 
     Returns immediately (202) with a job id -- the conversion itself has not
     finished yet. Poll `GET /convert/{job_id}` or open
-    `ws://.../convert/{job_id}/ws` for status.
+    `ws://.../convert/{job_id}/ws` for status. (The /docs description on the
+    decorator carries the client-facing limits + transport guidance --
+    docstrings can't interpolate constants.)
     """
     if source_format not in CONVERTERS:
         raise HTTPException(
@@ -379,7 +486,7 @@ async def create_conversion(
     }
 
 
-@router.get("")
+@router.get("", response_model=ConversionJobList)
 async def list_conversions(
     request: Request,
     offset: int = Query(default=0, ge=0),
@@ -404,7 +511,22 @@ async def list_conversions(
     }
 
 
-@router.get("/{job_id}")
+@router.get(
+    "/{job_id}",
+    response_model=ConversionJobStatus,
+    responses={
+        404: {
+            "model": ErrorDetail,
+            "description": "Unknown job id — including a job that exists but "
+            "belongs to a different submitter (deliberately the same "
+            "response, so job ids can't be enumerated).",
+        },
+    },
+    description=(
+        "Poll the status of a conversion job. This is the primary status "
+        "transport.\n\n" + _TRANSPORT_GUIDANCE
+    ),
+)
 async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
     """Poll the status of a conversion job.
 
@@ -415,7 +537,22 @@ async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
     return job.to_dict()
 
 
-@router.get("/{job_id}/download")
+@router.get(
+    "/{job_id}/download",
+    responses={
+        200: {
+            "content": {"application/zip": {}},
+            "description": "The finished `.corpus` archive; "
+            "`Content-Disposition` carries `result_filename`.",
+        },
+        404: {"model": ErrorDetail, "description": "Unknown (or foreign) job id."},
+        409: {
+            "model": ErrorDetail,
+            "description": "Job exists but is not `succeeded` yet — poll "
+            "until `download_ready` is true.",
+        },
+    },
+)
 async def download_conversion(job_id: str, request: Request) -> FileResponse:
     """Download the finished `.corpus` archive for a succeeded job.
 
@@ -452,6 +589,17 @@ async def download_conversion(job_id: str, request: Request) -> FileResponse:
 # corpora-web explore a freshly-converted corpus without publishing it.
 
 
+# Shared by every job-scoped detail route below: same 404 visibility rule as
+# poll/download, 409 until the job succeeds (matching `/download`).
+_JOB_DETAIL_RESPONSES: dict[int | str, dict[str, Any]] = {
+    404: {"model": ErrorDetail, "description": "Unknown (or foreign) job id."},
+    409: {
+        "model": ErrorDetail,
+        "description": "Job exists but is not `succeeded` yet.",
+    },
+}
+
+
 def _job_corpus_key(job_id: str) -> str:
     """Stable cache key for a job's result archive (``job-<id>.corpus``)."""
     return f"job-{job_id}"
@@ -467,7 +615,7 @@ def _resolve_succeeded(job_id: str, request: Request) -> Path:
     return job.result_path
 
 
-@router.get("/{job_id}/manifest")
+@router.get("/{job_id}/manifest", responses=_JOB_DETAIL_RESPONSES)
 async def get_job_manifest(job_id: str, request: Request) -> dict[str, Any]:
     """Return the converted archive's ``manifest.yml``."""
     archive = _resolve_succeeded(job_id, request)
@@ -475,7 +623,7 @@ async def get_job_manifest(job_id: str, request: Request) -> dict[str, Any]:
     return await _run_detail(lambda: get_manifest(key))
 
 
-@router.get("/{job_id}/index")
+@router.get("/{job_id}/index", responses=_JOB_DETAIL_RESPONSES)
 async def get_job_index(job_id: str, request: Request) -> dict[str, Any]:
     """Return the converted archive's toc, section structure, and node-type stats."""
     archive = _resolve_succeeded(job_id, request)
@@ -483,7 +631,7 @@ async def get_job_index(job_id: str, request: Request) -> dict[str, Any]:
     return await _run_detail(lambda: get_index(key))
 
 
-@router.get("/{job_id}/sections")
+@router.get("/{job_id}/sections", responses=_JOB_DETAIL_RESPONSES)
 async def get_job_sections(
     job_id: str,
     request: Request,
@@ -499,7 +647,7 @@ async def get_job_sections(
     )
 
 
-@router.get("/{job_id}/content")
+@router.get("/{job_id}/content", responses=_JOB_DETAIL_RESPONSES)
 async def get_job_content(
     job_id: str,
     request: Request,
@@ -516,7 +664,7 @@ async def get_job_content(
     )
 
 
-@router.get("/{job_id}/nodes/{node}")
+@router.get("/{job_id}/nodes/{node}", responses=_JOB_DETAIL_RESPONSES)
 async def get_job_node(
     job_id: str, node: int, request: Request
 ) -> dict[str, Any]:
@@ -526,7 +674,7 @@ async def get_job_node(
     return await _run_detail(lambda: get_node(key, node))
 
 
-@router.get("/{job_id}/versions")
+@router.get("/{job_id}/versions", responses=_JOB_DETAIL_RESPONSES)
 async def get_job_versions(job_id: str, request: Request) -> dict[str, Any]:
     """Return the converted archive's version timeline."""
     archive = _resolve_succeeded(job_id, request)

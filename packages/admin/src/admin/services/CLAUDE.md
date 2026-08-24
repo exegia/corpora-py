@@ -162,6 +162,19 @@ suffix (e.g. `"docx"`) — formats the parser enum doesn't enumerate. The shared
 expensive; concurrent `convert()` is not documented as safe), so parallel ingest jobs serialize on
 the parse step.
 
+## Typed job schema + transport guidance in /docs (`api.py`, issue #104)
+
+The job payload is declared as `ConversionJobStatus` in `api.py` (mirrors `ConversionJob.to_dict()`
+exactly — **change them together**; `TestOpenAPIContract` in `tests/admin/services/test_api.py`
+guards the contract). `GET /convert` is `ConversionJobList`, `POST /convert` is
+`ConversionAccepted`, and the error statuses are declared in the OpenAPI: 413 (upload cap) /
+422 / 429 (queue full) on POST, 404 on poll, 404/409 on download and every job-scoped detail
+route (`_JOB_DETAIL_RESPONSES`). The poll-vs-WebSocket guidance (serverless kills idle sockets
+mid-job; polling is what advances a frozen instance; no real progress percentage) lives in
+`_TRANSPORT_GUIDANCE` and is rendered into the POST + poll `/docs` descriptions via the decorator
+`description=` kwarg — not the docstrings, because docstrings can't interpolate the size-limit
+constants.
+
 ## Result filename + Content-Disposition (`jobs.py`, `api.py`, issues #108/#109)
 
 Every job exposes a `result_filename` in `to_dict()` (and therefore on the WebSocket/REST status
