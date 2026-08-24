@@ -732,6 +732,26 @@ class TestSaveSnapshot:
         assert blobs[key] == b"new-head"
         assert manager.get("j1").result_path == second
 
+    def test_set_result_key_points_head_at_snapshot(self, tmp_path):
+        blobs: dict[str, bytes] = {}
+        store = DictResultStore(tmp_path / "cache", blobs)
+        manager = make_manager(results=store)
+        first = tmp_path / "a.corpus"
+        first.write_bytes(b"old")
+        manager.submit(
+            source_format=SourceFormat.PLAIN,
+            name="d",
+            fn=lambda: first,
+            job_id="j1",
+        )
+        snap = tmp_path / "v11.corpus"
+        snap.write_bytes(b"v1.1-bytes")
+        key = manager.snapshot_file("j1", snap, "v1.1")
+        manager.set_result_key("j1", key, snap)
+        job = manager.get("j1")
+        assert job.result_key == "conversion-jobs/j1/v1.1.corpus"
+        assert manager.materialize(job).read_bytes() == b"v1.1-bytes"
+
     def test_snapshot_file_swallows_errors(self, tmp_path):
         class BoomSnap(LocalResultStore):
             def save_snapshot(self, job_id, path, label):
