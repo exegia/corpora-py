@@ -774,8 +774,10 @@ def _build_sections(api: Any) -> dict[str, Any] | None:
 def get_versions(filename: str) -> dict[str, Any]:
     """Version timeline for the Activity tab.
 
-    Prefers a ``history.yml`` sidecar, then the archive's ``.git/`` log, then
-    a single synthetic row from the manifest — so Vercel packages without git
+    Prefers a ``history.yml`` sidecar (pass-through, including ``files`` /
+    ``author`` / ``approved_by`` / ``snapshot_key``; ``sha`` is not
+    required — issues #147 / #150), then the archive's ``.git/`` log, then
+    a single synthetic row from the manifest — so archives without either
     still have one honest "Converted" entry.
     """
     cached = _ensure_extracted(filename)
