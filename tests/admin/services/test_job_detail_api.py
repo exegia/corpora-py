@@ -150,3 +150,57 @@ def test_job_manifest_patch_on_queued_job_is_409(client, manager):
     ).json()["job_id"]
     resp = client.patch(f"/convert/{job_id}/manifest", json={"description": "x"})
     assert resp.status_code == 409
+
+
+def test_job_restore_v1_after_mutations(client, succeeded_job):
+    original = client.get(f"/convert/{succeeded_job}/manifest").json()["description"]
+    client.patch(
+        f"/convert/{succeeded_job}/manifest", json={"description": "A"}
+    )
+    client.patch(
+        f"/convert/{succeeded_job}/manifest", json={"description": "B"}
+    )
+    assert (
+        client.get(f"/convert/{succeeded_job}/manifest").json()["description"]
+        == "B"
+    )
+
+    resp = client.post(
+        f"/convert/{succeeded_job}/restore", json={"version_id": "v1.0"}
+    )
+    assert resp.status_code == 200
+    versions = resp.json()["versions"]
+    assert [row["label"] for row in versions] == ["v1.0", "v1.1", "v1.2", "v1.3"]
+    assert versions[-1]["current"] is True
+    assert versions[-1]["title"] == "Restored v1.0"
+    assert versions[0]["current"] is False
+
+    body = client.get(f"/convert/{succeeded_job}/manifest").json()
+    assert body["description"] == original
+    assert body["version"] == "1.3"
+    index = client.get(f"/convert/{succeeded_job}/index").json()
+    assert "toc" in index
+
+
+def test_job_restore_unknown_version_is_404(client, succeeded_job):
+    resp = client.post(
+        f"/convert/{succeeded_job}/restore", json={"version_id": "v9.9"}
+    )
+    assert resp.status_code == 404
+
+
+def test_job_restore_current_is_409(client, succeeded_job):
+    resp = client.post(
+        f"/convert/{succeeded_job}/restore", json={"version_id": "v1.0"}
+    )
+    assert resp.status_code == 409
+
+
+def test_job_restore_queued_is_409(client):
+    job_id = client.post(
+        "/convert",
+        files={"file": ("mini.txt", b"placeholder")},
+        data={"source_format": "plain", "name": "Mini"},
+    ).json()["job_id"]
+    resp = client.post(f"/convert/{job_id}/restore", json={"version_id": "v1.0"})
+    assert resp.status_code == 409

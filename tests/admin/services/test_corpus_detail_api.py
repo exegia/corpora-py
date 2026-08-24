@@ -522,3 +522,12 @@ def test_get_versions_passes_through_sidecar_fields(tmp_path, monkeypatch):
 def test_restore_is_501(client):
     resp = client.post(f"/storage/{ARCHIVE_NAME}/restore")
     assert resp.status_code == 501
+
+
+def test_restore_read_only_is_403(client, fake_storage, monkeypatch):
+    from admin.services import storage_api
+
+    monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
+    resp = client.post(f"/storage/{ARCHIVE_NAME}/restore")
+    assert resp.status_code == 403
+    assert fake_storage.uploads == []

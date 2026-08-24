@@ -17,6 +17,7 @@ from admin.services.jobs import (
     LocalResultStore,
     MemoryJobStore,
     ResultStore,
+    SnapshotMissingError,
     _slugify,
     make_job_store,
     make_result_store,
@@ -624,6 +625,12 @@ class TestSaveSnapshot:
         assert key == "conversion-jobs/j1/v1.0.corpus"
         dest = tmp_path / "cache" / "j1-v1.0.corpus"
         assert dest.read_bytes() == b"archive-bytes"
+        assert store.materialize(key, "j1") == dest
+
+    def test_local_materialize_missing_snapshot(self, tmp_path):
+        store = LocalResultStore(cache_dir=tmp_path / "cache")
+        with pytest.raises(SnapshotMissingError):
+            store.materialize("conversion-jobs/j1/v1.0.corpus", "j1")
 
     def test_local_rejects_unsafe_label(self, tmp_path):
         store = LocalResultStore(cache_dir=tmp_path)

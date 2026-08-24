@@ -670,6 +670,63 @@ def _republish(
     return name
 
 
+def restore_from_snapshot(
+    filename: str,
+    snapshot_path: Path,
+    *,
+    title: str,
+    files: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Replace HEAD contents with a snapshot, keep the live timeline, bump 1.x.
+
+    The snapshot zip is the restored payload. ``history.yml`` stays the
+    current timeline so earlier rows are not rewound; ``_republish`` appends
+    the restore row (issue #148).
+    """
+    src = Path(snapshot_path)
+    if not src.is_file():
+        raise CorpusNotFoundError("Snapshot is no longer available")
+
+    cached = _ensure_extracted(filename)
+    history = [
+        dict(row)
+        for row in (
+            _load_history_versions(cached.extract_dir)
+            or _seed_v1_history(cached.extract_dir)
+        )
+    ]
+
+    with tempfile.NamedTemporaryFile(suffix=".corpus", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        shutil.copy2(src, tmp_path)
+        if cached.extract_dir.exists():
+            shutil.rmtree(cached.extract_dir, ignore_errors=True)
+        cached.extract_dir.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(tmp_path) as zf:
+            _safe_extract(zf, cached.extract_dir)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    cached.api = None
+    cached.api_loaded = False
+    (cached.extract_dir / "history.yml").write_text(
+        yaml.safe_dump({"versions": history}, sort_keys=False)
+    )
+
+    _republish(
+        filename,
+        cached,
+        title=title,
+        files=files
+        or [
+            {"path": "manifest.yml", "kind": "modified"},
+            {"path": "history.yml", "kind": "modified"},
+        ],
+    )
+    return get_versions(filename)
+
+
 # ── Nodes (inspect + annotate) ────────────────────────────────────────────────
 
 # Sidecar file at the archive root (next to manifest.yml) recording node-level
