@@ -61,10 +61,9 @@ empty when the source has no cover/thumbnail, and `.git/` is skipped on runtimes
 Service-side gaps (progress reporting, job registry, archive cleanup) live in
 `src/admin/services/CLAUDE.md`.
 
-- **No `_xml_to_tf.py`.** `XmlParser` exists (`admin.parsers`) but there's no matching Text-Fabric converter — generic
-  XML has no fixed node-type vocabulary to map onto, unlike TEI's `<div>`/`<p>` convention. Add one the same way as the
-  others (pick an `otype_for`, wire it into
-  `converters/__init__.py`'s `CONVERTERS`) if a concrete need shows up; don't add it speculatively.
+- **`_xml_to_tf.py` maps every XML element to a generic ``element`` otype** (mirroring the HTML converter, since
+  `XmlParser` already reuses `element_to_unit` from `_html.py`). Generic XML has no fixed node-type vocabulary unlike
+  TEI's `<div>`/`<p>` convention, so a single ``element`` otype is the correct mapping.
 - `dataset_id`/`project_id`/`publisher_id`/`author_ids` in
   `convert_to_corpus()` are caller-supplied and default to `""` — this package has no way to know them; they're assigned
   by whatever backend calls it (the Corpora/Exegia app, not this converter).
