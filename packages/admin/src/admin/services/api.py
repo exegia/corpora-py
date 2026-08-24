@@ -379,6 +379,31 @@ async def create_conversion(
     }
 
 
+@router.get("")
+async def list_conversions(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    """List the caller's conversion jobs (most recent first).
+
+    When auth is enabled, returns only jobs owned by the caller (JWT ``sub``).
+    When auth is disabled (``AUTH_REQUIRED=false``), returns all jobs —
+    capped by ``limit`` so an anonymous deployment doesn't dump the full
+    registry in one response. Lazy TTL reaping runs before listing so the
+    count stays bounded (see ``JobManager.retention_seconds``).
+    """
+    claims = _claims(request)
+    owner = claims.get("sub") if claims else None
+    jobs, total = job_manager.list_jobs(owner=owner, offset=offset, limit=limit)
+    return {
+        "jobs": [j.to_dict() for j in jobs],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
 @router.get("/{job_id}")
 async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
     """Poll the status of a conversion job.

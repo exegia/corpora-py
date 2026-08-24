@@ -207,8 +207,9 @@ lives here. **`corpora_mcp.corpus`** holds the singleton `CorpusManager` that lo
 
 **`admin.services`** — HTTP surface over the conversion pipeline: `api.py` (upload/poll/download via
 `POST/GET /convert`), `websocket.py` (`/convert/{id}/ws` coarse status push), `jobs.py`
-(`JobManager` — in-process `ThreadPoolExecutor`-backed job registry; explicitly **not** safe for a
-multi-worker/multi-process deployment, since job state lives in memory in one process). Also hosts the stored-`.corpus`
+(`JobManager` — `ThreadPoolExecutor`-backed job registry over a pluggable `JobStore`; the default
+`MemoryJobStore` keeps job state in one process's memory, so multi-worker/multi-process deployments need a shared
+store implementation — none ships in-tree yet). Also hosts the stored-`.corpus`
 surfaces — Hub storage (`/storage`) and its detail layer (read/patch manifest, section index, paginated content at
 `/storage/{filename}/...`, plus matching `corpus_*` MCP tools); see `packages/admin/CLAUDE.md`.
 
