@@ -3,9 +3,13 @@
 The archive contains:
 - manifest.yml (ICorpusManifest)
 - toc.yml (ICorpusToc)
+- history.yml (version log; v1.0 on first convert)
 - assets/ (optional cover/thumbnail/images)
 - corpora/ (the dataset payload: *.tf files + .cfm/ cache)
-- .git/ (a snapshot repo for the payload, for version history)
+
+`.git/` is no longer packaged; version history lives in history.yml
+(see issues #147 / #150). A full HEAD snapshot is stored beside the job
+result as ``conversion-jobs/{job_id}/v1.0.corpus``, not inside the zip.
 
 See packages/admin/README.md for an overview of the conversion/packaging pipeline.
 """
@@ -34,9 +38,9 @@ logger = logging.getLogger(__name__)
 # reach a client's library, so `convert_to_corpus` validates the archive it
 # just wrote against this set and raises `CorpusArchiveError` on a miss (see
 # issue #108's "Reject / 422 any converter that cannot produce the archive
-# layout"). `assets/` and `.git/` are deliberately optional: assets is empty
-# when the source has no cover/thumbnail, and `.git/` is skipped on runtimes
-# without a `git` binary (see `_git_snapshot`).
+# layout"). `assets/` is optional (empty when the source has no cover).
+# `history.yml` is always written by this converter but not required of
+# older archives. `.git/` is no longer packaged.
 _REQUIRED_ARCHIVE_MEMBERS = frozenset({"manifest.yml", "toc.yml", "corpora/"})
 
 
@@ -179,6 +183,35 @@ def _build_toc(
     }
 
 
+def _build_history(*, written_date: str) -> dict[str, Any]:
+    """Build the archive-root ``history.yml`` for the initial convert (v1.0).
+
+    ``author`` / ``approved_by`` stay null here so this converter's signature
+    does not grow; JobManager may stamp them later. ``snapshot_key`` is filled
+    after the result-store snapshot PUT (issue #147), not in the zip.
+    """
+    return {
+        "versions": [
+            {
+                "id": "v1.0",
+                "label": "v1.0",
+                "title": "Converted",
+                "at": written_date,
+                "current": True,
+                "snapshot_key": None,
+                "files": [
+                    {"path": "manifest.yml", "kind": "added"},
+                    {"path": "toc.yml", "kind": "added"},
+                    {"path": "corpora/", "kind": "added"},
+                ],
+                "author": None,
+                "approved_by": None,
+                "notes": [],
+            }
+        ]
+    }
+
+
 # Applied to every `git` invocation in `_git_snapshot`. After `commit`, git's
 # default `gc.autoDetach=true` can spawn a background gc that writes into
 # `.git/` while `TemporaryDirectory` is rmtree-ing it, which fails on Linux
@@ -314,7 +347,8 @@ def convert_to_corpus(
         )
         (root / "toc.yml").write_text(yaml.safe_dump(toc, sort_keys=False))
 
-        _git_snapshot(root)
+        history = _build_history(written_date=manifest["written_date"])
+        (root / "history.yml").write_text(yaml.safe_dump(history, sort_keys=False))
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         archive = shutil.make_archive(str(output_path.with_suffix("")), "zip", root_dir=root)

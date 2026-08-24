@@ -44,6 +44,7 @@ from .jobs import (
     JobStoreError,
     JobStoreNotConfiguredError,
     ResultStore,
+    snapshot_key_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -326,6 +327,53 @@ class SupabaseResultStore(ResultStore):
                 f"Could not upload conversion result ({resp.status_code})"
             )
         logger.info("Uploaded conversion result %s to bucket %s", key, bucket)
+        return key
+
+    def save_snapshot(self, job_id: str, path: Path, label: str) -> str | None:
+        """PUT ``conversion-jobs/{job_id}/{label}.corpus``. Never fails the job.
+
+        A missed snapshot is logged and returns ``None`` so the conversion
+        can still succeed (issue #147). Extra labels are for #149.
+        """
+        key = snapshot_key_for(job_id, label)
+        if key is None:
+            logger.warning(
+                "Snapshot skipped for job %s: invalid label %r", job_id, label
+            )
+            return None
+        try:
+            bucket = self._require_configured()
+            local = Path(path).expanduser()
+            if not local.is_file():
+                logger.warning(
+                    "Snapshot skipped for job %s: result file is missing", job_id
+                )
+                return None
+            self._ensure_bucket()
+            with local.open("rb") as fh:
+                resp = self._session.put(
+                    self._object_url(key),
+                    data=fh,
+                    headers={
+                        **self._headers(),
+                        "x-upsert": "true",
+                        "Content-Type": "application/zip",
+                    },
+                    timeout=_BLOB_TIMEOUT_SECONDS,
+                )
+        except (JobStoreError, requests.RequestException, OSError):
+            logger.warning(
+                "Snapshot upload failed for job %s", job_id, exc_info=True
+            )
+            return None
+        if resp.status_code not in (200, 201):
+            logger.warning(
+                "Could not upload snapshot %s (%s); conversion still succeeded",
+                key,
+                resp.status_code,
+            )
+            return None
+        logger.info("Uploaded conversion snapshot %s to bucket %s", key, bucket)
         return key
 
     def materialize(self, key: str, job_id: str) -> Path:

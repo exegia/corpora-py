@@ -115,4 +115,8 @@ def test_job_versions(client, succeeded_job):
     body = client.get(f"/convert/{succeeded_job}/versions").json()
     assert isinstance(body["versions"], list)
     assert body["versions"]  # at least one row
-    assert body["versions"][0]["current"] is True
+    row = body["versions"][0]
+    assert row["current"] is True
+    assert row["id"] == "v1.0"
+    assert {f["path"] for f in row["files"]} >= {"manifest.yml", "toc.yml", "corpora/"}
+    assert "author" in row

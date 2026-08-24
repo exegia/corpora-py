@@ -12,9 +12,11 @@ autouse fixture resets both per test (otherwise a cache hit skips `download` and
 suite becomes order-dependent -- e.g. the 404/503 cases would silently pass).
 """
 
+import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 from admin.converters._text_to_tf import convert_text_to_tf
 from admin.converters.convert_to_corpus import convert_to_corpus
 from admin.services import corpus_detail, corpus_detail_api
@@ -448,6 +450,46 @@ def test_get_versions_has_a_current_row(client):
     assert versions
     assert any(row.get("current") for row in versions)
     assert all({"id", "label", "title", "at", "current", "notes"} <= set(row) for row in versions)
+    row = next(v for v in versions if v.get("current"))
+    assert row["id"] == "v1.0"
+    assert {f["path"] for f in row["files"]} >= {"manifest.yml", "toc.yml", "corpora/"}
+    assert "author" in row
+    assert "approved_by" in row
+    assert "sha" not in row
+
+
+def test_get_versions_passes_through_sidecar_fields(tmp_path, monkeypatch):
+    """history.yml files/author/snapshot_key are returned as-is; sha is not required."""
+    monkeypatch.setattr(corpus_detail, "_local_archives", {})
+    archive = tmp_path / "sidecar.corpus"
+    history = {
+        "versions": [
+            {
+                "id": "v1.0",
+                "label": "v1.0",
+                "title": "Converted",
+                "at": "2026-01-01T00:00:00+00:00",
+                "current": True,
+                "snapshot_key": "conversion-jobs/j1/v1.0.corpus",
+                "files": [{"path": "manifest.yml", "kind": "modified"}],
+                "author": {"sub": "alice", "name": "Alice"},
+                "approved_by": None,
+                "notes": ["hi"],
+            }
+        ]
+    }
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("manifest.yml", "name: x\n")
+        zf.writestr("toc.yml", "uid: y\n")
+        zf.writestr("corpora/otype.tf", "x")
+        zf.writestr("history.yml", yaml.safe_dump(history))
+    key = corpus_detail.register_local_archive("sidecar.corpus", archive)
+    row = corpus_detail.get_versions(key)["versions"][0]
+    assert row["files"] == [{"path": "manifest.yml", "kind": "modified"}]
+    assert row["author"] == {"sub": "alice", "name": "Alice"}
+    assert row["snapshot_key"] == "conversion-jobs/j1/v1.0.corpus"
+    assert row["approved_by"] is None
+    assert "sha" not in row
 
 
 def test_restore_is_501(client):

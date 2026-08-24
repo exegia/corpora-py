@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -68,6 +69,33 @@ _GRAPH_SUFFIX = ".graph.json"
 # by `_slugify` to turn a free-form `name` ("Summa Theologiae 1200 ENG") into
 # a flat, safe filename stem ("summa-theologiae-1200-eng").
 _SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+
+# Snapshot labels are version tags like ``v1.0`` / ``v1.1`` (issue #147 / #149).
+# Only ``v`` + digits + dots are allowed in the object key / local filename.
+_SNAPSHOT_LABEL = re.compile(r"^v[0-9.]+$")
+
+
+def snapshot_label(label: str) -> str | None:
+    """Return a safe snapshot stem, or ``None`` if ``label`` is unusable."""
+    cleaned = (label or "").strip()
+    if _SNAPSHOT_LABEL.fullmatch(cleaned):
+        return cleaned
+    return None
+
+
+def snapshot_key_for(job_id: str, label: str) -> str | None:
+    """Object key ``conversion-jobs/{job_id}/{label}.corpus``, or ``None``.
+
+    Extra labels (v1.1, …) are for later mutation bumps (#149); convert
+    snapshots use ``v1.0`` (#147). Rejects path-like job ids so a bad
+    id cannot escape the prefix.
+    """
+    safe = snapshot_label(label)
+    if not safe:
+        return None
+    if not job_id or "/" in job_id or ".." in job_id or "\\" in job_id:
+        return None
+    return f"conversion-jobs/{job_id}/{safe}.corpus"
 
 
 def _slugify(name: str) -> str:
@@ -166,11 +194,24 @@ class ResultStore(ABC):
     no-op (the converting instance already has `result_path` on disk). A
     serverless deployment injects a shared backend so a different instance
     can materialize those bytes after the converter is gone (issue #140).
+
+    ``save_snapshot`` stores a labeled copy of HEAD (``v1.0`` on convert,
+    later ``v1.1`` … on mutation bumps — issue #147 / #149) under a
+    distinct key so restore (#148) can fetch it without rewriting HEAD.
     """
 
     @abstractmethod
     def save(self, job_id: str, path: Path) -> str | None:
         """Persist ``path`` and return a store key, or ``None`` if local-only."""
+
+    @abstractmethod
+    def save_snapshot(self, job_id: str, path: Path, label: str) -> str | None:
+        """Persist a labeled HEAD snapshot and return its key, or ``None``.
+
+        Must not raise on failure — a missed snapshot must not fail the
+        conversion job (issue #147). Extra ``label`` values are reserved
+        for later mutation bumps (#149).
+        """
 
     @abstractmethod
     def materialize(self, key: str, job_id: str) -> Path:
@@ -182,10 +223,41 @@ class ResultStore(ABC):
 
 
 class LocalResultStore(ResultStore):
-    """Default: results live only at the converting instance's `result_path`."""
+    """Default: results live only at the converting instance's `result_path`.
+
+    ``save`` is still a no-op (the converting instance already has the
+    file). ``save_snapshot`` copies bytes next to ``cache_dir`` (or next
+    to the source file) so tests and local restores can find v1.0.
+    """
+
+    def __init__(self, cache_dir: Path | None = None) -> None:
+        self._cache_dir = cache_dir
 
     def save(self, job_id: str, path: Path) -> str | None:
         return None
+
+    def save_snapshot(self, job_id: str, path: Path, label: str) -> str | None:
+        key = snapshot_key_for(job_id, label)
+        if key is None:
+            return None
+        src = Path(path)
+        if not src.is_file():
+            logger.warning(
+                "Local snapshot skipped for job %s: result file is missing", job_id
+            )
+            return None
+        dest_dir = self._cache_dir if self._cache_dir is not None else src.parent
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / f"{job_id}-{snapshot_label(label)}.corpus"
+            if dest.resolve() != src.resolve():
+                shutil.copy2(src, dest)
+        except OSError:
+            logger.warning(
+                "Local snapshot copy failed for job %s", job_id, exc_info=True
+            )
+            return None
+        return key
 
     def materialize(self, key: str, job_id: str) -> Path:
         raise JobStoreError("Local result store has no remote keys to materialize")
@@ -431,6 +503,20 @@ class JobManager:
                 # Upload *before* marking succeeded so another instance
                 # that reads the terminal row can materialize the bytes.
                 result_key = self._results.save(job.id, Path(result_path))
+                # v1.0 HEAD snapshot (issue #147). Failure here must not
+                # flip the job to FAILED — restore can fall back to HEAD
+                # while it is still v1.0. Extra labels are for #149.
+                if Path(result_path).name.endswith(".corpus"):
+                    try:
+                        self._results.save_snapshot(
+                            job.id, Path(result_path), "v1.0"
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Conversion job %s snapshot save failed; job still succeeded",
+                            job.id,
+                            exc_info=True,
+                        )
             error = None
         except Exception as exc:
             # Full detail server-side only -- `job.error` round-trips to
@@ -625,6 +711,17 @@ class JobManager:
                         logger.warning(
                             "Failed to delete result %s for expired job %s",
                             job.result_key,
+                            job.id,
+                            exc_info=True,
+                        )
+                snap_key = snapshot_key_for(job.id, "v1.0")
+                if snap_key:
+                    try:
+                        self._results.delete(snap_key)
+                    except Exception:
+                        logger.warning(
+                            "Failed to delete snapshot %s for expired job %s",
+                            snap_key,
                             job.id,
                             exc_info=True,
                         )
