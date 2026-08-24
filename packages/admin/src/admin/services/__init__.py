@@ -5,7 +5,9 @@
 `POST /validate` (corpus integrity checks). `storage` wraps Hugging Face Hub
 storage of finished `.corpus` archives (`storage_supabase` is the drop-in
 owner-scoped Supabase Storage backend, selected via `STORAGE_BACKEND` by
-`storage.make_corpus_storage()`); `storage_api` (REST `/storage...`) and
+`storage.make_corpus_storage()`); `job_store_supabase` is the shared
+`JobStore`/`ResultStore` selected by `JOB_STORE=supabase` (issue #140).
+`storage_api` (REST `/storage...`) and
 `storage_mcp` (MCP `storage_*` tools) expose it. All routers are plain
 `APIRouter`s meant to be included into the combined app built by
 `corpora_py.app` -- this package intentionally does not build its own
@@ -32,6 +34,7 @@ from . import (
     corpus_detail,
     corpus_detail_api,
     ingest_api,
+    job_store_supabase,
     jobs,
     storage,
     storage_api,
@@ -45,6 +48,7 @@ __all__ = [
     "corpus_detail",
     "corpus_detail_api",
     "ingest_api",
+    "job_store_supabase",
     "jobs",
     "storage",
     "storage_api",

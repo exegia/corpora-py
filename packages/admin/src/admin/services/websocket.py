@@ -25,7 +25,7 @@ import asyncio
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .jobs import JobStatus, job_manager
+from .jobs import JobStatus, JobStoreError, job_manager
 
 router = APIRouter()
 
@@ -46,7 +46,11 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
     this connection's ASGI scope -- `None` if auth is currently disabled.
     """
     claims = getattr(websocket.state, "user", None)
-    job = job_manager.get(job_id)
+    try:
+        job = job_manager.get(job_id)
+    except JobStoreError:
+        await websocket.close(code=1011, reason="Job store unavailable")
+        return
     if job is None or not job.is_visible_to(claims):
         await websocket.close(code=_UNKNOWN_JOB_CLOSE_CODE, reason="Unknown job id")
         return
@@ -56,7 +60,10 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
     last_log_count = 0
     try:
         while True:
-            job = job_manager.get(job_id)
+            try:
+                job = job_manager.get(job_id)
+            except JobStoreError:
+                break
             if job is None:
                 break
             # Also re-send on a new log line even when `status` hasn't

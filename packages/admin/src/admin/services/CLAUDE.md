@@ -60,9 +60,11 @@ Reader / Structure / Analytics) is **not** backed by `/storage`. The contract is
   (Supabase appears in this repo only as a JWT issuer — see the root `CLAUDE.md`'s Auth section).
 - **Explore reads come from the job, not the Hub.** The job-scoped detail endpoints
   (`GET /convert/{job_id}/{manifest,index,sections,content,nodes/{node},versions}`, see
-  `api.py`) serve the same response shapes as `/storage/{filename}/…` from the job's on-disk
-  `result_path` — no Hub download, no filename matching, works with Hub storage entirely
-  unconfigured. The stable client-side key is the `job_id`.
+  `api.py`) serve the same response shapes as `/storage/{filename}/…` from the job's result
+  archive — no Hub download, no filename matching. With the default in-memory store that
+  archive is the converting instance's on-disk `result_path`; with `JOB_STORE=supabase`
+  (issue #140) it is materialized from the shared result bucket, so reload after instance
+  recycle still works. The stable client-side key is the `job_id`.
 - **`/storage` (Hugging Face Hub) is the *publishing* surface only** — an owner action to share a
   corpus publicly, done against a writable deployment. On the public demo (`HF_READ_ONLY=true`) the
   Hub is read-only and library conversions are unaffected: nothing in the convert → download →
@@ -217,8 +219,8 @@ title and `result_filename` for the stored filename.
 ## Known gaps (service-side)
 
 **TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no
-shared (cross-process) `JobStore` implementation, no TTL reap for the Hub caches. (Converter-side gaps live in
-`src/admin/converters/CLAUDE.md`.)
+TTL reap for the Hub caches. Shared job metadata + result bytes ship behind `JOB_STORE=supabase` (issue #140); the
+default in-memory store is still per-process. (Converter-side gaps live in `src/admin/converters/CLAUDE.md`.)
 
 - **`ConversionJob.logs`/`last_log` (`jobs.py`) are fixed checkpoint strings, not real progress.**
   `_run_conversion` (`api.py`) calls
@@ -245,9 +247,12 @@ shared (cross-process) `JobStore` implementation, no TTL reap for the Hub caches
   `JobManager.submit()` to accept a picklable job spec instead of an arbitrary closure (`api.py` currently passes a
   `lambda` closing over
   `source_path`/`work_dir`/etc., which cannot cross a process boundary).
-- **No *shared* job-store implementation ships yet.** `JobManager` now fronts a pluggable `JobStore` (the seam a
-  Postgres/Redis-backed impl plugs into, so jobs survive instance recycling and are visible cross-process), but the
-  only implementation in-tree is the in-process `MemoryJobStore` — so the service is still effectively
-  single-process (see `corpora_py.app.main()`, which hardcodes `workers=1`). Note the *executor* is a separate
-  concern a shared store does not solve: running conversions still live in one process's thread pool, so a
-  multi-instance deployment with a shared store gets shared *visibility*, not work distribution.
+- **Shared `JobStore` ships (`JOB_STORE=supabase`, issue #140).** `SupabaseJobStore` (PostgREST) +
+  `SupabaseResultStore` (Storage, `conversion-jobs/` prefix) make poll and job-scoped detail
+  instance-agnostic. Default remains `memory` (desktop sidecar / single-worker). Enable on Vercel with
+  `JOB_STORE=supabase`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL` or `PROJECT_REF`, a jobs table
+  (`packages/admin/sql/conversion_jobs.sql`), and `SUPABASE_JOBS_BUCKET` or
+  `SUPABASE_STORAGE_BUCKET`. `HF_READ_ONLY` / Hub publishing is independent — do not paper over a
+  missing job store by matching library rows against Hub filenames. The *executor* is still
+  per-instance: a shared store shares *visibility*, not work distribution. A converting instance that
+  dies mid-job stays `running` until the stall watchdog.

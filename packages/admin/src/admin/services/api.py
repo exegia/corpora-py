@@ -51,6 +51,8 @@ from .jobs import (
     ConversionJob,
     JobQueueFullError,
     JobStatus,
+    JobStoreError,
+    JobStoreNotConfiguredError,
     _slugify,
     job_manager,
     result_filename_for,
@@ -403,6 +405,11 @@ def _run_conversion(
             "description": "Job queue is full — retry after in-flight "
             "conversions finish.",
         },
+        503: {
+            "model": ErrorDetail,
+            "description": "Shared job store is unconfigured or unavailable "
+            "(`JOB_STORE=supabase`).",
+        },
     },
     description=(
         "Upload a source document and start converting it in the background.\n\n"
@@ -467,6 +474,13 @@ async def create_conversion(
             )
         except JobQueueFullError as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except JobStoreNotConfiguredError as extra:
+            raise HTTPException(status_code=503, detail=str(extra)) from extra
+        except JobStoreError as extra:
+            logger.exception("Job store failed to accept conversion %s", job_id)
+            raise HTTPException(
+                status_code=503, detail="Job store unavailable"
+            ) from extra
     except Exception:
         # The job never started (rejected upload, full queue, or some
         # unexpected failure mid-upload e.g. a full disk) -- nothing will
@@ -502,7 +516,9 @@ async def list_conversions(
     """
     claims = _claims(request)
     owner = claims.get("sub") if claims else None
-    jobs, total = job_manager.list_jobs(owner=owner, offset=offset, limit=limit)
+    jobs, total = _store_op(
+        lambda: job_manager.list_jobs(owner=owner, offset=offset, limit=limit)
+    )
     return {
         "jobs": [j.to_dict() for j in jobs],
         "total": total,
@@ -533,7 +549,7 @@ async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
     404s for a job that exists but belongs to a different submitter, same as
     an unknown id -- see `_not_found_unless_visible`.
     """
-    job = _not_found_unless_visible(job_manager.get(job_id), request)
+    job = _not_found_unless_visible(_store_op(lambda: job_manager.get(job_id)), request)
     return job.to_dict()
 
 
@@ -565,18 +581,14 @@ async def download_conversion(job_id: str, request: Request) -> FileResponse:
     of a saveable file. 409 (not 404) until `download_ready`, matching the
     `GET /convert/{id}` contract.
     """
-    job = _not_found_unless_visible(job_manager.get(job_id), request)
-    if job.status != JobStatus.SUCCEEDED or job.result_path is None:
-        raise HTTPException(
-            status_code=409, detail=f"Job is {job.status.value}, not ready"
-        )
-    # `result_path.name` is the slug of the display name (the human-readable
+    archive = _resolve_succeeded(job_id, request)
+    # `archive.name` is the slug of the display name (the human-readable
     # title from the source, see issue #109) plus any collision suffix --
     # matching what `to_dict()` exposes as `result_filename`, so the
     # Save-As default agrees with the library name the client already has.
     return FileResponse(
-        job.result_path,
-        filename=job.result_path.name,
+        archive,
+        filename=archive.name,
         media_type="application/zip",
     )
 
@@ -605,14 +617,37 @@ def _job_corpus_key(job_id: str) -> str:
     return f"job-{job_id}"
 
 
+def _store_op(fn):
+    """Run a job-store call; misconfiguration / outage → HTTP 503."""
+    try:
+        return fn()
+    except JobStoreNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except JobStoreError as extra:
+        logger.exception("Job store operation failed")
+        raise HTTPException(
+            status_code=503, detail="Job store unavailable"
+        ) from extra
+
+
 def _resolve_succeeded(job_id: str, request: Request) -> Path:
-    """Return the result archive path for a succeeded, visible job or raise 404 / 409."""
-    job = _not_found_unless_visible(job_manager.get(job_id), request)
-    if job.status != JobStatus.SUCCEEDED or job.result_path is None:
+    """Return the result archive path for a succeeded, visible job or raise 404 / 409.
+
+    Hydrates a remote `result_key` onto a local file when this instance
+    did not run the conversion (issue #140). 409 until the job succeeded
+    *and* the bytes are available.
+    """
+    job = _not_found_unless_visible(_store_op(lambda: job_manager.get(job_id)), request)
+    if job.status != JobStatus.SUCCEEDED:
         raise HTTPException(
             status_code=409, detail=f"Job is {job.status.value}, not ready"
         )
-    return job.result_path
+    path = _store_op(lambda: job_manager.materialize(job))
+    if path is None:
+        raise HTTPException(
+            status_code=409, detail=f"Job is {job.status.value}, not ready"
+        )
+    return path
 
 
 @router.get("/{job_id}/manifest", responses=_JOB_DETAIL_RESPONSES)

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from admin.services import api as api_module
-from admin.services.jobs import JobStatus
+from admin.services.jobs import JobStatus, JobStoreError
 
 
 class FakeUpload:
@@ -52,6 +52,15 @@ class TestCreateConversion:
 
     def test_unknown_format_rejected_by_validation(self, client):
         assert _post(client, source_format="docx").status_code == 422
+
+    def test_job_store_outage_returns_503(self, client, manager):
+        def boom(*_args, **_kwargs):
+            raise JobStoreError("down")
+
+        manager._store.put = boom
+        response = _post(client)
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Job store unavailable"
 
     def test_queue_full_returns_429_and_cleans_work_dir(self, client, manager, tmp_path):
         manager._max_pending = 1
@@ -733,7 +742,7 @@ class TestOpenAPIContract:
 
     def test_post_declares_limit_and_queue_errors(self, spec):
         post_op = spec["paths"]["/convert"]["post"]
-        assert {"413", "422", "429"} <= set(post_op["responses"])
+        assert {"413", "422", "429", "503"} <= set(post_op["responses"])
         assert "500 MiB" in post_op["description"]
 
     def test_transport_guidance_in_docs(self, spec):

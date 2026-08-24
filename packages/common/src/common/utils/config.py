@@ -95,7 +95,28 @@ class Settings(BaseSettings):
     # bounding disk and memory on a long-running process. 0 (the default)
     # disables reaping, preserving today's keep-forever behavior; set
     # JOB_RETENTION_SECONDS on deployments that need a bounded footprint.
+    # Shared (Supabase) stores should set this to minutes-to-hours so a
+    # library detail visit after convert still resolves, without keeping
+    # result bytes forever (issue #140).
     job_retention_seconds: float = 0
+
+    # Where conversion-job *metadata* lives. "memory" (default) is the
+    # in-process dict -- fine for the desktop sidecar and single-worker
+    # local dev. "supabase" is the shared JobStore (issue #140): job rows
+    # in Postgres (`supabase_jobs_table`) plus result bytes in Storage
+    # (`supabase_jobs_bucket`, falling back to `supabase_storage_bucket`)
+    # so poll + job-scoped detail survive Vercel instance recycle. Hub
+    # publishing (`STORAGE_BACKEND=huggingface`) is independent of this.
+    job_store: Literal["memory", "supabase"] = "memory"
+    # PostgREST table for job rows when job_store=supabase. Must match
+    # packages/admin/sql/conversion_jobs.sql.
+    supabase_jobs_table: str = "conversion_jobs"
+    # Storage bucket for result archives (`.corpus` / `.graph.json`) when
+    # job_store=supabase. Unset falls back to supabase_storage_bucket so a
+    # deployment that already has the library bucket configured does not
+    # need a second name. Objects live under the `conversion-jobs/` prefix
+    # so they never appear in a library listing of `{sub}/{filename}`.
+    supabase_jobs_bucket: str | None = os.getenv("SUPABASE_JOBS_BUCKET")
 
     PROJECT_NAME: ClassVar[str] = "Corpora API"
     PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."
