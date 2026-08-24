@@ -311,7 +311,9 @@ class SupabaseResultStore(ResultStore):
         )
         try:
             with local.open("rb") as fh:
-                resp = self._session.post(
+                # PUT + x-upsert overwrites HEAD (POST to an existing object
+                # 400s on Storage even with x-upsert — snapshots already PUT).
+                resp = self._session.put(
                     self._object_url(key),
                     data=fh,
                     headers={
