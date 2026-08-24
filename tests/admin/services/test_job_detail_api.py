@@ -19,9 +19,7 @@ def _build_archive(work: Path) -> Path:
     """Build a real 5-paragraph .corpus archive and return its path."""
     work.mkdir(parents=True, exist_ok=True)
     src = work / "mini.txt"
-    src.write_text(
-        "\n\n".join(f"Paragraph number {i} has some words here." for i in range(1, 6))
-    )
+    src.write_text("\n\n".join(f"Paragraph number {i} has some words here." for i in range(1, 6)))
     tf_dir = convert_text_to_tf(str(src), work / "tf")
     return convert_to_corpus(
         tf_dir,
@@ -93,17 +91,13 @@ def test_job_sections(client, succeeded_job):
 
 
 def test_job_content(client, succeeded_job):
-    body = client.get(
-        f"/convert/{succeeded_job}/content", params={"limit": 2}
-    ).json()
+    body = client.get(f"/convert/{succeeded_job}/content", params={"limit": 2}).json()
     assert len(body["passages"]) == 2
     assert all(set(p) >= {"node", "ref", "text", "tokens"} for p in body["passages"])
 
 
 def test_job_node(client, succeeded_job):
-    content = client.get(
-        f"/convert/{succeeded_job}/content", params={"limit": 1}
-    ).json()
+    content = client.get(f"/convert/{succeeded_job}/content", params={"limit": 1}).json()
     node = content["passages"][0]["node"]
     body = client.get(f"/convert/{succeeded_job}/nodes/{node}").json()
     assert body["node"] == node
@@ -120,3 +114,93 @@ def test_job_versions(client, succeeded_job):
     assert row["id"] == "v1.0"
     assert {f["path"] for f in row["files"]} >= {"manifest.yml", "toc.yml", "corpora/"}
     assert "author" in row
+
+
+def test_job_two_manifest_patches_snapshot_and_bump(client, succeeded_job, manager):
+    """Job-scoped PATCHes bump 1.x and snapshot each label beside HEAD (#149)."""
+    first = client.patch(f"/convert/{succeeded_job}/manifest", json={"description": "A"})
+    assert first.status_code == 200
+    assert first.json()["version"] == "1.1"
+    second = client.patch(f"/convert/{succeeded_job}/manifest", json={"description": "B"})
+    assert second.status_code == 200
+    assert second.json()["version"] == "1.2"
+
+    versions = client.get(f"/convert/{succeeded_job}/versions").json()["versions"]
+    assert [row["label"] for row in versions] == ["v1.0", "v1.1", "v1.2"]
+    assert [row["current"] for row in versions] == [False, False, True]
+    assert versions[1]["snapshot_key"] == (f"conversion-jobs/{succeeded_job}/v1.1.corpus")
+    assert versions[2]["snapshot_key"] == (f"conversion-jobs/{succeeded_job}/v1.2.corpus")
+
+    job = manager.get(succeeded_job)
+    parent = Path(job.result_path).parent
+    v0 = parent / f"{succeeded_job}-v1.0.corpus"
+    v1 = parent / f"{succeeded_job}-v1.1.corpus"
+    v2 = parent / f"{succeeded_job}-v1.2.corpus"
+    assert v0.is_file() and v1.is_file() and v2.is_file()
+    head = Path(job.result_path).stat().st_size
+    assert head < v0.stat().st_size * 1.5
+    assert client.get(f"/convert/{succeeded_job}/manifest").json()["description"] == "B"
+
+
+def test_job_manifest_patch_on_queued_job_is_409(client, manager):
+    job_id = client.post(
+        "/convert",
+        files={"file": ("mini.txt", b"placeholder")},
+        data={"source_format": "plain", "name": "Mini"},
+    ).json()["job_id"]
+    resp = client.patch(f"/convert/{job_id}/manifest", json={"description": "x"})
+    assert resp.status_code == 409
+
+
+def test_job_restore_v1_after_mutations(client, succeeded_job):
+    original = client.get(f"/convert/{succeeded_job}/manifest").json()["description"]
+    client.patch(
+        f"/convert/{succeeded_job}/manifest", json={"description": "A"}
+    )
+    client.patch(
+        f"/convert/{succeeded_job}/manifest", json={"description": "B"}
+    )
+    assert (
+        client.get(f"/convert/{succeeded_job}/manifest").json()["description"]
+        == "B"
+    )
+
+    resp = client.post(
+        f"/convert/{succeeded_job}/restore", json={"version_id": "v1.0"}
+    )
+    assert resp.status_code == 200
+    versions = resp.json()["versions"]
+    assert [row["label"] for row in versions] == ["v1.0", "v1.1", "v1.2", "v1.3"]
+    assert versions[-1]["current"] is True
+    assert versions[-1]["title"] == "Restored v1.0"
+    assert versions[0]["current"] is False
+
+    body = client.get(f"/convert/{succeeded_job}/manifest").json()
+    assert body["description"] == original
+    assert body["version"] == "1.3"
+    index = client.get(f"/convert/{succeeded_job}/index").json()
+    assert "toc" in index
+
+
+def test_job_restore_unknown_version_is_404(client, succeeded_job):
+    resp = client.post(
+        f"/convert/{succeeded_job}/restore", json={"version_id": "v9.9"}
+    )
+    assert resp.status_code == 404
+
+
+def test_job_restore_current_is_409(client, succeeded_job):
+    resp = client.post(
+        f"/convert/{succeeded_job}/restore", json={"version_id": "v1.0"}
+    )
+    assert resp.status_code == 409
+
+
+def test_job_restore_queued_is_409(client):
+    job_id = client.post(
+        "/convert",
+        files={"file": ("mini.txt", b"placeholder")},
+        data={"source_format": "plain", "name": "Mini"},
+    ).json()["job_id"]
+    resp = client.post(f"/convert/{job_id}/restore", json={"version_id": "v1.0"})
+    assert resp.status_code == 409

@@ -3,6 +3,7 @@
 import pytest
 from admin.services import api as api_module
 from admin.services import ingest_api as ingest_module
+from admin.services import jobs as jobs_mod
 from admin.services import websocket as ws_module
 from admin.services.jobs import JobManager
 from fastapi import FastAPI
@@ -48,6 +49,7 @@ def manager(monkeypatch):
     monkeypatch.setattr(api_module, "job_manager", mgr)
     monkeypatch.setattr(ws_module, "job_manager", mgr)
     monkeypatch.setattr(ingest_module, "job_manager", mgr)
+    monkeypatch.setattr(jobs_mod, "job_manager", mgr)
     return mgr
 
 

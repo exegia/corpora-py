@@ -37,6 +37,7 @@ from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers import PARSERS
 from ..parsers.schema import SourceFormat
 from .corpus_detail import (
+    annotate_node,
     get_content,
     get_index,
     get_manifest,
@@ -44,7 +45,10 @@ from .corpus_detail import (
     get_sections,
     get_versions,
     register_local_archive,
+    restore_from_snapshot,
+    update_manifest,
 )
+from .corpus_detail_api import ManifestUpdate, NodeAnnotation
 from .corpus_detail_api import _run as _run_detail
 from .jobs import (
     _CORPUS_SUFFIX,
@@ -53,9 +57,11 @@ from .jobs import (
     JobStatus,
     JobStoreError,
     JobStoreNotConfiguredError,
+    SnapshotMissingError,
     _slugify,
     job_manager,
     result_filename_for,
+    snapshot_key_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -375,8 +381,14 @@ def _run_conversion(
             "Text-Fabric dataset ready. Compiling cache and packaging .corpus archive...",
         )
         corpus_path, _filename = _resolve_corpus_path(display_name, job_id)
+        job = job_manager.get(job_id)
+        author_sub = job.owner if job is not None else None
         result = convert_to_corpus(
-            tf_dir, corpus_path, name=display_name, description=description
+            tf_dir,
+            corpus_path,
+            name=display_name,
+            description=description,
+            author_sub=author_sub,
         )
 
         job_manager.log(job_id, "Conversion complete.")
@@ -715,3 +727,90 @@ async def get_job_versions(job_id: str, request: Request) -> dict[str, Any]:
     archive = _resolve_succeeded(job_id, request)
     key = register_local_archive(_job_corpus_key(job_id), archive)
     return await _run_detail(lambda: get_versions(key))
+
+
+@router.patch("/{job_id}/manifest", responses=_JOB_DETAIL_RESPONSES)
+async def patch_job_manifest(
+    job_id: str, request: Request, payload: ManifestUpdate
+) -> dict[str, Any]:
+    """Patch the converted archive's manifest and bump ``v1.N`` (issue #149).
+
+    Job-scoped writes stay available when Hub storage is read-only.
+    """
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    updates = payload.model_dump(exclude_unset=True)
+    return await _run_detail(lambda: update_manifest(key, updates))
+
+
+@router.patch("/{job_id}/nodes/{node}", responses=_JOB_DETAIL_RESPONSES)
+async def patch_job_node(
+    job_id: str, node: int, request: Request, payload: NodeAnnotation
+) -> dict[str, Any]:
+    """Annotate a node in the converted archive and bump ``v1.N`` (issue #149)."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    updates = payload.model_dump(exclude_unset=True)
+    return await _run_detail(lambda: annotate_node(key, node, **updates))
+
+
+class RestoreBody(BaseModel):
+    """Restore HEAD from a stored snapshot (issue #148)."""
+
+    version_id: str = Field(min_length=1)
+
+
+@router.post(
+    "/{job_id}/restore",
+    responses={
+        **_JOB_DETAIL_RESPONSES,
+        404: {
+            "model": ErrorDetail,
+            "description": "Unknown job, version, or missing snapshot.",
+        },
+    },
+)
+async def restore_job_corpus(
+    job_id: str, request: Request, payload: RestoreBody
+) -> dict[str, Any]:
+    """Copy a stored snapshot over HEAD and append a restore history row.
+
+    Job-scoped only — Hub storage restore stays 403/501. Not a git checkout.
+    """
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    versions = (await _run_detail(lambda: get_versions(key)))["versions"]
+    needle = payload.version_id.strip()
+    row = next(
+        (
+            item
+            for item in versions
+            if str(item.get("id") or "") == needle
+            or str(item.get("label") or "") == needle
+        ),
+        None,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Unknown version {needle!r}")
+    if row.get("current"):
+        raise HTTPException(
+            status_code=409, detail=f"{needle} is already the current version"
+        )
+    label = str(row.get("label") or needle)
+    snap_key = row.get("snapshot_key") or snapshot_key_for(job_id, label)
+    try:
+        snapshot = job_manager.materialize_snapshot(job_id, snap_key or "")
+    except SnapshotMissingError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except JobStoreNotConfiguredError as extra:
+        raise HTTPException(status_code=503, detail=str(extra)) from extra
+    except JobStoreError as extra:
+        logger.exception("Snapshot fetch failed for job %s", job_id)
+        raise HTTPException(
+            status_code=503, detail="Job store unavailable"
+        ) from extra
+
+    title = f"Restored {label}"
+    return await _run_detail(
+        lambda: restore_from_snapshot(key, snapshot, title=title)
+    )

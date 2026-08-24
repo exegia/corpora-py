@@ -152,6 +152,10 @@ class JobStoreNotConfiguredError(JobStoreError):
     """Raised when `JOB_STORE=supabase` but URL/key/table/bucket are unset."""
 
 
+class SnapshotMissingError(JobStoreError):
+    """The labeled snapshot is not in the result store (issue #148)."""
+
+
 # ── Pluggable job store ───────────────────────────────────────────────────────
 
 
@@ -232,6 +236,7 @@ class LocalResultStore(ResultStore):
 
     def __init__(self, cache_dir: Path | None = None) -> None:
         self._cache_dir = cache_dir
+        self._snapshots: dict[str, Path] = {}
 
     def save(self, job_id: str, path: Path) -> str | None:
         return None
@@ -257,9 +262,22 @@ class LocalResultStore(ResultStore):
                 "Local snapshot copy failed for job %s", job_id, exc_info=True
             )
             return None
+        self._snapshots[key] = dest
         return key
 
     def materialize(self, key: str, job_id: str) -> Path:
+        path = self._snapshots.get(key)
+        if path is not None and path.is_file():
+            return path
+        parts = key.replace("\\", "/").split("/")
+        if len(parts) == 3 and parts[0] == "conversion-jobs":
+            label = snapshot_label(Path(parts[2]).stem)
+            dest_dir = self._cache_dir
+            if label and dest_dir is not None:
+                dest = dest_dir / f"{job_id}-{label}.corpus"
+                if dest.is_file():
+                    return dest
+            raise SnapshotMissingError("Snapshot is no longer available")
         raise JobStoreError("Local result store has no remote keys to materialize")
 
     def delete(self, key: str) -> None:
@@ -665,6 +683,56 @@ class JobManager:
         job.result_path = path
         return path
 
+    def materialize_snapshot(self, job_id: str, key: str) -> Path:
+        """Return a local path for a labeled snapshot, or raise ``SnapshotMissingError``."""
+        if not key:
+            raise SnapshotMissingError("Snapshot is no longer available")
+        try:
+            path = self._results.materialize(key, job_id)
+        except SnapshotMissingError:
+            raise
+        except JobStoreError:
+            path = None
+        if path is not None and Path(path).is_file():
+            return Path(path)
+        job = self.get(job_id)
+        label = snapshot_label(Path(key).stem)
+        if job is not None and job.result_path is not None and label:
+            sibling = Path(job.result_path).parent / f"{job_id}-{label}.corpus"
+            if sibling.is_file():
+                return sibling
+        raise SnapshotMissingError("Snapshot is no longer available")
+
+    def snapshot_file(self, job_id: str, path: Path, label: str) -> str | None:
+        """Persist a labeled HEAD snapshot. Failure is logged, not raised.
+
+        Extra labels (v1.1, …) are mutation bumps (issue #149); convert
+        writes ``v1.0``. A missed snapshot must not fail the caller.
+        """
+        try:
+            return self._results.save_snapshot(job_id, Path(path), label)
+        except Exception:
+            logger.warning(
+                "Snapshot %s for job %s failed", label, job_id, exc_info=True
+            )
+            return None
+
+    def replace_result(self, job_id: str, path: Path) -> str | None:
+        """Overwrite the job's HEAD archive in the result store (issue #149)."""
+        local = Path(path)
+        if not local.is_file():
+            raise JobStoreError(f"Replacement archive missing for job {job_id}")
+        key = self._results.save(job_id, local)
+        with self._lock:
+            job = self._store.get(job_id)
+            if job is None:
+                return key
+            job.result_path = local
+            if key:
+                job.result_key = key
+            self._store.put(job)
+        return key
+
     def list_jobs(
         self,
         *,
@@ -714,8 +782,10 @@ class JobManager:
                             job.id,
                             exc_info=True,
                         )
-                snap_key = snapshot_key_for(job.id, "v1.0")
-                if snap_key:
+                for minor in range(33):
+                    snap_key = snapshot_key_for(job.id, f"v1.{minor}")
+                    if not snap_key:
+                        continue
                     try:
                         self._results.delete(snap_key)
                     except Exception:

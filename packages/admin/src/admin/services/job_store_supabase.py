@@ -44,6 +44,7 @@ from .jobs import (
     JobStoreError,
     JobStoreNotConfiguredError,
     ResultStore,
+    SnapshotMissingError,
     snapshot_key_for,
 )
 
@@ -389,6 +390,8 @@ class SupabaseResultStore(ResultStore):
         except requests.RequestException as exc:
             raise JobStoreError("Job result download failed") from exc
         if resp.status_code in _NOT_FOUND_STATUSES:
+            if key.count("/") >= 2:
+                raise SnapshotMissingError("Snapshot is no longer available")
             raise JobStoreError("Conversion result is no longer available")
         if resp.status_code != 200:
             raise JobStoreError(
