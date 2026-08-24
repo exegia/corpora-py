@@ -12,6 +12,9 @@ coverage
 *.lcov
 
 **/*.sql
+# Tracked DDL for the shared JobStore (issue #140). The blanket ignore
+# above is for supabase CLI dumps and generated seeds.
+!packages/admin/sql/conversion_jobs.sql
 
 # logs
 logs

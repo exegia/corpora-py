@@ -29,8 +29,21 @@ from typing import Any
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from .api import _RESULTS_ROOT, _WORK_ROOT, _claims, _not_found_unless_visible, _save_upload
-from .jobs import JobQueueFullError, JobStatus, job_manager
+from .api import (
+    _RESULTS_ROOT,
+    _WORK_ROOT,
+    _claims,
+    _not_found_unless_visible,
+    _save_upload,
+    _store_op,
+)
+from .jobs import (
+    JobQueueFullError,
+    JobStatus,
+    JobStoreError,
+    JobStoreNotConfiguredError,
+    job_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +172,13 @@ async def create_ingestion(
             )
         except JobQueueFullError as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except JobStoreNotConfiguredError as extra:
+            raise HTTPException(status_code=503, detail=str(extra)) from extra
+        except JobStoreError as extra:
+            logger.exception("Job store failed to accept ingestion %s", job_id)
+            raise HTTPException(
+                status_code=503, detail="Job store unavailable"
+            ) from extra
     except Exception:
         # Same clean-up-on-any-failure rule as `api.create_conversion`.
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -175,18 +195,24 @@ async def create_ingestion(
 @router.get("/{job_id}")
 async def get_ingestion(job_id: str, request: Request) -> dict[str, object]:
     """Poll the status of an ingestion job (same visibility rule as /convert)."""
-    job = _not_found_unless_visible(job_manager.get(job_id), request)
+    job = _not_found_unless_visible(_store_op(lambda: job_manager.get(job_id)), request)
     return job.to_dict()
 
 
 @router.get("/{job_id}/download")
 async def download_ingestion(job_id: str, request: Request) -> FileResponse:
     """Download the finished `graph.json` for a succeeded ingestion job."""
-    job = _not_found_unless_visible(job_manager.get(job_id), request)
-    if job.status != JobStatus.SUCCEEDED or job.result_path is None:
+    job = _not_found_unless_visible(_store_op(lambda: job_manager.get(job_id)), request)
+    if job.status != JobStatus.SUCCEEDED:
         raise HTTPException(
             status_code=409, detail=f"Job is {job.status.value}, not ready"
         )
+    path = _store_op(lambda: job_manager.materialize(job))
+    if path is None:
+        raise HTTPException(
+            status_code=409, detail=f"Job is {job.status.value}, not ready"
+        )
+    job.result_path = path
     return FileResponse(
         job.result_path, filename=job.result_path.name, media_type="application/json"
     )
