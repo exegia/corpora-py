@@ -139,3 +139,34 @@ class TestHistoryYml:
             "corpora/",
         }
         assert all(f["kind"] == "added" for f in row["files"])
+
+    def test_history_stamps_author_sub_when_provided(self, tmp_path):
+        from admin.converters._text_to_tf import convert_text_to_tf
+
+        src = tmp_path / "mini.txt"
+        src.write_text("Hello world.\n")
+        tf_dir = convert_text_to_tf(str(src), tmp_path / "tf")
+        archive = mod.convert_to_corpus(
+            tf_dir,
+            tmp_path / "mini.corpus",
+            name="Mini",
+            author_sub="user-1",
+        )
+        with zipfile.ZipFile(archive) as zf:
+            history = yaml.safe_load(zf.read("history.yml"))
+        actor = history["versions"][0]["author"]
+        assert actor == {"sub": "user-1"}
+        assert history["versions"][0]["approved_by"] == actor
+
+    def test_history_does_not_invent_a_user(self, tmp_path):
+        from admin.converters._text_to_tf import convert_text_to_tf
+
+        src = tmp_path / "mini.txt"
+        src.write_text("Hello world.\n")
+        tf_dir = convert_text_to_tf(str(src), tmp_path / "tf")
+        archive = mod.convert_to_corpus(
+            tf_dir, tmp_path / "mini.corpus", name="Mini", author_sub="  "
+        )
+        with zipfile.ZipFile(archive) as zf:
+            history = yaml.safe_load(zf.read("history.yml"))
+        assert history["versions"][0]["author"] is None

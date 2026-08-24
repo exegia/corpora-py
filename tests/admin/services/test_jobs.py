@@ -705,6 +705,36 @@ class TestSaveSnapshot:
         assert fetched.error is None
         assert fetched.result_key == f"conversion-jobs/{job.id}.corpus"
 
+    def test_replace_result_overwrites_head(self, tmp_path):
+        blobs: dict[str, bytes] = {}
+        store = DictResultStore(tmp_path / "cache", blobs)
+        manager = make_manager(results=store)
+        first = tmp_path / "a.corpus"
+        first.write_bytes(b"old")
+        job = manager.submit(
+            source_format=SourceFormat.PLAIN,
+            name="d",
+            fn=lambda: first,
+            job_id="j1",
+        )
+        assert blobs[job.result_key] == b"old"
+        second = tmp_path / "b.corpus"
+        second.write_bytes(b"new-head")
+        key = manager.replace_result("j1", second)
+        assert key == "conversion-jobs/j1.corpus"
+        assert blobs[key] == b"new-head"
+        assert manager.get("j1").result_path == second
+
+    def test_snapshot_file_swallows_errors(self, tmp_path):
+        class BoomSnap(LocalResultStore):
+            def save_snapshot(self, job_id, path, label):
+                raise RuntimeError("nope")
+
+        manager = make_manager(results=BoomSnap())
+        src = tmp_path / "out.corpus"
+        src.write_bytes(b"x")
+        assert manager.snapshot_file("j1", src, "v1.1") is None
+
     def test_graph_json_is_not_snapshotted(self, tmp_path):
         class Recording(LocalResultStore):
             def __init__(self):
