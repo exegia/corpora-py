@@ -35,6 +35,7 @@ from urllib.parse import parse_qs
 
 from common.utils.config import settings
 from common.utils.jwt_auth import AuthError, verify_jwt
+from common.utils.request_context import current_owner
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -105,7 +106,17 @@ class AuthMiddleware:
         # `admin.services.api`/`websocket` to scope job polling/download to
         # the job's own submitter -- see `ConversionJob.is_visible_to()`.
         scope.setdefault("state", {})["user"] = claims
-        await self.app(scope, receive, send)
+        # Also publish the verified identity request-wide: owner-scoped storage
+        # backends (`admin.services.storage_supabase`) and the corpus-detail
+        # cache read `current_owner` from several call layers below the
+        # routers (including inside `asyncio.to_thread`, which copies the
+        # context). This is the ONLY place the owner is ever set, and only
+        # from a verified token -- never from client-supplied input.
+        owner_token = current_owner.set(claims.get("sub"))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            current_owner.reset(owner_token)
 
     @staticmethod
     async def _reject(scope: Scope, send: Send, *, detail: str) -> None:
