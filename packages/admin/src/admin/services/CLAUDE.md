@@ -48,6 +48,32 @@ narrow allowance (e.g. "let a visitor publish the job they just converted"), tha
 rejected — it makes an unauthenticated deployment a write path to the owner's Hub account, and the demo
 gets everything it needs without one.
 
+## Library storage split: Supabase owns the library, the Hub is for publishing (issue #110)
+
+A product frontend's **library** (each user's own converted corpora — what corpora-web shows in
+Reader / Structure / Analytics) is **not** backed by `/storage`. The contract is:
+
+- **Conversion result → client downloads → client stores it.** After `GET /convert/{id}/download`,
+  the client owns persistence: corpora-web uploads the `.corpus` to its private Supabase bucket
+  (`project-corpora`) and records the path in its own `corpus_documents` table. This service never
+  `POST /storage`s a library corpus on the user's behalf, and never talks to Supabase Storage at all
+  (Supabase appears in this repo only as a JWT issuer — see the root `CLAUDE.md`'s Auth section).
+- **Explore reads come from the job, not the Hub.** The job-scoped detail endpoints
+  (`GET /convert/{job_id}/{manifest,index,sections,content,nodes/{node},versions}`, see
+  `api.py`) serve the same response shapes as `/storage/{filename}/…` from the job's on-disk
+  `result_path` — no Hub download, no filename matching, works with Hub storage entirely
+  unconfigured. The stable client-side key is the `job_id`.
+- **`/storage` (Hugging Face Hub) is the *publishing* surface only** — an owner action to share a
+  corpus publicly, done against a writable deployment. On the public demo (`HF_READ_ONLY=true`) the
+  Hub is read-only and library conversions are unaffected: nothing in the convert → download →
+  explore path touches the Hub, so no conversion is ever blocked on a Hub 403.
+
+Do **not** "fix" an empty library view by matching library rows against `GET /storage` filenames —
+the Hub holds unrelated public archives and the library never lives there. If job-scoped reads are
+insufficient (e.g. after the instance recycled and the job's `result_path` is gone), the sanctioned
+extension is a second `CorpusStorage`-style backend or a shared `JobStore` — a deliberate
+architecture decision, not a quiet workaround (issue #110 options B/C).
+
 ## Corpus detail (`corpus_detail*.py`)
 
 A *detail* layer over Hub storage for the desktop app's reader: read/patch a stored archive's
