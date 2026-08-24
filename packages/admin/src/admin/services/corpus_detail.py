@@ -662,7 +662,11 @@ def _republish(
             shutil.copy2(out, local)
             if job_id:
                 _replace_job_head(job_id, local)
-                _snapshot_job_archive(job_id, local, new_label)
+                snap_key = _snapshot_job_archive(job_id, local, new_label)
+                if snap_key:
+                    from . import jobs
+
+                    jobs.job_manager.set_result_key(job_id, snap_key, local)
         else:
             corpus_storage.upload(out, name)
 

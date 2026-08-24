@@ -733,6 +733,24 @@ class JobManager:
             self._store.put(job)
         return key
 
+    def set_result_key(
+        self, job_id: str, key: str, path: Path | None = None
+    ) -> None:
+        """Point the job's HEAD at ``key`` (a snapshot object after mutation).
+
+        Storage does not reliably replace ``conversion-jobs/{id}.corpus``
+        in place; unique snapshot keys do. After a 1.x bump, callers set
+        ``result_key`` to the new snapshot so GET hydrates the new HEAD.
+        """
+        with self._lock:
+            job = self._store.get(job_id)
+            if job is None:
+                return
+            job.result_key = key
+            if path is not None:
+                job.result_path = path
+            self._store.put(job)
+
     def list_jobs(
         self,
         *,
