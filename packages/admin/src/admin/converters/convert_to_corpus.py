@@ -179,6 +179,20 @@ def _build_toc(
     }
 
 
+# Applied to every `git` invocation in `_git_snapshot`. After `commit`, git's
+# default `gc.autoDetach=true` can spawn a background gc that writes into
+# `.git/` while `TemporaryDirectory` is rmtree-ing it, which fails on Linux
+# with `OSError: [Errno 39] Directory not empty: '.../.git'`.
+_GIT_NO_GC = (
+    "-c",
+    "gc.auto=0",
+    "-c",
+    "gc.autoDetach=false",
+    "-c",
+    "maintenance.auto=false",
+)
+
+
 def _git_snapshot(root: Path) -> None:
     """Init a git repo at the archive root and commit the payload, so the
     `.corpus` archive carries its own version history (see Schema.md).
@@ -195,6 +209,9 @@ def _git_snapshot(root: Path) -> None:
     Deliberately gated on `shutil.which` rather than catching
     `FileNotFoundError`, so a genuine git failure on a machine that *does*
     have git still raises instead of being silently swallowed.
+
+    Auto-gc / maintenance are pinned off on every invocation so a detached
+    git process cannot race the scratch-directory cleanup.
     """
     if shutil.which("git") is None:
         logger.warning(
@@ -204,11 +221,17 @@ def _git_snapshot(root: Path) -> None:
         )
         return
 
-    run = lambda *args: subprocess.run(args, cwd=root, check=True, capture_output=True)  # noqa: E731
-    run("git", "init", "-q")
-    run("git", "add", "-A")
+    def run(*args: str) -> None:
+        subprocess.run(
+            ("git", *_GIT_NO_GC, *args),
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+
+    run("init", "-q")
+    run("add", "-A")
     run(
-        "git",
         "-c",
         "user.name=Corpora",
         "-c",
@@ -254,7 +277,7 @@ def convert_to_corpus(
 
     manifest_uid = str(uuid.uuid4())
 
-    with tempfile.TemporaryDirectory(prefix="corpus-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="corpus-", ignore_cleanup_errors=True) as tmp:
         root = Path(tmp)
         corpora_dir = root / "corpora"
         shutil.copytree(tf_dir, corpora_dir)
