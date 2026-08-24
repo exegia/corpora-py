@@ -11,6 +11,8 @@ from admin.services.jobs import (
     JobManager,
     JobQueueFullError,
     JobStatus,
+    JobStore,
+    MemoryJobStore,
     _slugify,
     result_filename_for,
 )
@@ -267,7 +269,7 @@ class TestStallWatchdog:
         manager = make_manager(stall_timeout_seconds=10)
 
         def slow_then_succeed():
-            job = manager._jobs["fixed"]
+            job = manager._store.get("fixed")
             job.started_at = time.time() - 60  # pretend we've run for a minute
             manager.get("fixed")  # watchdog marks the job FAILED
             assert job.status == JobStatus.FAILED
@@ -279,7 +281,7 @@ class TestStallWatchdog:
             fn=slow_then_succeed,
             job_id="fixed",
         )
-        job = manager._jobs["fixed"]
+        job = manager._store.get("fixed")
         assert job.status == JobStatus.FAILED
         assert job.result_path is None
         assert "timed out" in job.error
@@ -319,3 +321,137 @@ class TestShutdown:
         manager = make_manager(executor)
         manager.shutdown()
         assert executor.shutdown_kwargs == {"wait": False, "cancel_futures": True}
+
+
+class TestListJobs:
+    def test_returns_all_jobs_for_owner(self):
+        manager = make_manager(DeferredExecutor())
+        manager.submit(source_format=SourceFormat.PLAIN, name="a", fn=lambda: Path("x"), owner="alice", job_id="j1")
+        manager.submit(source_format=SourceFormat.PLAIN, name="b", fn=lambda: Path("x"), owner="alice", job_id="j2")
+        manager.submit(source_format=SourceFormat.PLAIN, name="c", fn=lambda: Path("x"), owner="bob", job_id="j3")
+        jobs, total = manager.list_jobs(owner="alice")
+        assert total == 2
+        assert {j.id for j in jobs} == {"j1", "j2"}
+
+    def test_no_owner_returns_all(self):
+        manager = make_manager(DeferredExecutor())
+        manager.submit(source_format=SourceFormat.PLAIN, name="a", fn=lambda: Path("x"), owner="alice", job_id="j1")
+        manager.submit(source_format=SourceFormat.PLAIN, name="b", fn=lambda: Path("x"), owner="bob", job_id="j2")
+        jobs, total = manager.list_jobs(owner=None)
+        assert total == 2
+
+    def test_sorted_most_recent_first(self):
+        import time as _time
+
+        manager = make_manager(DeferredExecutor())
+        manager.submit(source_format=SourceFormat.PLAIN, name="old", fn=lambda: Path("x"), owner="u", job_id="j1")
+        # Ensure created_at differs.
+        _time.sleep(0.01)
+        manager.submit(source_format=SourceFormat.PLAIN, name="new", fn=lambda: Path("x"), owner="u", job_id="j2")
+        jobs, _ = manager.list_jobs(owner="u")
+        assert jobs[0].id == "j2"
+        assert jobs[1].id == "j1"
+
+    def test_pagination(self):
+        manager = make_manager(DeferredExecutor())
+        for i in range(5):
+            manager.submit(source_format=SourceFormat.PLAIN, name=f"j{i}", fn=lambda: Path("x"), owner="u", job_id=f"j{i}")
+        jobs, total = manager.list_jobs(owner="u", offset=1, limit=2)
+        assert total == 5
+        assert len(jobs) == 2
+
+    def test_empty_store(self):
+        manager = make_manager()
+        jobs, total = manager.list_jobs(owner="alice")
+        assert total == 0
+        assert jobs == []
+
+
+class TestReapExpired:
+    def test_reaps_terminal_jobs_past_retention(self, tmp_path):
+        manager = make_manager(DeferredExecutor(), retention_seconds=60)
+        # Submit a job and let it succeed.
+        result = tmp_path / "result.corpus"
+        result.write_bytes(b"data")
+        manager.submit(source_format=SourceFormat.PLAIN, name="d", fn=lambda: result, owner="u", job_id="j1")
+        manager._executor.run_all()
+        job = manager.get("j1")
+        assert job.status == JobStatus.SUCCEEDED
+        # Pretend it finished long ago.
+        with manager._lock:
+            job.finished_at = time.time() - 120
+            manager._store.put(job)
+        assert result.exists()
+        # Trigger reap via list_jobs.
+        manager.list_jobs(owner="u")
+        assert manager.get("j1") is None
+        assert not result.exists()
+
+    def test_does_not_reap_non_terminal(self, tmp_path):
+        manager = make_manager(DeferredExecutor(), retention_seconds=60)
+        manager.submit(source_format=SourceFormat.PLAIN, name="d", fn=lambda: Path("x"), owner="u", job_id="j1")
+        # Job is QUEUED (deferred executor, not run).
+        manager.list_jobs(owner="u")
+        assert manager.get("j1") is not None
+
+    def test_does_not_reap_recent_terminal(self, tmp_path):
+        manager = make_manager(DeferredExecutor(), retention_seconds=3600)
+        manager.submit(source_format=SourceFormat.PLAIN, name="d", fn=lambda: Path("x"), owner="u", job_id="j1")
+        manager._executor.run_all()
+        manager.list_jobs(owner="u")
+        assert manager.get("j1") is not None
+
+    def test_disabled_by_default(self, tmp_path):
+        manager = make_manager(DeferredExecutor())
+        manager.submit(source_format=SourceFormat.PLAIN, name="d", fn=lambda: Path("x"), owner="u", job_id="j1")
+        manager._executor.run_all()
+        job = manager.get("j1")
+        with manager._lock:
+            job.finished_at = time.time() - 999999
+            manager._store.put(job)
+        manager.list_jobs(owner="u")
+        assert manager.get("j1") is not None
+
+
+class TestCustomStore:
+    def test_custom_store_is_used(self):
+        class RecordingStore(JobStore):
+            def __init__(self):
+                self._d = {}
+                self.puts = 0
+
+            def get(self, job_id):
+                return self._d.get(job_id)
+
+            def put(self, job):
+                self._d[job.id] = job
+                self.puts += 1
+
+            def list(self, *, owner):
+                return list(self._d.values())
+
+            def delete(self, job_id):
+                return self._d.pop(job_id, None)
+
+        store = RecordingStore()
+        manager = make_manager(DeferredExecutor(), store=store)
+        manager.submit(source_format=SourceFormat.PLAIN, name="d", fn=lambda: Path("x"), owner="u", job_id="j1")
+        assert store.puts >= 1
+        assert manager.get("j1") is not None
+
+    def test_memory_store_list_filters_by_owner(self):
+        store = MemoryJobStore()
+        j1 = ConversionJob(id="j1", source_format=SourceFormat.PLAIN, name="a", owner="alice")
+        j2 = ConversionJob(id="j2", source_format=SourceFormat.PLAIN, name="b", owner="bob")
+        store.put(j1)
+        store.put(j2)
+        assert len(store.list(owner="alice")) == 1
+        assert len(store.list(owner="bob")) == 1
+        assert len(store.list(owner=None)) == 2
+
+    def test_memory_store_delete(self):
+        store = MemoryJobStore()
+        j = ConversionJob(id="j1", source_format=SourceFormat.PLAIN, name="a")
+        store.put(j)
+        assert store.delete("j1") is j
+        assert store.delete("j1") is None

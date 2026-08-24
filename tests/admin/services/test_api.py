@@ -19,11 +19,11 @@ class FakeUpload:
         return self._buffer.read(size)
 
 
-def _post(client, filename="doc.txt", source_format="plain", content=b"hello world"):
+def _post(client, filename="doc.txt", source_format="plain", content=b"hello world", name="My Doc"):
     return client.post(
         "/convert",
         files={"file": (filename, content)},
-        data={"source_format": source_format, "name": "My Doc"},
+        data={"source_format": source_format, "name": name},
     )
 
 
@@ -643,3 +643,60 @@ class TestRunConversionDisplayName:
             job_id="j",
         )
         assert result.name == "summa-theologiae.corpus"
+
+
+class TestListConversions:
+    def test_list_returns_jobs_for_owner(self, client, manager, claims_holder):
+        claims_holder["claims"] = {"sub": "alice"}
+        _post(client, name="doc1")
+        _post(client, name="doc2")
+        # Switch to bob.
+        claims_holder["claims"] = {"sub": "bob"}
+        _post(client, name="doc3")
+
+        # Alice sees her 2 jobs.
+        claims_holder["claims"] = {"sub": "alice"}
+        resp = client.get("/convert")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 2
+
+        # Bob sees his 1 job.
+        claims_holder["claims"] = {"sub": "bob"}
+        resp = client.get("/convert")
+        body = resp.json()
+        assert body["total"] == 1
+
+    def test_list_no_auth_returns_all(self, client, manager):
+        _post(client, name="a")
+        _post(client, name="b")
+        resp = client.get("/convert")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 2
+
+    def test_list_pagination(self, client, manager):
+        for i in range(5):
+            _post(client, name=f"doc{i}")
+        resp = client.get("/convert", params={"offset": 1, "limit": 2})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 5
+        assert len(body["jobs"]) == 2
+
+    def test_list_empty(self, client, manager):
+        resp = client.get("/convert")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 0
+        assert body["jobs"] == []
+
+    def test_list_most_recent_first(self, client, manager):
+        import time as _time
+
+        _post(client, name="old")
+        _time.sleep(0.01)
+        _post(client, name="new")
+        resp = client.get("/convert")
+        body = resp.json()
+        assert body["jobs"][0]["name"] == "new"

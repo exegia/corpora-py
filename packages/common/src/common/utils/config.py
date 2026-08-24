@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     # coupled to auth_required, so `AUTH_REQUIRED=false` local dev still writes.
     hf_read_only: bool = False
 
+    # Retention window for finished conversion jobs (admin.services.jobs).
+    # Terminal jobs older than this are lazily reaped -- removed from the job
+    # store and their .corpus result files deleted -- on the next list/submit,
+    # bounding disk and memory on a long-running process. 0 (the default)
+    # disables reaping, preserving today's keep-forever behavior; set
+    # JOB_RETENTION_SECONDS on deployments that need a bounded footprint.
+    job_retention_seconds: float = 0
+
     PROJECT_NAME: ClassVar[str] = "Corpora API"
     PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."
     API_V1_STR: str = "/api/v1"

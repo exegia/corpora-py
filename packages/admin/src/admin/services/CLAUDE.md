@@ -150,7 +150,7 @@ title and `result_filename` for the stored filename.
 ## Known gaps (service-side)
 
 **TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no
-cross-process job registry, no archive cleanup, no test coverage for the HTTP API. (Converter-side gaps live in
+shared (cross-process) `JobStore` implementation, no TTL reap for the Hub caches. (Converter-side gaps live in
 `src/admin/converters/CLAUDE.md`.)
 
 - **`ConversionJob.logs`/`last_log` (`jobs.py`) are fixed checkpoint strings, not real progress.**
@@ -160,19 +160,14 @@ cross-process job registry, no archive cleanup, no test coverage for the HTTP AP
   `convert_to_corpus()` still have no mid-call progress hook — adding real per-unit progress needs threading a callback
   through every
   `_{format}_to_tf.py` converter and `_walker.convert_document()`, not just more log calls here.
-- **`services/` (the `/convert` HTTP API) has no test coverage.** A deliberate scope cut, not an oversight — see the
-  root `CLAUDE.md`'s CI/CD section for context. Test strategy (mocking `cfabric`, exercising
-  `JobManager` without real conversions) needs its own design pass. (Auth *is* covered now — see `corpora_py.auth` and
-  the root `CLAUDE.md`.)
-- **`_RESULTS_ROOT` (finished `.corpus` archives, in `api.py`) is never cleaned up.** `_WORK_ROOT` (uploads +
-  intermediate Text-Fabric output) *is* deleted once a job reaches a terminal state, but there's no
-  "client downloaded it, safe to delete" signal for the final archive, and a naive delete-on-download would break
-  retries. Needs a TTL-based reap (a periodic task deleting files older than N hours) — not implemented yet.
-  `JobManager._jobs` has the same problem: terminal job entries are never pruned from the in-memory registry, so it
-  grows for the lifetime of the process. `_HUB_CACHE_ROOT` (`storage_api.py` — archives fetched from the Hub
-  for `GET /storage/{filename}/download`) shares the same missing-TTL-reap gap, as does
-  `corpus_detail._HUB_CACHE_ROOT` (and its in-process `_cache`) — the extracted archives it caches per filename are only
-  ever dropped by a manifest PATCH's `invalidate()`, never reaped by age.
+- **Tracked-job retention is TTL-reaped; orphaned files and Hub caches are not.** `JobManager` lazily reaps
+  terminal jobs older than `JOB_RETENTION_SECONDS` (0 = keep forever, the default) on each `list_jobs`/`submit`,
+  deleting the job entry *and* its `result_path` file — so `_RESULTS_ROOT` and the in-memory registry stay bounded
+  for jobs the store still knows about. Two gaps remain: (1) with the default `MemoryJobStore`, a restart forgets
+  all jobs, orphaning their `_RESULTS_ROOT` files forever (a shared `JobStore` fixes this by construction); (2)
+  `_HUB_CACHE_ROOT` (`storage_api.py` — archives fetched from the Hub for `GET /storage/{filename}/download`) still
+  has no TTL reap, as does `corpus_detail._HUB_CACHE_ROOT` (and its in-process `_cache`) — the extracted archives it
+  caches per filename are only ever dropped by a manifest PATCH's `invalidate()`, never reaped by age.
 - **`JobManager`'s stall watchdog (`_check_stall`) cannot actually stop a hung conversion.** It marks a job `FAILED`
   after `stall_timeout_seconds`
   of wall-clock `RUNNING` time so clients stop waiting on it, but a
@@ -183,6 +178,9 @@ cross-process job registry, no archive cleanup, no test coverage for the HTTP AP
   `JobManager.submit()` to accept a picklable job spec instead of an arbitrary closure (`api.py` currently passes a
   `lambda` closing over
   `source_path`/`work_dir`/etc., which cannot cross a process boundary).
-- **No cross-process job registry.** `JobManager` is an in-memory, per-process singleton (see its class docstring and
-  `corpora_py.app.main()`, which hardcodes `workers=1` specifically because of this). Scaling this service beyond one
-  process needs a shared backend (Redis, Celery, or similar) instead of — or in front of — `JobManager`.
+- **No *shared* job-store implementation ships yet.** `JobManager` now fronts a pluggable `JobStore` (the seam a
+  Postgres/Redis-backed impl plugs into, so jobs survive instance recycling and are visible cross-process), but the
+  only implementation in-tree is the in-process `MemoryJobStore` — so the service is still effectively
+  single-process (see `corpora_py.app.main()`, which hardcodes `workers=1`). Note the *executor* is a separate
+  concern a shared store does not solve: running conversions still live in one process's thread pool, so a
+  multi-instance deployment with a shared store gets shared *visibility*, not work distribution.
