@@ -48,6 +48,60 @@ narrow allowance (e.g. "let a visitor publish the job they just converted"), tha
 rejected — it makes an unauthenticated deployment a write path to the owner's Hub account, and the demo
 gets everything it needs without one.
 
+## Library storage split: Supabase owns the library, the Hub is for publishing (issue #110)
+
+A product frontend's **library** (each user's own converted corpora — what corpora-web shows in
+Reader / Structure / Analytics) is **not** backed by `/storage`. The contract is:
+
+- **Conversion result → client downloads → client stores it.** After `GET /convert/{id}/download`,
+  the client owns persistence: corpora-web uploads the `.corpus` to its private Supabase bucket
+  (`project-corpora`) and records the path in its own `corpus_documents` table. This service never
+  `POST /storage`s a library corpus on the user's behalf, and never talks to Supabase Storage at all
+  (Supabase appears in this repo only as a JWT issuer — see the root `CLAUDE.md`'s Auth section).
+- **Explore reads come from the job, not the Hub.** The job-scoped detail endpoints
+  (`GET /convert/{job_id}/{manifest,index,sections,content,nodes/{node},versions}`, see
+  `api.py`) serve the same response shapes as `/storage/{filename}/…` from the job's on-disk
+  `result_path` — no Hub download, no filename matching, works with Hub storage entirely
+  unconfigured. The stable client-side key is the `job_id`.
+- **`/storage` (Hugging Face Hub) is the *publishing* surface only** — an owner action to share a
+  corpus publicly, done against a writable deployment. On the public demo (`HF_READ_ONLY=true`) the
+  Hub is read-only and library conversions are unaffected: nothing in the convert → download →
+  explore path touches the Hub, so no conversion is ever blocked on a Hub 403.
+
+Do **not** "fix" an empty library view by matching library rows against `GET /storage` filenames —
+the Hub holds unrelated public archives and the library never lives there. If job-scoped reads are
+insufficient (e.g. after the instance recycled and the job's `result_path` is gone), the sanctioned
+extension is a second `CorpusStorage`-style backend or a shared `JobStore` — a deliberate
+architecture decision, not a quiet workaround (issue #110 options B/C).
+
+### Option C ships: the Supabase Storage backend (`storage_supabase.py`, issue #129)
+
+`STORAGE_BACKEND=supabase` (default `huggingface`) makes `storage.make_corpus_storage()` build a
+`SupabaseCorpusStorage` instead of `CorpusStorage`. It exposes the identical 5-method surface +
+`ensure_repo` and the same error classes, so `/storage` REST, the `storage_*`/`corpus_*` MCP tools,
+and `corpus_detail` all read the **library bucket** with zero call-site changes. Specifics:
+
+- **Owner scoping is the access control.** Object paths are `{sub}/{filename}` where `sub` is the
+  verified JWT claim read from the `current_owner` ContextVar
+  (`common.utils.request_context`), set *only* by `corpora_py.auth.AuthMiddleware` — never from
+  client input. The service-role key bypasses bucket RLS, so this prefix is what stops one user
+  listing/addressing another's objects. Paths match corpora-web's `{user_id}/{job_id}.corpus`
+  layout. No verified identity (auth disabled) ⇒ un-prefixed bucket root, single-user local dev.
+- **`hf_read_only` applies to both backends** — it is the deployment-wide storage read-only flag,
+  refused inside `upload`/`delete` on this backend too, and the 403 dependency / MCP tool-skipping
+  layers are backend-agnostic already.
+- **`scopes_by_owner`** (`False` on `CorpusStorage`, `True` here) tells `corpus_detail._cache_key`
+  to prefix cache entries and work dirs with the sanitized owner, so two owners' same-named
+  archives never share an extraction. Local (job-result) registrations stay plain-name keyed —
+  job ids are unique and job visibility is enforced upstream.
+- Talks to the Storage REST API directly with `requests` (already a transitive dep); config is
+  `SUPABASE_STORAGE_BUCKET` + `SUPABASE_SERVICE_ROLE_KEY` + `SUPABASE_URL` (or derived from
+  `PROJECT_REF`), all unset ⇒ `StorageNotConfiguredError` (503) per call, never at import. The
+  service-role key is server-side only — never in client config (no `VITE_*`).
+
+This amends the previous "this service never talks to Supabase Storage" invariant: it now does
+*iff* `STORAGE_BACKEND=supabase` is explicitly set; the default deployment still doesn't.
+
 ## Corpus detail (`corpus_detail*.py`)
 
 A *detail* layer over Hub storage for the desktop app's reader: read/patch a stored archive's
@@ -108,6 +162,19 @@ suffix (e.g. `"docx"`) — formats the parser enum doesn't enumerate. The shared
 expensive; concurrent `convert()` is not documented as safe), so parallel ingest jobs serialize on
 the parse step.
 
+## Typed job schema + transport guidance in /docs (`api.py`, issue #104)
+
+The job payload is declared as `ConversionJobStatus` in `api.py` (mirrors `ConversionJob.to_dict()`
+exactly — **change them together**; `TestOpenAPIContract` in `tests/admin/services/test_api.py`
+guards the contract). `GET /convert` is `ConversionJobList`, `POST /convert` is
+`ConversionAccepted`, and the error statuses are declared in the OpenAPI: 413 (upload cap) /
+422 / 429 (queue full) on POST, 404 on poll, 404/409 on download and every job-scoped detail
+route (`_JOB_DETAIL_RESPONSES`). The poll-vs-WebSocket guidance (serverless kills idle sockets
+mid-job; polling is what advances a frozen instance; no real progress percentage) lives in
+`_TRANSPORT_GUIDANCE` and is rendered into the POST + poll `/docs` descriptions via the decorator
+`description=` kwarg — not the docstrings, because docstrings can't interpolate the size-limit
+constants.
+
 ## Result filename + Content-Disposition (`jobs.py`, `api.py`, issues #108/#109)
 
 Every job exposes a `result_filename` in `to_dict()` (and therefore on the WebSocket/REST status
@@ -150,7 +217,7 @@ title and `result_filename` for the stored filename.
 ## Known gaps (service-side)
 
 **TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no
-cross-process job registry, no archive cleanup, no test coverage for the HTTP API. (Converter-side gaps live in
+shared (cross-process) `JobStore` implementation, no TTL reap for the Hub caches. (Converter-side gaps live in
 `src/admin/converters/CLAUDE.md`.)
 
 - **`ConversionJob.logs`/`last_log` (`jobs.py`) are fixed checkpoint strings, not real progress.**
@@ -160,19 +227,14 @@ cross-process job registry, no archive cleanup, no test coverage for the HTTP AP
   `convert_to_corpus()` still have no mid-call progress hook — adding real per-unit progress needs threading a callback
   through every
   `_{format}_to_tf.py` converter and `_walker.convert_document()`, not just more log calls here.
-- **`services/` (the `/convert` HTTP API) has no test coverage.** A deliberate scope cut, not an oversight — see the
-  root `CLAUDE.md`'s CI/CD section for context. Test strategy (mocking `cfabric`, exercising
-  `JobManager` without real conversions) needs its own design pass. (Auth *is* covered now — see `corpora_py.auth` and
-  the root `CLAUDE.md`.)
-- **`_RESULTS_ROOT` (finished `.corpus` archives, in `api.py`) is never cleaned up.** `_WORK_ROOT` (uploads +
-  intermediate Text-Fabric output) *is* deleted once a job reaches a terminal state, but there's no
-  "client downloaded it, safe to delete" signal for the final archive, and a naive delete-on-download would break
-  retries. Needs a TTL-based reap (a periodic task deleting files older than N hours) — not implemented yet.
-  `JobManager._jobs` has the same problem: terminal job entries are never pruned from the in-memory registry, so it
-  grows for the lifetime of the process. `_HUB_CACHE_ROOT` (`storage_api.py` — archives fetched from the Hub
-  for `GET /storage/{filename}/download`) shares the same missing-TTL-reap gap, as does
-  `corpus_detail._HUB_CACHE_ROOT` (and its in-process `_cache`) — the extracted archives it caches per filename are only
-  ever dropped by a manifest PATCH's `invalidate()`, never reaped by age.
+- **Tracked-job retention is TTL-reaped; orphaned files and Hub caches are not.** `JobManager` lazily reaps
+  terminal jobs older than `JOB_RETENTION_SECONDS` (0 = keep forever, the default) on each `list_jobs`/`submit`,
+  deleting the job entry *and* its `result_path` file — so `_RESULTS_ROOT` and the in-memory registry stay bounded
+  for jobs the store still knows about. Two gaps remain: (1) with the default `MemoryJobStore`, a restart forgets
+  all jobs, orphaning their `_RESULTS_ROOT` files forever (a shared `JobStore` fixes this by construction); (2)
+  `_HUB_CACHE_ROOT` (`storage_api.py` — archives fetched from the Hub for `GET /storage/{filename}/download`) still
+  has no TTL reap, as does `corpus_detail._HUB_CACHE_ROOT` (and its in-process `_cache`) — the extracted archives it
+  caches per filename are only ever dropped by a manifest PATCH's `invalidate()`, never reaped by age.
 - **`JobManager`'s stall watchdog (`_check_stall`) cannot actually stop a hung conversion.** It marks a job `FAILED`
   after `stall_timeout_seconds`
   of wall-clock `RUNNING` time so clients stop waiting on it, but a
@@ -183,6 +245,9 @@ cross-process job registry, no archive cleanup, no test coverage for the HTTP AP
   `JobManager.submit()` to accept a picklable job spec instead of an arbitrary closure (`api.py` currently passes a
   `lambda` closing over
   `source_path`/`work_dir`/etc., which cannot cross a process boundary).
-- **No cross-process job registry.** `JobManager` is an in-memory, per-process singleton (see its class docstring and
-  `corpora_py.app.main()`, which hardcodes `workers=1` specifically because of this). Scaling this service beyond one
-  process needs a shared backend (Redis, Celery, or similar) instead of — or in front of — `JobManager`.
+- **No *shared* job-store implementation ships yet.** `JobManager` now fronts a pluggable `JobStore` (the seam a
+  Postgres/Redis-backed impl plugs into, so jobs survive instance recycling and are visible cross-process), but the
+  only implementation in-tree is the in-process `MemoryJobStore` — so the service is still effectively
+  single-process (see `corpora_py.app.main()`, which hardcodes `workers=1`). Note the *executor* is a separate
+  concern a shared store does not solve: running conversions still live in one process's thread pool, so a
+  multi-instance deployment with a shared store gets shared *visibility*, not work distribution.

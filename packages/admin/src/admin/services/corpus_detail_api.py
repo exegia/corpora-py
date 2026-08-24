@@ -31,6 +31,8 @@ from .corpus_detail import (
     get_index,
     get_manifest,
     get_node,
+    get_sections,
+    get_versions,
     update_manifest,
 )
 from .storage import (
@@ -124,7 +126,11 @@ class NodeAnnotation(BaseModel):
 
 @router.get("/{filename}/nodes/{node}")
 async def get_corpus_node(filename: str, node: int) -> dict[str, Any]:
-    """Inspect one graph node: type, slot span, text, features, annotation."""
+    """Inspect one graph node: type, slot span, text, features, annotation.
+
+    Also returns ``context`` (embedding parents), ``occurrences`` and
+    ``occurrences_in_section`` for the reader's inspect panel.
+    """
     return await _run(lambda: get_node(filename, node))
 
 
@@ -137,10 +143,47 @@ async def patch_corpus_node(
     return await _run(lambda: annotate_node(filename, node, **updates))
 
 
+@router.get("/{filename}/versions")
+async def get_corpus_versions(filename: str) -> dict[str, Any]:
+    """Version timeline: history.yml, else git log, else one packaged row."""
+    return await _run(lambda: get_versions(filename))
+
+
+@router.post("/{filename}/restore")
+async def restore_corpus_version(filename: str) -> dict[str, Any]:
+    """Reserved. Restore is not implemented — 501 so the UI can stay honest."""
+    raise HTTPException(
+        status_code=501,
+        detail=f"Restore is not implemented for {filename}.",
+    )
+
+
 @router.get("/{filename}/index")
 async def get_corpus_index(filename: str) -> dict[str, Any]:
-    """Return the archive's toc, section structure, and node-type counts."""
+    """Return the archive's toc, section structure, and node-type stats.
+
+    ``node_types`` entries include ``avg_slots`` and ``is_slot``. Each section
+    item includes ``child_count``, ``words`` (slot span), and ``truncated``
+    when the nested children list was capped. Deeper / remaining children:
+    ``GET /storage/{filename}/sections``.
+    """
     return await _run(lambda: get_index(filename))
+
+
+@router.get("/{filename}/sections")
+async def get_corpus_sections(
+    filename: str,
+    parent: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50),
+) -> dict[str, Any]:
+    """Paginated section children under ``parent`` (top-level if omitted).
+
+    Lowest-level sections return no items — use ``/content`` for passages.
+    """
+    return await _run(
+        lambda: get_sections(filename, parent=parent, offset=offset, limit=limit)
+    )
 
 
 @router.get("/{filename}/content")
@@ -151,7 +194,11 @@ async def get_corpus_content(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50),
 ) -> dict[str, Any]:
-    """Return paginated passages under `ref` (or the whole corpus if omitted)."""
+    """Return paginated passages under `ref` (or the whole corpus if omitted).
+
+    Each passage includes ``tokens``: ``{text, after, node}`` so the reader
+    can inspect the clicked word instead of guessing ``first_slot + n``.
+    """
     return await _run(
         lambda: get_content(filename, ref=ref, fmt=fmt, offset=offset, limit=limit)
     )

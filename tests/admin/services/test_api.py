@@ -19,11 +19,11 @@ class FakeUpload:
         return self._buffer.read(size)
 
 
-def _post(client, filename="doc.txt", source_format="plain", content=b"hello world"):
+def _post(client, filename="doc.txt", source_format="plain", content=b"hello world", name="My Doc"):
     return client.post(
         "/convert",
         files={"file": (filename, content)},
-        data={"source_format": source_format, "name": "My Doc"},
+        data={"source_format": source_format, "name": name},
     )
 
 
@@ -46,10 +46,9 @@ class TestCreateConversion:
         job_id = _post(client).json()["job_id"]
         assert manager.get(job_id).owner is None
 
-    def test_xml_has_no_converter_422(self, client):
+    def test_xml_format_is_accepted(self, client):
         response = _post(client, source_format="xml")
-        assert response.status_code == 422
-        assert "No converter registered" in response.json()["detail"]
+        assert response.status_code == 202
 
     def test_unknown_format_rejected_by_validation(self, client):
         assert _post(client, source_format="docx").status_code == 422
@@ -644,3 +643,119 @@ class TestRunConversionDisplayName:
             job_id="j",
         )
         assert result.name == "summa-theologiae.corpus"
+
+
+class TestListConversions:
+    def test_list_returns_jobs_for_owner(self, client, manager, claims_holder):
+        claims_holder["claims"] = {"sub": "alice"}
+        _post(client, name="doc1")
+        _post(client, name="doc2")
+        # Switch to bob.
+        claims_holder["claims"] = {"sub": "bob"}
+        _post(client, name="doc3")
+
+        # Alice sees her 2 jobs.
+        claims_holder["claims"] = {"sub": "alice"}
+        resp = client.get("/convert")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 2
+
+        # Bob sees his 1 job.
+        claims_holder["claims"] = {"sub": "bob"}
+        resp = client.get("/convert")
+        body = resp.json()
+        assert body["total"] == 1
+
+    def test_list_no_auth_returns_all(self, client, manager):
+        _post(client, name="a")
+        _post(client, name="b")
+        resp = client.get("/convert")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 2
+
+    def test_list_pagination(self, client, manager):
+        for i in range(5):
+            _post(client, name=f"doc{i}")
+        resp = client.get("/convert", params={"offset": 1, "limit": 2})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 5
+        assert len(body["jobs"]) == 2
+
+    def test_list_empty(self, client, manager):
+        resp = client.get("/convert")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 0
+        assert body["jobs"] == []
+
+    def test_list_most_recent_first(self, client, manager):
+        import time as _time
+
+        _post(client, name="old")
+        _time.sleep(0.01)
+        _post(client, name="new")
+        resp = client.get("/convert")
+        body = resp.json()
+        assert body["jobs"][0]["name"] == "new"
+
+
+class TestOpenAPIContract:
+    """Issue #104: the job payload and error responses must be fully typed in
+    the OpenAPI, and /docs must carry the poll-vs-WS transport guidance."""
+
+    @pytest.fixture
+    def spec(self, client):
+        return client.get("/openapi.json").json()
+
+    def test_job_status_payload_is_typed(self, spec):
+        get_op = spec["paths"]["/convert/{job_id}"]["get"]
+        ref = get_op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        schema = spec["components"]["schemas"][ref.rsplit("/", 1)[-1]]
+        # A typed model, not additionalProperties: true.
+        assert set(schema["required"]) >= {
+            "id",
+            "source_format",
+            "status",
+            "result_filename",
+            "download_ready",
+            "logs",
+        }
+        assert schema.get("additionalProperties") is not True
+
+    def test_list_payload_is_typed(self, spec):
+        get_op = spec["paths"]["/convert"]["get"]
+        ref = get_op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        schema = spec["components"]["schemas"][ref.rsplit("/", 1)[-1]]
+        assert set(schema["required"]) == {"jobs", "total", "offset", "limit"}
+
+    def test_post_declares_limit_and_queue_errors(self, spec):
+        post_op = spec["paths"]["/convert"]["post"]
+        assert {"413", "422", "429"} <= set(post_op["responses"])
+        assert "500 MiB" in post_op["description"]
+
+    def test_transport_guidance_in_docs(self, spec):
+        for op in (
+            spec["paths"]["/convert"]["post"],
+            spec["paths"]["/convert/{job_id}"]["get"],
+        ):
+            assert "fall back to polling" in op["description"]
+
+    def test_job_routes_declare_404_and_409(self, spec):
+        assert "404" in spec["paths"]["/convert/{job_id}"]["get"]["responses"]
+        download = spec["paths"]["/convert/{job_id}/download"]["get"]["responses"]
+        assert {"404", "409"} <= set(download)
+        for segment in ("manifest", "index", "sections", "content", "versions"):
+            responses = spec["paths"][f"/convert/{{job_id}}/{segment}"]["get"]["responses"]
+            assert {"404", "409"} <= set(responses), segment
+        node_responses = spec["paths"]["/convert/{job_id}/nodes/{node}"]["get"]["responses"]
+        assert {"404", "409"} <= set(node_responses)
+
+    def test_poll_response_matches_model(self, client, manager):
+        job_id = _post(client).json()["job_id"]
+        body = client.get(f"/convert/{job_id}").json()
+        expected = api_module.ConversionJobStatus.model_validate(body)
+        assert expected.status == JobStatus.QUEUED
+        assert expected.result_filename.endswith(".corpus")

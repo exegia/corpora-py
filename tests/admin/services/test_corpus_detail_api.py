@@ -161,15 +161,35 @@ def test_get_index_shape(client):
     assert sections["levels"] == ["book"]
     assert len(sections["items"]) == 1
     item = sections["items"][0]
-    assert set(item) >= {"title", "ref", "children"}
+    assert set(item) >= {
+        "title",
+        "ref",
+        "children",
+        "otype",
+        "child_count",
+        "nodes",
+        "words",
+        "truncated",
+    }
     # Single-level corpus: top items have no child sections.
     assert item["children"] == []
+    assert item["child_count"] == 0
+    assert item["truncated"] is False
+    assert item["otype"] == "book"
+    assert isinstance(item["words"], int) and item["words"] > 0
 
     node_types = body["node_types"]
-    assert all(set(nt) == {"type", "count"} for nt in node_types)
+    assert all(
+        set(nt) >= {"type", "count", "avg_slots", "is_slot"} for nt in node_types
+    )
     counts = {nt["type"]: nt["count"] for nt in node_types}
     assert counts["book"] == 1
     assert counts["paragraph"] == 5
+    by_type = {nt["type"]: nt for nt in node_types}
+    assert by_type["word"]["is_slot"] is True
+    assert by_type["word"]["avg_slots"] == 1
+    assert by_type["book"]["is_slot"] is False
+    assert by_type["book"]["avg_slots"] >= 1
 
 
 # ── Content ────────────────────────────────────────────────────────────────────
@@ -185,9 +205,13 @@ def test_get_content_whole_corpus_paginates(client):
     assert body["limit"] == 2
     assert body["next_offset"] == 2
     assert len(body["passages"]) == 2
-    assert all(set(p) == {"node", "ref", "text"} for p in body["passages"])
+    assert all(set(p) >= {"node", "ref", "text", "tokens"} for p in body["passages"])
     assert all(isinstance(p["node"], int) for p in body["passages"])
     assert body["passages"][0]["text"]  # non-empty
+    tokens = body["passages"][0]["tokens"]
+    assert tokens
+    assert all(set(t) >= {"text", "after", "node"} for t in tokens)
+    assert all(isinstance(t["node"], int) for t in tokens)
 
 
 def test_get_content_last_page_has_no_next_offset(client):
@@ -232,6 +256,41 @@ def test_index_ref_round_trips_into_content(client):
     assert body["passages"]
 
 
+def test_get_sections_lists_top_level(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/sections")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["parent"] is None
+    assert body["levels"] == ["book"]
+    assert body["total"] == 1
+    assert body["next_offset"] is None
+    item = body["items"][0]
+    assert item["otype"] == "book"
+    assert item["child_count"] == 0
+    assert set(item) >= {"title", "ref", "otype", "child_count", "nodes", "words"}
+
+
+def test_get_sections_unknown_parent_is_404(client):
+    assert (
+        client.get(
+            f"/storage/{ARCHIVE_NAME}/sections",
+            params={"parent": "Nonexistent 999"},
+        ).status_code
+        == 404
+    )
+
+
+def test_get_sections_lowest_level_has_no_children(client):
+    index = client.get(f"/storage/{ARCHIVE_NAME}/index").json()
+    ref = index["sections"]["items"][0]["ref"]
+    body = client.get(
+        f"/storage/{ARCHIVE_NAME}/sections", params={"parent": ref}
+    ).json()
+    assert body["parent"] == ref
+    assert body["items"] == []
+    assert body["total"] == 0
+
+
 # ── Nodes (GET) ────────────────────────────────────────────────────────────────
 
 
@@ -259,6 +318,10 @@ def test_get_node_shape(client):
     assert isinstance(body["features"], dict)
     assert body["annotation"] is None
     assert set(body["node_types"]) >= {"book", "paragraph", "word"}
+    assert isinstance(body["context"], list)
+    assert body["occurrences"] >= 1
+    assert body["occurrences_in_section"] >= 1
+    assert body["occurrences_in_section"] <= body["occurrences"]
 
 
 def test_get_node_slot_node(client):
@@ -272,6 +335,9 @@ def test_get_node_slot_node(client):
     assert body["otype"] == "word"
     assert body["is_slot"] is True
     assert body["first_slot"] == body["last_slot"] == slot
+    assert body["context"]
+    assert any(row["otype"] == "paragraph" for row in body["context"])
+    assert body["occurrences"] >= 1
 
 
 def test_get_node_unknown_node_is_404(client):
@@ -370,3 +436,20 @@ def test_read_only_still_allows_manifest_read(client, monkeypatch):
 
     monkeypatch.setattr(storage_api.settings, "hf_read_only", True)
     assert client.get(f"/storage/{ARCHIVE_NAME}/manifest").status_code == 200
+
+
+# ── Versions ───────────────────────────────────────────────────────────────────
+
+
+def test_get_versions_has_a_current_row(client):
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/versions")
+    assert resp.status_code == 200
+    versions = resp.json()["versions"]
+    assert versions
+    assert any(row.get("current") for row in versions)
+    assert all({"id", "label", "title", "at", "current", "notes"} <= set(row) for row in versions)
+
+
+def test_restore_is_501(client):
+    resp = client.post(f"/storage/{ARCHIVE_NAME}/restore")
+    assert resp.status_code == 501

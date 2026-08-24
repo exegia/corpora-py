@@ -64,6 +64,39 @@ class Settings(BaseSettings):
     # coupled to auth_required, so `AUTH_REQUIRED=false` local dev still writes.
     hf_read_only: bool = False
 
+    # Which backend the corpus storage surfaces (/storage REST + MCP + the
+    # corpus-detail layer) talk to -- see admin.services.storage's
+    # make_corpus_storage(). "huggingface" (default) is the Hub publishing
+    # location described above. "supabase" stores .corpus objects in the
+    # Supabase Storage bucket below, with object paths scoped per-user by the
+    # verified JWT `sub` claim ({sub}/{filename}) so no caller can list or
+    # address another user's objects -- the library backend for corpora-web
+    # (issue #110 option C). hf_read_only applies to BOTH backends: it is the
+    # deployment-wide storage read-only flag, not a Hub-only switch.
+    storage_backend: Literal["huggingface", "supabase"] = "huggingface"
+    # Base URL of the Supabase project (https://<ref>.supabase.co). Falls back
+    # to deriving from project_ref (see supabase_api_url below); set it
+    # explicitly for self-hosted/local instances.
+    supabase_url: str | None = os.getenv("SUPABASE_URL")
+    # Server-side only. Grants full Storage access, bypassing RLS -- the
+    # per-user path scoping above is enforced by this service, which is why
+    # every request's owner comes from a *verified* JWT and never from client
+    # input. Must never appear in client-side config (no VITE_*).
+    supabase_service_role_key: str | None = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    # Storage bucket holding library .corpus objects (corpora-web writes to
+    # the same bucket, e.g. "project-corpora"). Unset keeps the supabase
+    # backend importable but every call fails with a clear "not configured"
+    # error, matching hf_storage_repo's behavior.
+    supabase_storage_bucket: str | None = os.getenv("SUPABASE_STORAGE_BUCKET")
+
+    # Retention window for finished conversion jobs (admin.services.jobs).
+    # Terminal jobs older than this are lazily reaped -- removed from the job
+    # store and their .corpus result files deleted -- on the next list/submit,
+    # bounding disk and memory on a long-running process. 0 (the default)
+    # disables reaping, preserving today's keep-forever behavior; set
+    # JOB_RETENTION_SECONDS on deployments that need a bounded footprint.
+    job_retention_seconds: float = 0
+
     PROJECT_NAME: ClassVar[str] = "Corpora API"
     PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."
     API_V1_STR: str = "/api/v1"
@@ -86,6 +119,21 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.environment == "development"
+
+    @property
+    def supabase_api_url(self) -> str | None:
+        """Base URL for Supabase REST APIs (Storage lives under /storage/v1).
+
+        `supabase_url` wins if set (self-hosted/local instances); otherwise
+        derived from `project_ref`, mirroring `jwks_url` below. `None` when
+        neither is configured -- the supabase storage backend treats that as
+        "not configured", never as a default host.
+        """
+        if self.supabase_url:
+            return self.supabase_url.rstrip("/")
+        if self.project_ref:
+            return f"https://{self.project_ref}.supabase.co"
+        return None
 
     @property
     def jwks_url(self) -> str | None:

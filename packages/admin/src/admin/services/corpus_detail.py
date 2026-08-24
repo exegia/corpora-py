@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
+import subprocess
 import tempfile
 import threading
 import zipfile
@@ -40,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from common.utils.request_context import current_owner
 
 from .storage import (
     CorpusNotFoundError,
@@ -58,8 +61,9 @@ _HUB_CACHE_ROOT = Path(tempfile.gettempdir()) / "corpora-admin-corpus-detail-cac
 
 # How many child sections (chapters/pages) to list per top-level index item
 # before truncating -- a big book can have thousands of chapters and the detail
-# view only needs a navigable slice.
+# view only needs a navigable slice. `GET …/sections` is the paginated follow-up.
 _MAX_CHILDREN = 500
+_MAX_SECTION_PAGE = 200
 
 # Manifest keys a PATCH is allowed to touch (all optional strings). Kept here so
 # the REST/MCP surfaces and this module agree on the editable subset.
@@ -90,6 +94,37 @@ class _Cached:
 _cache: dict[str, _Cached] = {}
 _lock = threading.Lock()
 
+# Archives supplied directly (e.g. a conversion job's result on disk) instead of
+# fetched from the Hub. safe-name -> local .corpus path. Checked by
+# `_ensure_extracted` before it tries `corpus_storage.download`, so job-scoped
+# detail reads work without Hub storage being configured at all. Guarded by
+# `_lock` alongside `_cache`.
+_local_archives: dict[str, Path] = {}
+
+
+def register_local_archive(name: str, archive_path: Path) -> str:
+    """Serve detail reads from a local ``.corpus`` instead of the Hub.
+
+    Registers ``archive_path`` under a safe cache key derived from ``name`` so
+    that ``_ensure_extracted`` extracts it directly (no Hub download). Returns
+    the key the caller should pass to ``get_manifest`` / ``get_index`` / … —
+    identical to how a Hub filename is passed. Re-registering the same key just
+    re-points the path and drops any stale cached extraction.
+    """
+    key = _safe_name(name)
+    with _lock:
+        _local_archives[key] = Path(archive_path)
+        _cache.pop(key, None)
+    return key
+
+
+def unregister_local_archive(name: str) -> None:
+    """Drop a local-archive registration and its cached extraction."""
+    key = _safe_name(name)
+    with _lock:
+        _local_archives.pop(key, None)
+        _cache.pop(key, None)
+
 
 def _safe_name(filename: str) -> str:
     """Normalize to a flat ``<name>.corpus`` filename, rejecting path escapes.
@@ -105,6 +140,26 @@ def _safe_name(filename: str) -> str:
     return name
 
 
+def _cache_key(name: str) -> str:
+    """Cache/work-dir key for a safe archive name.
+
+    When the active storage backend scopes archives per-owner
+    (`corpus_storage.scopes_by_owner`, i.e. the Supabase library backend), two
+    owners can legitimately hold different archives under the same filename --
+    a shared plain-name key would serve one owner's extraction to the other.
+    Prefix the key with the request's verified owner in that case. Hub-backed
+    storage (global namespace) and anonymous requests keep the plain name.
+    The owner is sanitized because the key doubles as a directory name under
+    `_HUB_CACHE_ROOT`.
+    """
+    if not getattr(corpus_storage, "scopes_by_owner", False):
+        return name
+    owner = current_owner.get()
+    if not owner:
+        return name
+    return f"{re.sub(r'[^A-Za-z0-9_-]', '-', owner)}__{name}"
+
+
 def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
     """Extract `zf` into `dest`, rejecting any member that escapes `dest`."""
     dest = dest.resolve()
@@ -118,28 +173,41 @@ def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
 def _ensure_extracted(filename: str) -> _Cached:
     """Return the cache entry for `filename`, downloading + extracting if absent."""
     name = _safe_name(filename)
+    key = _cache_key(name)
     with _lock:
-        cached = _cache.get(name)
+        cached = _cache.get(key)
         if cached is not None:
             return cached
+        # Local (job-result) registrations are keyed by plain name: a job id is
+        # already unique, and job visibility is enforced upstream by
+        # `ConversionJob.is_visible_to`.
+        local_archive = _local_archives.get(name)
 
-        work = _HUB_CACHE_ROOT / name
+        work = _HUB_CACHE_ROOT / key
         download_dir = work / "download"
         extract_dir = work / "extracted"
         if extract_dir.exists():
             shutil.rmtree(extract_dir, ignore_errors=True)
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        # Raises CorpusNotFoundError / StorageNotConfiguredError / StorageError,
-        # which the callers map to 404 / 503 / 502.
-        archive = corpus_storage.download(name, dest_dir=download_dir)
+        if local_archive is not None:
+            # Job-scoped read: extract the on-disk result directly, no Hub I/O.
+            if not local_archive.is_file():
+                raise CorpusNotFoundError(
+                    f"Local archive not found: {local_archive!s}"
+                )
+            archive_path: Path = local_archive
+        else:
+            # Hub read. Raises CorpusNotFoundError / StorageNotConfiguredError /
+            # StorageError, which the callers map to 404 / 503 / 502.
+            archive_path = corpus_storage.download(name, dest_dir=download_dir)
 
         extract_dir.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(archive) as zf:
+        with zipfile.ZipFile(archive_path) as zf:
             _safe_extract(zf, extract_dir)
 
         cached = _Cached(extract_dir=extract_dir)
-        _cache[name] = cached
+        _cache[key] = cached
         return cached
 
 
@@ -166,12 +234,16 @@ def _load_api(filename: str) -> Any:
 def invalidate(filename: str) -> None:
     """Drop the cached extraction + api for `filename` and delete its files."""
     name = _safe_name(filename)
+    key = _cache_key(name)
     with _lock:
-        cached = _cache.pop(name, None)
-    work = _HUB_CACHE_ROOT / name
+        cached = _cache.pop(key, None)
+        is_local = name in _local_archives
+    work = _HUB_CACHE_ROOT / key
     shutil.rmtree(work, ignore_errors=True)
     if cached is not None:
         logger.debug("Invalidated corpus-detail cache for %s", name)
+    if is_local:
+        logger.debug("Keeping local-archive registration for %s", name)
 
 
 # ── Section-reference helpers (adapted from corpora_mcp.server) ────────────────
@@ -185,6 +257,67 @@ def _section_ref(node: int, api: Any) -> str:
         return ref or str(node)
     except Exception:
         return str(node)
+
+
+def _slot_span(api: Any, node: int) -> int | None:
+    """How many slots `node` covers, or None if it has no oslots."""
+    otype = api.F.otype.v(node)
+    if otype is None:
+        return None
+    if otype == api.F.otype.slotType:
+        return 1
+    try:
+        slots = api.E.oslots.s(node)
+    except Exception:  # noqa: BLE001 - some nodes have no slot embedding
+        return None
+    if not slots:
+        return None
+    return int(slots[-1]) - int(slots[0]) + 1
+
+
+def _node_type_stats(api: Any) -> list[dict[str, Any]]:
+    """Per-otype counts with mean slot span and a slot-type flag."""
+    slot_type = api.F.otype.slotType
+    rows: list[dict[str, Any]] = []
+    for otype in api.F.otype.all or ():
+        nodes = list(api.F.otype.s(otype))
+        if otype == slot_type:
+            avg = 1.0
+        else:
+            spans = [span for n in nodes if (span := _slot_span(api, n)) is not None]
+            avg = (sum(spans) / len(spans)) if spans else 0.0
+        rows.append(
+            {
+                "type": otype,
+                "count": len(nodes),
+                "avg_slots": round(avg, 1),
+                "is_slot": otype == slot_type,
+            }
+        )
+    return rows
+
+
+def _section_entry(
+    api: Any,
+    node: int,
+    *,
+    grandchild_type: str | None = None,
+) -> dict[str, Any]:
+    """One section row: identity, slot span, and how many section-children it has."""
+    ref = _section_ref(node, api)
+    otype = api.F.otype.v(node)
+    if grandchild_type:
+        child_count = len(list(api.L.d(node, otype=grandchild_type)))
+    else:
+        child_count = 0
+    return {
+        "title": _section_label(node, api) or ref,
+        "ref": ref,
+        "otype": str(otype or ""),
+        "child_count": child_count,
+        "nodes": child_count,
+        "words": _slot_span(api, node),
+    }
 
 
 def _section_label(node: int, api: Any) -> str:
@@ -365,6 +498,125 @@ def get_annotations(filename: str) -> dict[str, Any]:
     return _read_annotations(cached.extract_dir)
 
 
+_IDENTITY_FEATURES = ("lemma", "lex", "word", "form", "text")
+
+
+def _feature_names(api: Any) -> set[str]:
+    try:
+        return set(api.Fall())
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _identity_feature(api: Any, node: int) -> tuple[str | None, str | None]:
+    """Best identifying feature for occurrence counts (lemma → text)."""
+    names = _feature_names(api)
+    for feat in _IDENTITY_FEATURES:
+        if feat not in names:
+            continue
+        try:
+            value = api.Fs(feat).v(node)
+        except Exception:  # noqa: BLE001
+            continue
+        if value is not None and str(value).strip():
+            return feat, str(value)
+    try:
+        text = api.T.text(node)
+    except Exception:  # noqa: BLE001
+        text = ""
+    if text and str(text).strip():
+        # Sentinel: not a real feature name, so counting uses T.text().
+        return "", str(text)
+    return None, None
+
+
+def _occurrence_counts(
+    api: Any,
+    node: int,
+    feat: str | None,
+    value: str | None,
+) -> tuple[int, int]:
+    """How many nodes of the same otype share `feat=value`, corpus-wide and in-section."""
+    if feat is None or value is None:
+        return 0, 0
+    otype = api.F.otype.v(node)
+    if otype is None:
+        return 0, 0
+    section = _section_ref(node, api)
+    corpus = 0
+    in_section = 0
+    names = _feature_names(api)
+    for other in api.F.otype.s(otype):
+        try:
+            if feat in names:
+                other_value = api.Fs(feat).v(other)
+            else:
+                other_value = api.T.text(other)
+        except Exception:  # noqa: BLE001
+            continue
+        if other_value is None or str(other_value) != value:
+            continue
+        corpus += 1
+        if _section_ref(other, api) == section:
+            in_section += 1
+    return corpus, in_section
+
+
+def _containment_chain(api: Any, node: int) -> list[dict[str, Any]]:
+    """Embedding parents (`L.u`), nearest first."""
+    try:
+        parents = list(api.L.u(node) or ())
+    except Exception:  # noqa: BLE001
+        parents = []
+    chain: list[dict[str, Any]] = []
+    for parent in parents:
+        chain.append(
+            {
+                "node": int(parent),
+                "otype": str(api.F.otype.v(parent) or ""),
+                "ref": _section_ref(parent, api),
+            }
+        )
+    return chain
+
+
+def _slot_tokens(api: Any, node: int) -> list[dict[str, Any]]:
+    """Slot-level tokens under `node` for the reader inspect mapping."""
+    slot_type = api.F.otype.slotType
+    otype = api.F.otype.v(node)
+    if otype == slot_type:
+        slots = [node]
+    else:
+        try:
+            slots = list(api.L.d(node, otype=slot_type) or ())
+        except Exception:  # noqa: BLE001
+            slots = []
+    names = _feature_names(api)
+    tokens: list[dict[str, Any]] = []
+    for slot in slots:
+        text = ""
+        if "text" in names:
+            try:
+                raw = api.Fs("text").v(slot)
+                text = str(raw) if raw is not None else ""
+            except Exception:  # noqa: BLE001
+                text = ""
+        if not text:
+            try:
+                text = api.T.text(slot) or ""
+            except Exception:  # noqa: BLE001
+                text = ""
+        after = ""
+        if "after" in names:
+            try:
+                raw_after = api.Fs("after").v(slot)
+                after = "" if raw_after is None else str(raw_after)
+            except Exception:  # noqa: BLE001
+                after = ""
+        tokens.append({"text": text, "after": after, "node": int(slot)})
+    return tokens
+
+
 def _require_api(filename: str) -> Any:
     """Load the cfabric api or raise (the node surfaces can't degrade to empty)."""
     api = _load_api(filename)
@@ -419,6 +671,8 @@ def get_node(filename: str, node: int) -> dict[str, Any]:
 
     cached = _ensure_extracted(filename)
     annotation = _read_annotations(cached.extract_dir).get("nodes", {}).get(str(node))
+    lemma_feat, lemma_value = _identity_feature(api, node)
+    corpus_n, section_n = _occurrence_counts(api, node, lemma_feat, lemma_value)
 
     return {
         "node": int(node),
@@ -432,6 +686,9 @@ def get_node(filename: str, node: int) -> dict[str, Any]:
         "features": features,
         "annotation": annotation,
         "node_types": [str(t) for t in (api.F.otype.all or ())],
+        "context": _containment_chain(api, node),
+        "occurrences": corpus_n,
+        "occurrences_in_section": section_n,
     }
 
 
@@ -481,41 +738,108 @@ def annotate_node(
 # ── Index ─────────────────────────────────────────────────────────────────────
 
 
+def _section_levels(api: Any) -> list[str]:
+    try:
+        return list(api.T.sectionTypes)
+    except Exception:
+        return []
+
+
 def _build_sections(api: Any) -> dict[str, Any] | None:
     """Top-level section nodes with their immediate child sections, or None."""
-    try:
-        levels = list(api.T.sectionTypes)
-    except Exception:
-        levels = []
+    levels = _section_levels(api)
     if not levels:
         return None
 
     top_type = levels[0]
     child_type = levels[1] if len(levels) > 1 else None
+    grandchild_type = levels[2] if len(levels) > 2 else None
 
     items: list[dict[str, Any]] = []
     for node in api.F.otype.s(top_type):
-        children: list[dict[str, str]] = []
-        if child_type is not None:
-            for child in api.L.d(node, otype=child_type)[:_MAX_CHILDREN]:
-                child_ref = _section_ref(child, api)
-                children.append(
-                    {"title": _section_label(child, api) or child_ref, "ref": child_ref}
-                )
-        item_ref = _section_ref(node, api)
-        items.append(
-            {
-                "title": _section_label(node, api) or item_ref,
-                "ref": item_ref,
-                "children": children,
-            }
-        )
+        child_nodes = list(api.L.d(node, otype=child_type)) if child_type else []
+        total = len(child_nodes)
+        children = [
+            _section_entry(api, child, grandchild_type=grandchild_type)
+            for child in child_nodes[:_MAX_CHILDREN]
+        ]
+        item = _section_entry(api, node, grandchild_type=child_type)
+        item["children"] = children
+        item["truncated"] = total > _MAX_CHILDREN
+        items.append(item)
 
     return {"levels": levels, "items": items}
 
 
+def get_versions(filename: str) -> dict[str, Any]:
+    """Version timeline for the Activity tab.
+
+    Prefers a ``history.yml`` sidecar, then the archive's ``.git/`` log, then
+    a single synthetic row from the manifest — so Vercel packages without git
+    still have one honest "Converted" entry.
+    """
+    cached = _ensure_extracted(filename)
+    sidecar = cached.extract_dir / "history.yml"
+    if sidecar.is_file():
+        try:
+            data = yaml.safe_load(sidecar.read_text()) or {}
+        except (OSError, yaml.YAMLError):
+            data = {}
+        sidecar_versions = data.get("versions") if isinstance(data, dict) else None
+        if isinstance(sidecar_versions, list) and sidecar_versions:
+            return {"versions": sidecar_versions}
+
+    versions: list[dict[str, Any]] = []
+    git_dir = cached.extract_dir / ".git"
+    if git_dir.is_dir() and shutil.which("git"):
+        try:
+            proc = subprocess.run(
+                ["git", "log", "--format=%H%x09%cI%x09%s"],
+                cwd=cached.extract_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            lines = [line for line in proc.stdout.splitlines() if line.strip()]
+            total = len(lines)
+            for index, line in enumerate(lines):
+                sha, at, title = (line.split("\t", 2) + ["", "", ""])[:3]
+                versions.append(
+                    {
+                        "id": sha[:12] or f"commit-{index}",
+                        "sha": sha or None,
+                        "label": "v1.0" if index == total - 1 else f"v1.{total - 1 - index}",
+                        "title": title or "Snapshot",
+                        "at": at,
+                        "current": index == 0,
+                        "notes": [],
+                    }
+                )
+        except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+            logger.debug("git log failed for %s: %s", filename, exc)
+
+    if not versions:
+        try:
+            manifest = get_manifest(filename)
+        except CorpusNotFoundError:
+            manifest = {}
+        name = manifest.get("name")
+        versions.append(
+            {
+                "id": "packaged",
+                "sha": None,
+                "label": str(manifest.get("version") or "v1.0"),
+                "title": "Converted",
+                "at": str(manifest.get("written_date") or ""),
+                "current": True,
+                "notes": [str(name)] if name else [],
+            }
+        )
+    return {"versions": versions}
+
+
 def get_index(filename: str) -> dict[str, Any]:
-    """Return the archive's toc, section structure, and node-type counts."""
+    """Return the archive's toc, section structure, and node-type stats."""
     cached = _ensure_extracted(filename)
     toc_path = cached.extract_dir / "toc.yml"
     toc = yaml.safe_load(toc_path.read_text()) if toc_path.is_file() else None
@@ -524,11 +848,76 @@ def get_index(filename: str) -> dict[str, Any]:
     if api is None:
         return {"toc": toc, "sections": None, "node_types": []}
 
-    node_types = [
-        {"type": t, "count": len(api.F.otype.s(t))} for t in (api.F.otype.all or ())
-    ]
-    sections = _build_sections(api)
-    return {"toc": toc, "sections": sections, "node_types": node_types}
+    return {
+        "toc": toc,
+        "sections": _build_sections(api),
+        "node_types": _node_type_stats(api),
+    }
+
+
+def get_sections(
+    filename: str,
+    parent: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Paginated section children under `parent` (or top-level if omitted).
+
+    Used by Structure to load levels deeper than the two-level index without
+    treating content passages as the next otype. `parent` is a section ref
+    from the index. Lowest-level sections return an empty item list — the
+    client should then call ``/content``.
+    """
+    limit = max(1, min(int(limit), _MAX_SECTION_PAGE))
+    offset = max(0, int(offset))
+
+    api = _load_api(filename)
+    empty: dict[str, Any] = {
+        "parent": parent,
+        "levels": [],
+        "items": [],
+        "total": 0,
+        "offset": offset,
+        "limit": limit,
+        "next_offset": None,
+    }
+    if api is None:
+        return empty
+
+    levels = _section_levels(api)
+    if not levels:
+        return {**empty, "levels": levels}
+
+    if parent:
+        node = _resolve_section_node(api, parent, levels)
+        if node is None:
+            raise CorpusNotFoundError(
+                f"Section reference {parent!r} not found in {_safe_name(filename)}"
+            )
+        otype = api.F.otype.v(node)
+        idx = levels.index(otype) if otype in levels else -1
+        child_type = levels[idx + 1] if 0 <= idx < len(levels) - 1 else None
+        grandchild_type = levels[idx + 2] if 0 <= idx < len(levels) - 2 else None
+        nodes = list(api.L.d(node, otype=child_type)) if child_type else []
+    else:
+        child_type = levels[0]
+        grandchild_type = levels[1] if len(levels) > 1 else None
+        nodes = list(api.F.otype.s(child_type))
+
+    total = len(nodes)
+    page = nodes[offset : offset + limit]
+    next_offset = offset + limit if offset + limit < total else None
+    return {
+        "parent": parent,
+        "levels": levels,
+        "items": [
+            _section_entry(api, node, grandchild_type=grandchild_type) for node in page
+        ],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "next_offset": next_offset,
+    }
 
 
 # ── Content ───────────────────────────────────────────────────────────────────
@@ -622,7 +1011,12 @@ def get_content(
         # `node` lets clients cherry-pick a passage's graph node (inspect /
         # annotate it) without a second ref->node resolution round-trip.
         passages.append(
-            {"node": int(node), "ref": _section_ref(node, api), "text": text}
+            {
+                "node": int(node),
+                "ref": _section_ref(node, api),
+                "text": text,
+                "tokens": _slot_tokens(api, node),
+            }
         )
 
     next_offset = offset + limit if offset + limit < total else None
