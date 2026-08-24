@@ -28,7 +28,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 
-from .jobs import JobStatus, job_manager
+from .jobs import (
+    JobStatus,
+    JobStoreError,
+    JobStoreNotConfiguredError,
+    job_manager,
+)
 from .storage import (
     CorpusNotFoundError,
     ReadOnlyStorageError,
@@ -132,14 +137,29 @@ def _resolve_upload_source(payload: UploadRequest, request: Request) -> tuple[Pa
     """
     if payload.job_id is not None:
         claims = getattr(request.state, "user", None)
-        job = job_manager.get(payload.job_id)
-        if job is None or not job.is_visible_to(claims):
-            raise HTTPException(status_code=404, detail="Unknown job id")
-        if job.status != JobStatus.SUCCEEDED or job.result_path is None:
+        try:
+            job = job_manager.get(payload.job_id)
+            if job is None or not job.is_visible_to(claims):
+                raise HTTPException(status_code=404, detail="Unknown job id")
+            if job.status != JobStatus.SUCCEEDED:
+                raise HTTPException(
+                    status_code=409, detail=f"Job is {job.status.value}, not ready"
+                )
+            path = job_manager.materialize(job)
+        except HTTPException:
+            raise
+        except JobStoreNotConfiguredError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except JobStoreError as extra:
+            logger.exception("Job store failed while resolving upload source")
+            raise HTTPException(
+                status_code=503, detail="Job store unavailable"
+            ) from extra
+        if path is None:
             raise HTTPException(
                 status_code=409, detail=f"Job is {job.status.value}, not ready"
             )
-        return job.result_path, payload.filename or f"{job.name}.corpus"
+        return path, payload.filename or f"{job.name}.corpus"
 
     local = Path(payload.path).expanduser()  # type: ignore[arg-type]
     if not local.is_file():

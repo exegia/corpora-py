@@ -69,3 +69,14 @@ class TestEnvironment:
     def test_is_development(self):
         assert _settings(environment="development").is_development is True
         assert _settings(environment="production").is_development is False
+
+
+class TestJobStore:
+    def test_defaults_to_memory(self):
+        s = _settings()
+        assert s.job_store == "memory"
+        assert s.supabase_jobs_table == "conversion_jobs"
+
+    def test_env_selects_supabase(self, make_settings):
+        s = make_settings(JOB_STORE="supabase")
+        assert s.job_store == "supabase"

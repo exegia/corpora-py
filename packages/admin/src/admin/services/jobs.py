@@ -111,6 +111,19 @@ class JobQueueFullError(Exception):
     """
 
 
+class JobStoreError(Exception):
+    """Raised when the job store or result store cannot complete an operation.
+
+    Callers in `api.py` / `ingest_api.py` translate this to HTTP 503. The
+    message may be operator-facing (misconfiguration) but must not leak
+    internal URLs or keys.
+    """
+
+
+class JobStoreNotConfiguredError(JobStoreError):
+    """Raised when `JOB_STORE=supabase` but URL/key/table/bucket are unset."""
+
+
 # ── Pluggable job store ───────────────────────────────────────────────────────
 
 
@@ -143,6 +156,42 @@ class JobStore(ABC):
     @abstractmethod
     def delete(self, job_id: str) -> ConversionJob | None:
         """Remove and return the job for ``job_id``, or ``None`` if unknown."""
+
+
+class ResultStore(ABC):
+    """Blob store for a job's result file (``.corpus`` / ``.graph.json``).
+
+    Metadata in `JobStore` is not enough for job-scoped detail: `/index`
+    has to read the archive bytes. The default `LocalResultStore` is a
+    no-op (the converting instance already has `result_path` on disk). A
+    serverless deployment injects a shared backend so a different instance
+    can materialize those bytes after the converter is gone (issue #140).
+    """
+
+    @abstractmethod
+    def save(self, job_id: str, path: Path) -> str | None:
+        """Persist ``path`` and return a store key, or ``None`` if local-only."""
+
+    @abstractmethod
+    def materialize(self, key: str, job_id: str) -> Path:
+        """Fetch ``key`` into a local cache file and return that path."""
+
+    @abstractmethod
+    def delete(self, key: str) -> None:
+        """Remove a previously saved result. Missing keys are a no-op."""
+
+
+class LocalResultStore(ResultStore):
+    """Default: results live only at the converting instance's `result_path`."""
+
+    def save(self, job_id: str, path: Path) -> str | None:
+        return None
+
+    def materialize(self, key: str, job_id: str) -> Path:
+        raise JobStoreError("Local result store has no remote keys to materialize")
+
+    def delete(self, key: str) -> None:
+        return None
 
 
 class MemoryJobStore(JobStore):
@@ -179,6 +228,11 @@ class ConversionJob:
     started_at: float | None = None
     finished_at: float | None = None
     result_path: Path | None = None
+    # Remote key for the result bytes (issue #140), e.g.
+    # ``conversion-jobs/{id}.corpus``. `None` on the in-memory/local store.
+    # Not exposed via `to_dict()` -- callers hydrate a local `result_path`
+    # through `JobManager.materialize` before serving download/detail.
+    result_key: str | None = None
     error: str | None = None
     # Coarse, human-readable stage markers (e.g. "Parsing source...",
     # "Building .corpus archive...") appended by `JobManager.log()` from
@@ -238,7 +292,7 @@ class ConversionJob:
             "last_log": self.logs[-1] if self.logs else None,
             "result_filename": result_filename,
             "download_ready": self.status == JobStatus.SUCCEEDED
-            and self.result_path is not None,
+            and (self.result_path is not None or bool(self.result_key)),
         }
 
     def is_visible_to(self, claims: dict[str, Any] | None) -> bool:
@@ -291,6 +345,12 @@ class JobManager:
     jobs older than this are removed from the store and their result files
     deleted on the next `list_jobs` or `submit` call, bounding disk and
     memory usage for long-running processes.
+
+    `results` is the blob store for finished archives. The default
+    `LocalResultStore` does nothing; a shared `JobStore` deployment must
+    inject a backend that both *saves* bytes on success and *materializes*
+    them on another instance (issue #140). Metadata without bytes still
+    404s job-scoped detail after recycle.
     """
 
     def __init__(
@@ -301,8 +361,10 @@ class JobManager:
         stall_timeout_seconds: float = 15 * 60,
         retention_seconds: float = 0,
         store: JobStore | None = None,
+        results: ResultStore | None = None,
     ) -> None:
         self._store = store or MemoryJobStore()
+        self._results = results or LocalResultStore()
         self._lock = Lock()
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="convert"
@@ -364,6 +426,11 @@ class JobManager:
             self._store.put(job)
         try:
             result_path = fn()
+            result_key = None
+            if result_path is not None:
+                # Upload *before* marking succeeded so another instance
+                # that reads the terminal row can materialize the bytes.
+                result_key = self._results.save(job.id, Path(result_path))
             error = None
         except Exception as exc:
             # Full detail server-side only -- `job.error` round-trips to
@@ -372,10 +439,22 @@ class JobManager:
             # library internals.
             logger.exception("Conversion job %s failed", job.id)
             result_path = None
+            result_key = None
             error = f"Conversion failed: {type(exc).__name__} (job id {job.id})"
 
         with self._lock:
-            if job.status in _TERMINAL_STATUSES:
+            # Re-read: `log` / `set_display_name` / a stall check on another
+            # instance may have put a newer copy while `fn()` ran. Putting
+            # this method's original object would clobber those fields (and
+            # a shared store returns a deserialized copy, not this object).
+            current = self._store.get(job.id)
+            if current is None:
+                logger.warning(
+                    "Conversion job %s finished but is no longer in the store; dropping result",
+                    job.id,
+                )
+                return
+            if current.status in _TERMINAL_STATUSES:
                 # `_check_stall` (called from `get()`, under this same lock)
                 # already marked this job FAILED for exceeding
                 # `stall_timeout_seconds` while `fn()` was still running.
@@ -400,14 +479,15 @@ class JobManager:
                     job.id,
                     result_path,
                     error,
-                    job.status.value,
+                    current.status.value,
                 )
                 return
-            job.result_path = result_path
-            job.error = error
-            job.status = JobStatus.FAILED if error else JobStatus.SUCCEEDED
-            job.finished_at = time.time()
-            self._store.put(job)
+            current.result_path = result_path
+            current.result_key = result_key
+            current.error = error
+            current.status = JobStatus.FAILED if error else JobStatus.SUCCEEDED
+            current.finished_at = time.time()
+            self._store.put(current)
 
     def _check_stall(self, job: ConversionJob) -> None:
         """Mark a job FAILED if it's been RUNNING past `stall_timeout_seconds`.
@@ -473,8 +553,31 @@ class JobManager:
         with self._lock:
             job = self._store.get(job_id)
             if job is not None:
+                before = job.status
                 self._check_stall(job)
+                if job.status != before:
+                    # Persist the stall verdict so a shared store doesn't
+                    # keep serving RUNNING to the next instance.
+                    self._store.put(job)
             return job
+
+    def materialize(self, job: ConversionJob) -> Path | None:
+        """Ensure ``job.result_path`` is a readable local file.
+
+        No-op when the converting instance still has the file. On a
+        different instance, downloads via `result_key`. Returns ``None``
+        when there is nothing to serve (queued/failed, or the blob is gone).
+        Does not hold ``_lock`` across the download -- two concurrent
+        materializations of the same job may both fetch, which is cheaper
+        than blocking polls on a large archive.
+        """
+        if job.result_path is not None and Path(job.result_path).is_file():
+            return Path(job.result_path)
+        if not job.result_key:
+            return None
+        path = self._results.materialize(job.result_key, job.id)
+        job.result_path = path
+        return path
 
     def list_jobs(
         self,
@@ -515,6 +618,16 @@ class JobManager:
                 and job.finished_at is not None
                 and now - job.finished_at > self._retention_seconds
             ):
+                if job.result_key:
+                    try:
+                        self._results.delete(job.result_key)
+                    except Exception:
+                        logger.warning(
+                            "Failed to delete result %s for expired job %s",
+                            job.result_key,
+                            job.id,
+                            exc_info=True,
+                        )
                 if job.result_path is not None:
                     Path(job.result_path).unlink(missing_ok=True)
                 self._store.delete(job.id)
@@ -533,6 +646,34 @@ class JobManager:
         self._executor.shutdown(wait=wait, cancel_futures=True)
 
 
+def make_job_store() -> JobStore:
+    """Build the job-metadata backend selected by `JOB_STORE` (issue #140).
+
+    Lazy-imports the Supabase impl so a memory-only deployment never
+    touches PostgREST. Tests inject a store directly onto `JobManager`.
+    """
+    if settings.job_store == "supabase":
+        from .job_store_supabase import SupabaseJobStore
+
+        return SupabaseJobStore()
+    return MemoryJobStore()
+
+
+def make_result_store() -> ResultStore:
+    """Build the result-bytes backend to pair with `make_job_store()`."""
+    if settings.job_store == "supabase":
+        from .job_store_supabase import SupabaseResultStore
+
+        return SupabaseResultStore()
+    return LocalResultStore()
+
+
 # Process-wide singleton, mirroring `corpus_manager` in `corpora_mcp.corpus`.
 # Retention comes from JOB_RETENTION_SECONDS (0 = keep forever, the default).
-job_manager = JobManager(retention_seconds=settings.job_retention_seconds)
+# `JOB_STORE=supabase` swaps in a shared metadata + blob backend so poll and
+# job-scoped detail survive instance recycle (issue #140).
+job_manager = JobManager(
+    retention_seconds=settings.job_retention_seconds,
+    store=make_job_store(),
+    results=make_result_store(),
+)

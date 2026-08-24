@@ -81,6 +81,12 @@ class FakeJobManager:
     def get(self, job_id):
         return self.jobs.get(job_id)
 
+    def materialize(self, job):
+        path = job.result_path
+        if path is not None and Path(path).is_file():
+            return Path(path)
+        return None
+
 
 @pytest.fixture
 def fake_storage(monkeypatch) -> FakeStorage:

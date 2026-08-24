@@ -110,8 +110,9 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # mid-job on long conversions — clients must fall back to polling on any
 # pre-terminal close, which also keeps a request in flight so the frozen
 # instance keeps advancing the job; see trackJob in
-# example/app/lib/uploads/manager.ts) and the in-memory JobManager is
-# per-instance; the container image (above) remains the deployment for
+# example/app/lib/uploads/manager.ts). Set JOB_STORE=supabase so poll and
+# job-scoped detail survive instance recycle (issue #140); the executor is
+# still per-instance. The container image (above) remains the deployment for
 # heavy/long-running conversion work.
 vercel deploy          # manual preview deploy from a linked checkout
 vercel deploy --prod   # manual production deploy
@@ -208,8 +209,8 @@ lives here. **`corpora_mcp.corpus`** holds the singleton `CorpusManager` that lo
 **`admin.services`** — HTTP surface over the conversion pipeline: `api.py` (upload/poll/download via
 `POST/GET /convert`), `websocket.py` (`/convert/{id}/ws` coarse status push), `jobs.py`
 (`JobManager` — `ThreadPoolExecutor`-backed job registry over a pluggable `JobStore`; the default
-`MemoryJobStore` keeps job state in one process's memory, so multi-worker/multi-process deployments need a shared
-store implementation — none ships in-tree yet). Also hosts the stored-`.corpus`
+`MemoryJobStore` keeps job state in one process's memory, `JOB_STORE=supabase` is the shared
+implementation — PostgREST metadata + Storage result bytes, issue #140). Also hosts the stored-`.corpus`
 surfaces — Hub storage (`/storage`) and its detail layer (read/patch manifest, section index, paginated content at
 `/storage/{filename}/...`, plus matching `corpus_*` MCP tools); see `packages/admin/CLAUDE.md`.
 
@@ -296,12 +297,11 @@ clients can't set custom headers on the handshake).
   `packages/admin/src/admin/services/CLAUDE.md`. There is deliberately **no** per-case exception to this — the public
   demo converts, downloads, and explores, and never writes to the Hub at all.
 - **By default, nothing in this repo writes to Supabase.** Supabase appears as a JWT *issuer* whose signatures
-  `common.utils.jwt_auth` verifies against the public JWKS; there is no Supabase database client and no table this app
-  can touch (see "Dropped/missing functionality" above). The one opt-in exception is **Supabase *Storage***: setting
-  `STORAGE_BACKEND=supabase` (issue #129, option C of #110) points the corpus-storage surfaces at a Supabase Storage
-  bucket via `admin.services.storage_supabase.SupabaseCorpusStorage`, authenticated with `SUPABASE_SERVICE_ROLE_KEY`
-  (server-side only — never `VITE_*`) and scoped per-user by the verified JWT `sub` (`{sub}/{filename}` object paths,
-  owner read from the `current_owner` ContextVar set by `AuthMiddleware`). On the default `huggingface` backend an
+  `common.utils.jwt_auth` verifies against the public JWKS. Two opt-in exceptions, both server-side
+  (`SUPABASE_SERVICE_ROLE_KEY`, never `VITE_*`): **Supabase Storage** (`STORAGE_BACKEND=supabase`, issue #129) for
+  the library `/storage` surfaces, and **the shared JobStore** (`JOB_STORE=supabase`, issue #140) for conversion
+  job metadata (`conversion_jobs` via PostgREST) plus result bytes (`conversion-jobs/` prefix). Neither uses the
+  `supabase` Python SDK — both talk REST with `requests`. On the default `huggingface` / `memory` settings an
   anonymous deployment still has no Supabase write surface to lock down.
 - Decoded JWT claims land in `scope["state"]["user"]` and are used by
   `ConversionJob.is_visible_to()` (`admin.services.jobs`) to scope `GET /convert/{id}`,
