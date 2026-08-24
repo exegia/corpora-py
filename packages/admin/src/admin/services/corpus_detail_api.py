@@ -149,9 +149,9 @@ async def get_corpus_versions(filename: str) -> dict[str, Any]:
     return await _run(lambda: get_versions(filename))
 
 
-@router.post("/{filename}/restore")
+@router.post("/{filename}/restore", dependencies=[Depends(require_writable)])
 async def restore_corpus_version(filename: str) -> dict[str, Any]:
-    """Reserved. Restore is not implemented — 501 so the UI can stay honest."""
+    """Hub restore is not implemented. Read-only deployments 403 (issue #148)."""
     raise HTTPException(
         status_code=501,
         detail=f"Restore is not implemented for {filename}.",
