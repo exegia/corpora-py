@@ -28,9 +28,25 @@ from .corpus_detail import (
     get_index,
     get_manifest,
     get_node,
+    get_sections,
     update_manifest,
 )
 from .storage import StorageError
+
+
+def _append_section_line(lines: list[str], item: dict[str, Any], *, indent: int) -> None:
+    """Append one section row to ``lines`` with its child count and word span."""
+    ref = item.get("ref", "?")
+    parts: list[str] = [" " * indent + ref]
+    cc = item.get("child_count")
+    if cc:
+        parts.append(f"({cc} children)")
+    words = item.get("words")
+    if words is not None:
+        parts.append(f"[{words} slots]")
+    if item.get("truncated"):
+        parts.append("…")
+    lines.append(" ".join(parts))
 
 
 def register_corpus_detail_tools(mcp: Any, *, read_only: bool = False) -> None:
@@ -186,21 +202,70 @@ def register_corpus_detail_tools(mcp: Any, *, read_only: bool = False) -> None:
         node_types = index.get("node_types") or []
         if node_types:
             lines.append("Node types:")
-            lines += [f"  {nt['type']:<20} {nt['count']:>10,}" for nt in node_types]
+            lines += [
+                f"  {nt['type']:<20} {nt['count']:>10,}  avg_slots={nt.get('avg_slots', '—')}"
+                + ("  slot" if nt.get("is_slot") else "")
+                for nt in node_types
+            ]
 
         sections = index.get("sections")
         if sections:
             lines.append("")
             lines.append("Section levels: " + " > ".join(sections.get("levels", [])))
             for item in sections.get("items", []):
-                lines.append(f"  {item['ref']}")
+                _append_section_line(lines, item, indent=2)
                 for child in item.get("children", []):
-                    lines.append(f"    {child['ref']}")
+                    _append_section_line(lines, child, indent=4)
         else:
             lines.append("")
             lines.append("(no section structure)")
 
         return "\n".join(lines) if lines else "(empty corpus)"
+
+    @mcp.tool()
+    async def corpus_sections(
+        filename: str,
+        parent: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> str:
+        """
+        List section children of a stored archive, paginated.
+
+        Use this to expand a section the index listed with ``truncated: true``
+        or to go deeper than the index's two levels. ``parent`` is a section
+        ref from the index (e.g. ``"Genesis"``); omit it for top-level
+        sections. Lowest-level sections return no items — use
+        ``corpus_content`` for passages.
+
+        Args:
+            filename: Archive name, e.g. "BHSA.corpus".
+            parent:   Section ref to expand (omit for top-level).
+            offset:   Pagination offset (default 0).
+            limit:    Page size (1-200, default 50).
+        """
+        try:
+            result = await asyncio.to_thread(
+                get_sections, filename, parent, offset, limit
+            )
+        except StorageError as exc:
+            raise ToolError(str(exc)) from exc
+
+        header = (
+            f"{filename} sections under {result['parent'] or '(top)'} "
+            f"{result['offset']}-{result['offset'] + len(result['items'])} "
+            f"of {result['total']}"
+        )
+        body_lines: list[str] = []
+        for item in result["items"]:
+            _append_section_line(body_lines, item, indent=2)
+        body = "\n".join(body_lines)
+        footer = (
+            f"\n\n(next offset: {result['next_offset']})"
+            if result["next_offset"] is not None
+            else ""
+        )
+        return f"{header}\n\n{body}{footer}" if body else header
 
     @mcp.tool()
     async def corpus_content(

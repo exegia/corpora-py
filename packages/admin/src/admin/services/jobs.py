@@ -10,8 +10,10 @@ This module runs each conversion in a dedicated `ThreadPoolExecutor`,
 decoupled from any individual HTTP request/response cycle -- unlike
 `fastapi.BackgroundTasks`, which is tied to the lifetime of the request that
 spawned it and offers no way to observe, cancel, or query a task after the
-response is sent. Job state lives in an in-memory registry so multiple
-clients (a polling REST client, a WebSocket) can observe the same job.
+response is sent. Job state lives in a pluggable `JobStore` (default:
+in-memory) so multiple clients (a polling REST client, a WebSocket) can
+observe the same job, and a serverless deployment can swap in a shared
+backend (Postgres, Redis) so jobs survive instance recycling.
 
 See `packages/admin/CLAUDE.md` and `services/websocket.py` for why this
 reports coarse status (queued/running/succeeded/failed) rather than a
@@ -24,6 +26,7 @@ import logging
 import re
 import time
 import uuid
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -31,6 +34,8 @@ from enum import StrEnum
 from pathlib import Path
 from threading import Lock
 from typing import Any
+
+from common.utils.config import settings
 
 from ..parsers.schema import SourceFormat
 
@@ -104,6 +109,61 @@ class JobQueueFullError(Exception):
     has no FastAPI dependency (see `JobManager`'s docstring); callers in
     `api.py` translate it to a 429.
     """
+
+
+# ── Pluggable job store ───────────────────────────────────────────────────────
+
+
+class JobStore(ABC):
+    """Storage backend for `JobManager`.
+
+    The default `MemoryJobStore` is a dict held in-process; a serverless
+    deployment (Vercel, multiple uvicorn workers) can swap in a Postgres or
+    Redis-backed implementation so jobs survive instance recycling and are
+    visible cross-process. `JobManager` holds the lock and coordinates all
+    access, so implementations do **not** need their own locking.
+    """
+
+    @abstractmethod
+    def get(self, job_id: str) -> ConversionJob | None:
+        """Return the job for ``job_id``, or ``None`` if unknown."""
+
+    @abstractmethod
+    def put(self, job: ConversionJob) -> None:
+        """Insert or update ``job`` (keyed by ``job.id``)."""
+
+    @abstractmethod
+    def list(self, *, owner: str | None) -> list[ConversionJob]:
+        """Return all jobs, filtered by ``owner`` when not ``None``.
+
+        When ``owner`` is ``None`` (auth disabled / anonymous deployment),
+        return every job in the store.
+        """
+
+    @abstractmethod
+    def delete(self, job_id: str) -> ConversionJob | None:
+        """Remove and return the job for ``job_id``, or ``None`` if unknown."""
+
+
+class MemoryJobStore(JobStore):
+    """Default in-process store: a plain dict (no locking — the caller owns that)."""
+
+    def __init__(self) -> None:
+        self._jobs: dict[str, ConversionJob] = {}
+
+    def get(self, job_id: str) -> ConversionJob | None:
+        return self._jobs.get(job_id)
+
+    def put(self, job: ConversionJob) -> None:
+        self._jobs[job.id] = job
+
+    def list(self, *, owner: str | None) -> list[ConversionJob]:
+        if owner is None:
+            return list(self._jobs.values())
+        return [j for j in self._jobs.values() if j.owner == owner]
+
+    def delete(self, job_id: str) -> ConversionJob | None:
+        return self._jobs.pop(job_id, None)
 
 
 @dataclass
@@ -206,14 +266,11 @@ class ConversionJob:
 class JobManager:
     """Tracks conversion jobs and runs them on a background thread pool.
 
-    A process-local singleton is enough here: conversion output lands on
-     the local disk (see `convert_to_corpus`), so a multi-worker/multi-process
-    deployment would need a shared store and queue (Redis, Celery, ...) instead
-    of this in-memory registry. That's a deliberate scope cut for a
-    single-process admin/conversion service, not an oversight -- revisit if
-    this ever needs to run behind more than one uvicorn worker. See
-    `corpora_py.app`'s `main()` for the corresponding "stay single-process"
-    guard on the server side.
+    A pluggable `JobStore` (default: in-memory) holds job state. For a
+    single-process deployment the default `MemoryJobStore` is sufficient;
+    a serverless / multi-worker deployment can inject a shared backend
+    (Postgres, Redis) so jobs survive instance recycling and are visible
+    cross-process.
 
     `max_pending` is a blunt, in-memory-only backpressure stopgap (reject new
     submissions once too many jobs are queued/running), not real
@@ -229,6 +286,11 @@ class JobManager:
     (subprocess / `ProcessPoolExecutor`, which in turn needs `submit()` to
     take a picklable job spec instead of an arbitrary closure) -- out of
     scope here, tracked in `packages/admin/CLAUDE.md`'s "Known gaps".
+
+    `retention_seconds` (0 = disabled) controls lazy TTL reaping: terminal
+    jobs older than this are removed from the store and their result files
+    deleted on the next `list_jobs` or `submit` call, bounding disk and
+    memory usage for long-running processes.
     """
 
     def __init__(
@@ -237,14 +299,17 @@ class JobManager:
         *,
         max_pending: int = 50,
         stall_timeout_seconds: float = 15 * 60,
+        retention_seconds: float = 0,
+        store: JobStore | None = None,
     ) -> None:
-        self._jobs: dict[str, ConversionJob] = {}
+        self._store = store or MemoryJobStore()
         self._lock = Lock()
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="convert"
         )
         self._max_pending = max_pending
         self._stall_timeout_seconds = stall_timeout_seconds
+        self._retention_seconds = retention_seconds
 
     def submit(
         self,
@@ -280,14 +345,15 @@ class JobManager:
             owner=owner,
         )
         with self._lock:
+            self._reap_expired()
             pending = sum(
-                1 for j in self._jobs.values() if j.status not in _TERMINAL_STATUSES
+                1 for j in self._store.list(owner=None) if j.status not in _TERMINAL_STATUSES
             )
             if pending >= self._max_pending:
                 raise JobQueueFullError(
                     f"{pending} conversions already queued/running (limit {self._max_pending})"
                 )
-            self._jobs[job.id] = job
+            self._store.put(job)
         self._executor.submit(self._run, job, fn)
         return job
 
@@ -295,6 +361,7 @@ class JobManager:
         with self._lock:
             job.status = JobStatus.RUNNING
             job.started_at = time.time()
+            self._store.put(job)
         try:
             result_path = fn()
             error = None
@@ -340,6 +407,7 @@ class JobManager:
             job.error = error
             job.status = JobStatus.FAILED if error else JobStatus.SUCCEEDED
             job.finished_at = time.time()
+            self._store.put(job)
 
     def _check_stall(self, job: ConversionJob) -> None:
         """Mark a job FAILED if it's been RUNNING past `stall_timeout_seconds`.
@@ -374,15 +442,16 @@ class JobManager:
         -- guarded by the same lock as every other mutation. Silently a
         no-op for an unknown `job_id` rather than raising: a job can only
         reach this codepath through `JobManager.submit()`, so a miss here
-        would mean the job was somehow evicted mid-run, which nothing does
-        today, but this shouldn't be able to crash a worker thread either way.
+        would mean the job was somehow evicted mid-run (e.g. by TTL
+        reaping), but this shouldn't be able to crash a worker thread either way.
         """
         with self._lock:
-            job = self._jobs.get(job_id)
+            job = self._store.get(job_id)
             if job is None:
                 return
             job.logs.append(message)
             del job.logs[:-_MAX_LOG_LINES]
+            self._store.put(job)
 
     def set_display_name(self, job_id: str, display_name: str) -> None:
         """Set the human-readable title on a job, if it still exists.
@@ -394,17 +463,62 @@ class JobManager:
         mutation; silently a no-op for an unknown `job_id`, matching `log`.
         """
         with self._lock:
-            job = self._jobs.get(job_id)
+            job = self._store.get(job_id)
             if job is None:
                 return
             job.display_name = display_name
+            self._store.put(job)
 
     def get(self, job_id: str) -> ConversionJob | None:
         with self._lock:
-            job = self._jobs.get(job_id)
+            job = self._store.get(job_id)
             if job is not None:
                 self._check_stall(job)
             return job
+
+    def list_jobs(
+        self,
+        *,
+        owner: str | None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[ConversionJob], int]:
+        """Return the caller's jobs (most recent first) with pagination.
+
+        ``owner`` is the JWT ``sub`` claim (or ``None`` if auth is disabled).
+        Reaps expired terminal jobs (see ``retention_seconds``) before listing
+        so the count and disk usage stay bounded on a long-running process.
+        Returns ``(jobs, total)`` where ``total`` is the full count before
+        pagination.
+        """
+        with self._lock:
+            self._reap_expired()
+            jobs = self._store.list(owner=owner)
+            jobs.sort(key=lambda j: j.created_at, reverse=True)
+            total = len(jobs)
+            return jobs[offset : offset + limit], total
+
+    def _reap_expired(self) -> None:
+        """Remove terminal jobs older than ``retention_seconds`` and delete their result files.
+
+        Called under ``self._lock`` from ``list_jobs`` and ``submit`` — lazy
+        reaping, no background timer. ``retention_seconds <= 0`` disables it
+        (the default). Keeps disk and memory bounded on a long-running
+        process without a separate cleanup thread.
+        """
+        if self._retention_seconds <= 0:
+            return
+        now = time.time()
+        for job in self._store.list(owner=None):
+            if (
+                job.status in _TERMINAL_STATUSES
+                and job.finished_at is not None
+                and now - job.finished_at > self._retention_seconds
+            ):
+                if job.result_path is not None:
+                    Path(job.result_path).unlink(missing_ok=True)
+                self._store.delete(job.id)
+                logger.debug("Reaped expired job %s (finished %.0fs ago)", job.id, now - job.finished_at)
 
     def shutdown(self, *, wait: bool = False) -> None:
         """Best-effort shutdown for use from an app lifespan.
@@ -420,4 +534,5 @@ class JobManager:
 
 
 # Process-wide singleton, mirroring `corpus_manager` in `corpora_mcp.corpus`.
-job_manager = JobManager()
+# Retention comes from JOB_RETENTION_SECONDS (0 = keep forever, the default).
+job_manager = JobManager(retention_seconds=settings.job_retention_seconds)

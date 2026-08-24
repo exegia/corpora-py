@@ -38,6 +38,7 @@ class TestRegistries:
         assert set(CONVERTERS) == {
             SourceFormat.EPUB,
             SourceFormat.HTML,
+            SourceFormat.XML,
             SourceFormat.PDF,
             SourceFormat.TEI,
             SourceFormat.TEI_ZIP,
@@ -45,10 +46,10 @@ class TestRegistries:
             SourceFormat.TF_ZIP,
         }
 
-    def test_xml_deliberately_has_no_converter(self):
-        # Generic XML has no fixed node vocabulary (packages/admin/CLAUDE.md);
-        # a converter for it must be an explicit decision, not an accident.
-        assert SourceFormat.XML not in CONVERTERS
+    def test_xml_maps_all_elements_to_generic_otype(self):
+        # Generic XML has no fixed node vocabulary, so every element maps to
+        # a generic "element" otype (mirroring the HTML converter).
+        assert SourceFormat.XML in CONVERTERS
 
     def test_parsers_cover_document_formats_not_tf_zip(self):
         assert SourceFormat.XML in PARSERS
