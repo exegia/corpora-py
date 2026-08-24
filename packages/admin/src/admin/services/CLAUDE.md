@@ -108,6 +108,45 @@ suffix (e.g. `"docx"`) — formats the parser enum doesn't enumerate. The shared
 expensive; concurrent `convert()` is not documented as safe), so parallel ingest jobs serialize on
 the parse step.
 
+## Result filename + Content-Disposition (`jobs.py`, `api.py`, issues #108/#109)
+
+Every job exposes a `result_filename` in `to_dict()` (and therefore on the WebSocket/REST status
+push): the human-readable filename a client should store the result under, always ending in
+`.corpus` for `/convert` jobs and `.graph.json` for `/ingest` jobs. The stem is
+`_slugify(display_name or name)` (lowercased, non-alphanumeric runs collapsed to a single `-`);
+an empty/punctuation-only name falls back to the job id. Clients must use this rather than
+inventing `${uploadStem}.corpus` — the library contract is that only `.corpus` archives appear in
+the list, and the stored name follows the human-readable title, not the upload filename.
+`GET /convert/{id}/download`'s `Content-Disposition` echoes `result_path.name` back (with
+`media_type=application/zip`, since a `.corpus` archive is a zip — an unknown type makes some
+browsers treat the download as raw bytes), so the Save-As default always matches the
+`result_filename` the client already received.
+
+The on-disk file in `_RESULTS_ROOT` is named the same way via `_resolve_corpus_path`, with a
+short uuid suffix appended on collision (two jobs with the same display name finishing close
+together) so concurrent conversions never overwrite each other. `result_filename` tracks that
+suffix when `result_path` is set, so a client echoing it back on download matches the actual
+archive.
+
+## Display name / title derivation (`jobs.py`, `api.py`, issue #109)
+
+`ConversionJob.display_name` is the human-readable title written to `manifest.name`, derived
+in `_run_conversion` **before** the expensive TF walk so it's available on the running status:
+`_extract_source_title` calls the format parser's lightweight `parse_metadata` (TEI
+`teiHeader`, PDF `info`, HTML `<title>`, EPUB `dc:title` — headers only, not the full parse)
+and returns `metadata.title`. The priority is: source title → request `name` →
+`_clean_filename_stem` (the upload filename stem with `-`/`_` replaced by spaces). Formats
+without a parser (`tf_zip` — already a dataset; `tei_zip` — multiple documents, no single
+title) get `None` from `_extract_source_title` and fall back to the request `name`.
+
+`display_name` is `None` while the job is `QUEUED` (the worker hasn't run yet), set via
+`JobManager.set_display_name(job_id, ...)` once the worker extracts it, and exposed in
+`to_dict()` alongside the original request `name`. The slug-based `result_filename` is derived
+from `display_name` once set, so the on-disk archive name follows the human title
+(`"Summa Theologiae"` → `summa-theologiae.corpus`), not the upload filename stem
+(`summa-theologia-1200-ENG.xml`). Clients should prefer `display_name` for the library display
+title and `result_filename` for the stored filename.
+
 ## Known gaps (service-side)
 
 **TL;DR:** No real progress reporting during conversion (fixed checkpoints only), no process isolation for hung jobs, no

@@ -18,7 +18,7 @@ from ._tei_zip_to_tf import convert_tei_zip_to_tf
 from ._text_to_tf import convert_text_to_tf
 from ._tf_zip_to_tf import convert_tf_zip_to_tf
 from .convert_to_cfm import convert_to_cfm
-from .convert_to_corpus import convert_to_corpus
+from .convert_to_corpus import CorpusArchiveError, convert_to_corpus
 
 CONVERTERS = {
     SourceFormat.EPUB: convert_epub_to_tf,
@@ -32,6 +32,7 @@ CONVERTERS = {
 
 __all__ = [
     "CONVERTERS",
+    "CorpusArchiveError",
     "convert_epub_to_tf",
     "convert_html_to_tf",
     "convert_pdf_to_tf",

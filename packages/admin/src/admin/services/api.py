@@ -21,6 +21,7 @@ are how a client finds out when it's done.
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import tempfile
 import uuid
@@ -32,8 +33,17 @@ from fastapi.responses import FileResponse
 
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
+from ..parsers import PARSERS
 from ..parsers.schema import SourceFormat
-from .jobs import ConversionJob, JobQueueFullError, JobStatus, job_manager
+from .jobs import (
+    _CORPUS_SUFFIX,
+    ConversionJob,
+    JobQueueFullError,
+    JobStatus,
+    _slugify,
+    job_manager,
+    result_filename_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +139,98 @@ async def _save_upload(upload: UploadFile, dest_dir: Path) -> Path:
     return dest
 
 
+def _resolve_corpus_path(name: str, job_id: str) -> tuple[Path, str]:
+    """Pick the on-disk `.corpus` path and its exposed filename for one job.
+
+    The stem is `_slugify(name)` (e.g. `"Summa Theologiae 1200 ENG"` ->
+    `"summa-theologiae-1200-eng"`), falling back to the job id when `name`
+    has no alphanumeric content. If a file with that name already exists in
+    `_RESULTS_ROOT` (two jobs with the same `name` finishing close together,
+    or a re-run of an idempotent job), a short uuid suffix is appended to
+    keep the on-disk files unique -- the exposed `result_filename` tracks
+    that suffix so a client echoing it back on download matches the actual
+    archive. The filename always ends in `.corpus` (see issue #108).
+    """
+    _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = result_filename_for(name, SourceFormat.PLAIN, job_id=job_id)
+    path = _RESULTS_ROOT / filename
+    if path.exists():
+        stem = _slugify(name) or _slugify(job_id) or job_id
+        filename = f"{stem}-{uuid.uuid4().hex[:8]}{_CORPUS_SUFFIX}"
+        path = _RESULTS_ROOT / filename
+    return path, filename
+
+
+def _clean_filename_stem(filename: str) -> str:
+    """Turn an upload filename into a human-readable fallback title.
+
+    Strips the extension, replaces ``-`` and ``_`` with spaces, collapses
+    repeated whitespace, and strips. ``"summa-theologia-1200-ENG.xml"`` ->
+    ``"summa theologia 1200 ENG"``. This is the last-resort fallback (see
+    `_derive_display_name`) for when the source has no extractable title and
+    the client supplied no `name` -- not a title-caser, so the original
+    letter casing survives untouched.
+    """
+    stem = Path(filename).stem
+    return re.sub(r"\s+", " ", stem.replace("-", " ").replace("_", " ")).strip()
+
+
+def _extract_source_title(
+    source_format: SourceFormat, source_path: Path
+) -> str | None:
+    """Read the source document's own title, if a parser knows how.
+
+    Uses the format parser's lightweight ``parse_metadata`` (headers only --
+    TEI ``teiHeader``, PDF ``info``, HTML ``<title>``, EPUB ``dc:title``),
+    not the full parse, so this is cheap to run before the expensive TF
+    walk. Returns ``None`` for formats without a parser (``tf_zip`` --
+    already a dataset, no source metadata; ``tei_zip`` -- multiple
+    documents, no single title), so the caller falls back to the request
+    ``name`` / filename stem (see issue #109).
+    """
+    parser = PARSERS.get(source_format)
+    if parser is None:
+        return None
+    try:
+        return parser.parse_metadata(str(source_path)).title
+    except Exception:
+        logger.warning(
+            "Metadata extraction failed for %s (%s) -- falling back to "
+            "request name",
+            source_path.name,
+            source_format.value,
+            exc_info=True,
+        )
+        return None
+
+
+def _derive_display_name(
+    *,
+    source_format: SourceFormat,
+    source_path: Path,
+    name: str,
+) -> str:
+    """Pick the human-readable title that becomes ``manifest.name``.
+
+    Priority (see issue #109):
+    1. The source document's own title (TEI ``titleStmt``, PDF
+       ``info.title``, HTML ``<title>``, EPUB ``dc:title``) -- a person would
+       read this.
+    2. The request ``name`` (whatever the client sent -- may already be
+       human-readable).
+    3. A cleaned upload filename stem (spaces, not kebab).
+
+    Never returns an empty string: the filename stem is the final stop and
+    always has at least the stem of the uploaded file.
+    """
+    source_title = _extract_source_title(source_format, source_path)
+    if source_title and source_title.strip():
+        return source_title.strip()
+    if name and name.strip():
+        return name.strip()
+    return _clean_filename_stem(source_path.name) or name
+
+
 def _run_conversion(
     *,
     source_path: Path,
@@ -145,13 +247,22 @@ def _run_conversion(
     `tf/` tree) on the way out, success or failure -- only the final
     `.corpus`, written to `_RESULTS_ROOT`, survives.
 
-    The `job_manager.log()` calls bracketing each stage are coarse, fixed
-    checkpoints, not real progress -- `converter()` and `convert_to_corpus()`
-    have no progress hook to report from mid-call (see
-    `packages/admin/CLAUDE.md`'s "Known gaps"). They exist so a client
-    watching `/convert/{id}/ws` sees *something* move during a multi-minute
-    conversion instead of a status stuck on "running" with no other signal.
+    The `display_name` (human-readable title from the source document's own
+    metadata, falling back to the request `name` / filename stem -- see
+    issue #109) is derived before the expensive TF walk so it's available on
+    the running status, written into `manifest.name`, and slugified for the
+    on-disk archive filename. The `job_manager.log()` calls bracketing each
+    stage are coarse, fixed checkpoints, not real progress --
+    `converter()` and `convert_to_corpus()` have no progress hook to report
+    from mid-call (see `packages/admin/CLAUDE.md`'s "Known gaps"). They
+    exist so a client watching `/convert/{id}/ws` sees *something* move
+    during a multi-minute conversion instead of a status stuck on "running"
+    with no other signal.
     """
+    display_name = _derive_display_name(
+        source_format=source_format, source_path=source_path, name=name
+    )
+    job_manager.set_display_name(job_id, display_name)
     try:
         if source_format == SourceFormat.TF_ZIP:
             job_manager.log(
@@ -175,10 +286,9 @@ def _run_conversion(
             job_id,
             "Text-Fabric dataset ready. Compiling cache and packaging .corpus archive...",
         )
-        _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
-        corpus_path = _RESULTS_ROOT / f"{work_dir.name}.corpus"
+        corpus_path, _filename = _resolve_corpus_path(display_name, job_id)
         result = convert_to_corpus(
-            tf_dir, corpus_path, name=name, description=description
+            tf_dir, corpus_path, name=display_name, description=description
         )
 
         job_manager.log(job_id, "Conversion complete.")
@@ -272,10 +382,28 @@ async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
 
 @router.get("/{job_id}/download")
 async def download_conversion(job_id: str, request: Request) -> FileResponse:
-    """Download the finished `.corpus` archive for a succeeded job."""
+    """Download the finished `.corpus` archive for a succeeded job.
+
+    `Content-Disposition` carries the job's `result_filename` (slugified
+    from the user-supplied `name`, always ending in `.corpus`) rather than
+    the on-disk `result_path.name` -- so the client's Save-As default is the
+    human-readable library name, not the server-internal `job-<uuid>` id.
+    `media_type` is `application/zip`: a `.corpus` archive is a zip, and an
+    unknown type makes some browsers treat the download as raw bytes instead
+    of a saveable file. 409 (not 404) until `download_ready`, matching the
+    `GET /convert/{id}` contract.
+    """
     job = _not_found_unless_visible(job_manager.get(job_id), request)
     if job.status != JobStatus.SUCCEEDED or job.result_path is None:
         raise HTTPException(
             status_code=409, detail=f"Job is {job.status.value}, not ready"
         )
-    return FileResponse(job.result_path, filename=job.result_path.name)
+    # `result_path.name` is the slug of the display name (the human-readable
+    # title from the source, see issue #109) plus any collision suffix --
+    # matching what `to_dict()` exposes as `result_filename`, so the
+    # Save-As default agrees with the library name the client already has.
+    return FileResponse(
+        job.result_path,
+        filename=job.result_path.name,
+        media_type="application/zip",
+    )

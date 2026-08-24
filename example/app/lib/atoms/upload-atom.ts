@@ -104,6 +104,16 @@ export type UploadEntry = {
   corpusName?: string
   corpusSize?: number
   /**
+   * The human-readable title derived from the source document's own metadata
+   * (TEI `titleStmt`, PDF `info.title`, HTML `<title>`, EPUB `dc:title`),
+   * set by the manager once the server reports "succeeded" with a
+   * `display_name` (see issue #109). Falls back to the request `name`
+   * (filename stem) for older servers. This is what the library should
+   * display as the document title -- `corpusName` is the slug-based
+   * filename, not a human title.
+   */
+  displayName?: string
+  /**
    * The server-assigned job id and its `/convert/{id}/ws` path, set once
    * `POST /convert` responds. Kept in the atom (not just in `useUpload`'s
    * closures) so this entry is fully serializable for the localStorage
