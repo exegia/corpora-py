@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -41,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from common.utils.request_context import current_owner
 
 from .storage import (
     CorpusNotFoundError,
@@ -138,6 +140,26 @@ def _safe_name(filename: str) -> str:
     return name
 
 
+def _cache_key(name: str) -> str:
+    """Cache/work-dir key for a safe archive name.
+
+    When the active storage backend scopes archives per-owner
+    (`corpus_storage.scopes_by_owner`, i.e. the Supabase library backend), two
+    owners can legitimately hold different archives under the same filename --
+    a shared plain-name key would serve one owner's extraction to the other.
+    Prefix the key with the request's verified owner in that case. Hub-backed
+    storage (global namespace) and anonymous requests keep the plain name.
+    The owner is sanitized because the key doubles as a directory name under
+    `_HUB_CACHE_ROOT`.
+    """
+    if not getattr(corpus_storage, "scopes_by_owner", False):
+        return name
+    owner = current_owner.get()
+    if not owner:
+        return name
+    return f"{re.sub(r'[^A-Za-z0-9_-]', '-', owner)}__{name}"
+
+
 def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
     """Extract `zf` into `dest`, rejecting any member that escapes `dest`."""
     dest = dest.resolve()
@@ -151,13 +173,17 @@ def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
 def _ensure_extracted(filename: str) -> _Cached:
     """Return the cache entry for `filename`, downloading + extracting if absent."""
     name = _safe_name(filename)
+    key = _cache_key(name)
     with _lock:
-        cached = _cache.get(name)
+        cached = _cache.get(key)
         if cached is not None:
             return cached
+        # Local (job-result) registrations are keyed by plain name: a job id is
+        # already unique, and job visibility is enforced upstream by
+        # `ConversionJob.is_visible_to`.
         local_archive = _local_archives.get(name)
 
-        work = _HUB_CACHE_ROOT / name
+        work = _HUB_CACHE_ROOT / key
         download_dir = work / "download"
         extract_dir = work / "extracted"
         if extract_dir.exists():
@@ -181,7 +207,7 @@ def _ensure_extracted(filename: str) -> _Cached:
             _safe_extract(zf, extract_dir)
 
         cached = _Cached(extract_dir=extract_dir)
-        _cache[name] = cached
+        _cache[key] = cached
         return cached
 
 
@@ -208,10 +234,11 @@ def _load_api(filename: str) -> Any:
 def invalidate(filename: str) -> None:
     """Drop the cached extraction + api for `filename` and delete its files."""
     name = _safe_name(filename)
+    key = _cache_key(name)
     with _lock:
-        cached = _cache.pop(name, None)
+        cached = _cache.pop(key, None)
         is_local = name in _local_archives
-    work = _HUB_CACHE_ROOT / name
+    work = _HUB_CACHE_ROOT / key
     shutil.rmtree(work, ignore_errors=True)
     if cached is not None:
         logger.debug("Invalidated corpus-detail cache for %s", name)

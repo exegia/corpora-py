@@ -74,6 +74,34 @@ insufficient (e.g. after the instance recycled and the job's `result_path` is go
 extension is a second `CorpusStorage`-style backend or a shared `JobStore` — a deliberate
 architecture decision, not a quiet workaround (issue #110 options B/C).
 
+### Option C ships: the Supabase Storage backend (`storage_supabase.py`, issue #129)
+
+`STORAGE_BACKEND=supabase` (default `huggingface`) makes `storage.make_corpus_storage()` build a
+`SupabaseCorpusStorage` instead of `CorpusStorage`. It exposes the identical 5-method surface +
+`ensure_repo` and the same error classes, so `/storage` REST, the `storage_*`/`corpus_*` MCP tools,
+and `corpus_detail` all read the **library bucket** with zero call-site changes. Specifics:
+
+- **Owner scoping is the access control.** Object paths are `{sub}/{filename}` where `sub` is the
+  verified JWT claim read from the `current_owner` ContextVar
+  (`common.utils.request_context`), set *only* by `corpora_py.auth.AuthMiddleware` — never from
+  client input. The service-role key bypasses bucket RLS, so this prefix is what stops one user
+  listing/addressing another's objects. Paths match corpora-web's `{user_id}/{job_id}.corpus`
+  layout. No verified identity (auth disabled) ⇒ un-prefixed bucket root, single-user local dev.
+- **`hf_read_only` applies to both backends** — it is the deployment-wide storage read-only flag,
+  refused inside `upload`/`delete` on this backend too, and the 403 dependency / MCP tool-skipping
+  layers are backend-agnostic already.
+- **`scopes_by_owner`** (`False` on `CorpusStorage`, `True` here) tells `corpus_detail._cache_key`
+  to prefix cache entries and work dirs with the sanitized owner, so two owners' same-named
+  archives never share an extraction. Local (job-result) registrations stay plain-name keyed —
+  job ids are unique and job visibility is enforced upstream.
+- Talks to the Storage REST API directly with `requests` (already a transitive dep); config is
+  `SUPABASE_STORAGE_BUCKET` + `SUPABASE_SERVICE_ROLE_KEY` + `SUPABASE_URL` (or derived from
+  `PROJECT_REF`), all unset ⇒ `StorageNotConfiguredError` (503) per call, never at import. The
+  service-role key is server-side only — never in client config (no `VITE_*`).
+
+This amends the previous "this service never talks to Supabase Storage" invariant: it now does
+*iff* `STORAGE_BACKEND=supabase` is explicitly set; the default deployment still doesn't.
+
 ## Corpus detail (`corpus_detail*.py`)
 
 A *detail* layer over Hub storage for the desktop app's reader: read/patch a stored archive's

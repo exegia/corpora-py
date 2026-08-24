@@ -120,6 +120,11 @@ class CorpusStorage:
     returns the same `StoredCorpus` either way.
     """
 
+    # Hub archives are shared/global, not per-user: the corpus-detail cache
+    # (`corpus_detail._cache_key`) may key extractions by plain filename. The
+    # Supabase backend overrides this -- see `storage_supabase`.
+    scopes_by_owner = False
+
     def __init__(
         self,
         repo_id: str | None = None,
@@ -317,7 +322,23 @@ class CorpusStorage:
         logger.info("Deleted corpus %s from %s", filename, repo_id)
 
 
+def make_corpus_storage() -> CorpusStorage:
+    """Build the storage backend selected by `STORAGE_BACKEND` (issue #110 C).
+
+    Both backends expose the identical public surface
+    (`list`/`info`/`upload`/`download`/`delete`/`ensure_repo` -> `StoredCorpus`
+    plus the errors above), so the REST routes, MCP tools, and corpus-detail
+    layer are backend-agnostic by construction. The Supabase import is lazy so
+    a Hub-only deployment never touches that module.
+    """
+    if settings.storage_backend == "supabase":
+        from .storage_supabase import SupabaseCorpusStorage
+
+        return SupabaseCorpusStorage()  # type: ignore[return-value]
+    return CorpusStorage()
+
+
 # Module-level singleton, same pattern as `job_manager` (`jobs.py`): the
 # router and the MCP tools must share one instance so tests can swap it in
 # a single place.
-corpus_storage = CorpusStorage()
+corpus_storage = make_corpus_storage()

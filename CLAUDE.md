@@ -295,10 +295,14 @@ clients can't set custom headers on the handshake).
   which stay fully writable — so the owner keeps publishing locally to the same Hub repo the public demo reads. See
   `packages/admin/src/admin/services/CLAUDE.md`. There is deliberately **no** per-case exception to this — the public
   demo converts, downloads, and explores, and never writes to the Hub at all.
-- **Nothing in this repo writes to Supabase.** Supabase appears only as a JWT *issuer* whose signatures
-  `common.utils.jwt_auth` verifies against the public JWKS; there is no Supabase client, no service-role key, and no
-  table this app can touch (see "Dropped/missing functionality" above). An anonymous deployment therefore has no
-  Supabase write surface to lock down.
+- **By default, nothing in this repo writes to Supabase.** Supabase appears as a JWT *issuer* whose signatures
+  `common.utils.jwt_auth` verifies against the public JWKS; there is no Supabase database client and no table this app
+  can touch (see "Dropped/missing functionality" above). The one opt-in exception is **Supabase *Storage***: setting
+  `STORAGE_BACKEND=supabase` (issue #129, option C of #110) points the corpus-storage surfaces at a Supabase Storage
+  bucket via `admin.services.storage_supabase.SupabaseCorpusStorage`, authenticated with `SUPABASE_SERVICE_ROLE_KEY`
+  (server-side only — never `VITE_*`) and scoped per-user by the verified JWT `sub` (`{sub}/{filename}` object paths,
+  owner read from the `current_owner` ContextVar set by `AuthMiddleware`). On the default `huggingface` backend an
+  anonymous deployment still has no Supabase write surface to lock down.
 - Decoded JWT claims land in `scope["state"]["user"]` and are used by
   `ConversionJob.is_visible_to()` (`admin.services.jobs`) to scope `GET /convert/{id}`,
   `/download`, and `/ws` to the job's own submitter (the JWT `sub` claim, recorded on the job at

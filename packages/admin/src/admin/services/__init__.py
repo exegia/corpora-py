@@ -3,7 +3,9 @@
 `api` exposes `POST/GET /convert...` (upload + poll + download) and
 `websocket` exposes `/convert/{id}/ws` (status push). `validation_api` exposes
 `POST /validate` (corpus integrity checks). `storage` wraps Hugging Face Hub
-storage of finished `.corpus` archives; `storage_api` (REST `/storage...`) and
+storage of finished `.corpus` archives (`storage_supabase` is the drop-in
+owner-scoped Supabase Storage backend, selected via `STORAGE_BACKEND` by
+`storage.make_corpus_storage()`); `storage_api` (REST `/storage...`) and
 `storage_mcp` (MCP `storage_*` tools) expose it. All routers are plain
 `APIRouter`s meant to be included into the combined app built by
 `corpora_py.app` -- this package intentionally does not build its own
@@ -33,6 +35,7 @@ from . import (
     jobs,
     storage,
     storage_api,
+    storage_supabase,
     validation_api,
     websocket,
 )
@@ -45,6 +48,7 @@ __all__ = [
     "jobs",
     "storage",
     "storage_api",
+    "storage_supabase",
     "validation_api",
     "websocket",
 ]
