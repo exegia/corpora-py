@@ -665,6 +665,36 @@ class JobManager:
         job.result_path = path
         return path
 
+    def snapshot_file(self, job_id: str, path: Path, label: str) -> str | None:
+        """Persist a labeled HEAD snapshot. Failure is logged, not raised.
+
+        Extra labels (v1.1, …) are mutation bumps (issue #149); convert
+        writes ``v1.0``. A missed snapshot must not fail the caller.
+        """
+        try:
+            return self._results.save_snapshot(job_id, Path(path), label)
+        except Exception:
+            logger.warning(
+                "Snapshot %s for job %s failed", label, job_id, exc_info=True
+            )
+            return None
+
+    def replace_result(self, job_id: str, path: Path) -> str | None:
+        """Overwrite the job's HEAD archive in the result store (issue #149)."""
+        local = Path(path)
+        if not local.is_file():
+            raise JobStoreError(f"Replacement archive missing for job {job_id}")
+        key = self._results.save(job_id, local)
+        with self._lock:
+            job = self._store.get(job_id)
+            if job is None:
+                return key
+            job.result_path = local
+            if key:
+                job.result_key = key
+            self._store.put(job)
+        return key
+
     def list_jobs(
         self,
         *,
@@ -714,8 +744,10 @@ class JobManager:
                             job.id,
                             exc_info=True,
                         )
-                snap_key = snapshot_key_for(job.id, "v1.0")
-                if snap_key:
+                for minor in range(33):
+                    snap_key = snapshot_key_for(job.id, f"v1.{minor}")
+                    if not snap_key:
+                        continue
                     try:
                         self._results.delete(snap_key)
                     except Exception:

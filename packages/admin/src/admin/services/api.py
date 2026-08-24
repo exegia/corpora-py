@@ -37,6 +37,7 @@ from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers import PARSERS
 from ..parsers.schema import SourceFormat
 from .corpus_detail import (
+    annotate_node,
     get_content,
     get_index,
     get_manifest,
@@ -44,7 +45,9 @@ from .corpus_detail import (
     get_sections,
     get_versions,
     register_local_archive,
+    update_manifest,
 )
+from .corpus_detail_api import ManifestUpdate, NodeAnnotation
 from .corpus_detail_api import _run as _run_detail
 from .jobs import (
     _CORPUS_SUFFIX,
@@ -375,8 +378,14 @@ def _run_conversion(
             "Text-Fabric dataset ready. Compiling cache and packaging .corpus archive...",
         )
         corpus_path, _filename = _resolve_corpus_path(display_name, job_id)
+        job = job_manager.get(job_id)
+        author_sub = job.owner if job is not None else None
         result = convert_to_corpus(
-            tf_dir, corpus_path, name=display_name, description=description
+            tf_dir,
+            corpus_path,
+            name=display_name,
+            description=description,
+            author_sub=author_sub,
         )
 
         job_manager.log(job_id, "Conversion complete.")
@@ -715,3 +724,28 @@ async def get_job_versions(job_id: str, request: Request) -> dict[str, Any]:
     archive = _resolve_succeeded(job_id, request)
     key = register_local_archive(_job_corpus_key(job_id), archive)
     return await _run_detail(lambda: get_versions(key))
+
+
+@router.patch("/{job_id}/manifest", responses=_JOB_DETAIL_RESPONSES)
+async def patch_job_manifest(
+    job_id: str, request: Request, payload: ManifestUpdate
+) -> dict[str, Any]:
+    """Patch the converted archive's manifest and bump ``v1.N`` (issue #149).
+
+    Job-scoped writes stay available when Hub storage is read-only.
+    """
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    updates = payload.model_dump(exclude_unset=True)
+    return await _run_detail(lambda: update_manifest(key, updates))
+
+
+@router.patch("/{job_id}/nodes/{node}", responses=_JOB_DETAIL_RESPONSES)
+async def patch_job_node(
+    job_id: str, node: int, request: Request, payload: NodeAnnotation
+) -> dict[str, Any]:
+    """Annotate a node in the converted archive and bump ``v1.N`` (issue #149)."""
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    updates = payload.model_dump(exclude_unset=True)
+    return await _run_detail(lambda: annotate_node(key, node, **updates))

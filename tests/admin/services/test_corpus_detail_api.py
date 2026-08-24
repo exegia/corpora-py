@@ -12,6 +12,7 @@ autouse fixture resets both per test (otherwise a cache hit skips `download` and
 suite becomes order-dependent -- e.g. the 404/503 cases would silently pass).
 """
 
+import io
 import zipfile
 from pathlib import Path
 
@@ -32,9 +33,7 @@ def corpus_archive_bytes(tmp_path_factory) -> bytes:
     """Build a real 5-paragraph `.corpus` archive once and return its bytes."""
     work = tmp_path_factory.mktemp("corpus-detail-archive")
     src = work / "mini.txt"
-    src.write_text(
-        "\n\n".join(f"Paragraph number {i} has some words here." for i in range(1, 6))
-    )
+    src.write_text("\n\n".join(f"Paragraph number {i} has some words here." for i in range(1, 6)))
     tf_dir = convert_text_to_tf(str(src), work / "tf")
     archive = convert_to_corpus(
         tf_dir,
@@ -148,6 +147,46 @@ def test_patch_manifest_empty_body_is_422(client):
     assert client.patch(f"/storage/{ARCHIVE_NAME}/manifest", json={}).status_code == 422
 
 
+def test_two_manifest_patches_append_1x_history(client, fake_storage):
+    """Two PATCHes yield v1.0, v1.1, v1.2 and never v2 (issue #149)."""
+    first = client.patch(f"/storage/{ARCHIVE_NAME}/manifest", json={"description": "A"})
+    assert first.status_code == 200
+    assert first.json()["version"] == "1.1"
+    second = client.patch(f"/storage/{ARCHIVE_NAME}/manifest", json={"description": "B"})
+    assert second.status_code == 200
+    assert second.json()["version"] == "1.2"
+
+    versions = client.get(f"/storage/{ARCHIVE_NAME}/versions").json()["versions"]
+    assert [row["label"] for row in versions] == ["v1.0", "v1.1", "v1.2"]
+    assert [row["current"] for row in versions] == [False, False, True]
+    assert versions[0]["title"] == "Converted"
+    assert versions[1]["title"] == "Updated metadata"
+    assert versions[1]["files"] == [{"path": "manifest.yml", "kind": "modified"}]
+    assert versions[2]["files"] == [{"path": "manifest.yml", "kind": "modified"}]
+    assert all(row["label"].startswith("v1.") for row in versions)
+    assert not any(str(row["label"]).startswith("v2") for row in versions)
+
+    with zipfile.ZipFile(io.BytesIO(fake_storage._bytes)) as zf:
+        names = zf.namelist()
+        assert "history.yml" in names
+        assert not any(name.endswith(".corpus") for name in names)
+
+
+def test_manifest_patch_stamps_author_from_owner(client):
+    from common.utils.request_context import current_owner
+
+    token = current_owner.set("user-1")
+    try:
+        resp = client.patch(f"/storage/{ARCHIVE_NAME}/manifest", json={"description": "owned"})
+    finally:
+        current_owner.reset(token)
+    assert resp.status_code == 200
+    versions = client.get(f"/storage/{ARCHIVE_NAME}/versions").json()["versions"]
+    assert versions[-1]["author"] == {"sub": "user-1"}
+    assert versions[-1]["approved_by"] == {"sub": "user-1"}
+    assert versions[0]["author"] is None
+
+
 # ── Index ──────────────────────────────────────────────────────────────────────
 
 
@@ -181,9 +220,7 @@ def test_get_index_shape(client):
     assert isinstance(item["words"], int) and item["words"] > 0
 
     node_types = body["node_types"]
-    assert all(
-        set(nt) >= {"type", "count", "avg_slots", "is_slot"} for nt in node_types
-    )
+    assert all(set(nt) >= {"type", "count", "avg_slots", "is_slot"} for nt in node_types)
     counts = {nt["type"]: nt["count"] for nt in node_types}
     assert counts["book"] == 1
     assert counts["paragraph"] == 5
@@ -217,9 +254,7 @@ def test_get_content_whole_corpus_paginates(client):
 
 
 def test_get_content_last_page_has_no_next_offset(client):
-    resp = client.get(
-        f"/storage/{ARCHIVE_NAME}/content", params={"offset": 4, "limit": 2}
-    )
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/content", params={"offset": 4, "limit": 2})
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["passages"]) == 1
@@ -239,9 +274,7 @@ def test_get_content_limit_is_clamped_up_to_1(client):
 
 
 def test_get_content_bad_ref_is_404(client):
-    resp = client.get(
-        f"/storage/{ARCHIVE_NAME}/content", params={"ref": "Nonexistent 999"}
-    )
+    resp = client.get(f"/storage/{ARCHIVE_NAME}/content", params={"ref": "Nonexistent 999"})
     assert resp.status_code == 404
 
 
@@ -285,9 +318,7 @@ def test_get_sections_unknown_parent_is_404(client):
 def test_get_sections_lowest_level_has_no_children(client):
     index = client.get(f"/storage/{ARCHIVE_NAME}/index").json()
     ref = index["sections"]["items"][0]["ref"]
-    body = client.get(
-        f"/storage/{ARCHIVE_NAME}/sections", params={"parent": ref}
-    ).json()
+    body = client.get(f"/storage/{ARCHIVE_NAME}/sections", params={"parent": ref}).json()
     assert body["parent"] == ref
     assert body["items"] == []
     assert body["total"] == 0
@@ -328,9 +359,7 @@ def test_get_node_shape(client):
 
 def test_get_node_slot_node(client):
     """Slot nodes report is_slot=True and span exactly themselves."""
-    detail = client.get(
-        f"/storage/{ARCHIVE_NAME}/nodes/{_first_passage_node(client)}"
-    ).json()
+    detail = client.get(f"/storage/{ARCHIVE_NAME}/nodes/{_first_passage_node(client)}").json()
     slot = detail["first_slot"]
 
     body = client.get(f"/storage/{ARCHIVE_NAME}/nodes/{slot}").json()
@@ -404,9 +433,7 @@ def test_patch_node_empty_body_is_422(client):
 
 
 def test_patch_node_unknown_node_is_404(client):
-    resp = client.patch(
-        f"/storage/{ARCHIVE_NAME}/nodes/999999", json={"otype": "word"}
-    )
+    resp = client.patch(f"/storage/{ARCHIVE_NAME}/nodes/999999", json={"otype": "word"})
     assert resp.status_code == 404
 
 
