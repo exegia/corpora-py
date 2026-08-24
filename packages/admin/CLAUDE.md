@@ -63,7 +63,8 @@ packages/admin/
       corpus_detail.py          # read/patch manifest, section index, paginated content of a stored archive
       corpus_detail_api.py      # /storage/{filename}/{manifest,index,content} REST surface
       corpus_detail_mcp.py      # corpus_* MCP tools (registered by corpora_py.app, NOT here)
-      jobs.py                   # JobManager (in-process ThreadPoolExecutor job registry)
+      jobs.py                   # JobManager (ThreadPoolExecutor + pluggable JobStore)
+      job_store_supabase.py     # JOB_STORE=supabase: PostgREST metadata + Storage result bytes
 ```
 
 This mirrors `packages/common/src/common/` and `packages/mcp/src/corpora_mcp/`

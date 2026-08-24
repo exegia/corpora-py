@@ -1,5 +1,6 @@
 """JobManager and ConversionJob: ownership, queue cap, stall watchdog, errors."""
 
+import copy
 import time
 from pathlib import Path
 
@@ -12,10 +13,15 @@ from admin.services.jobs import (
     JobQueueFullError,
     JobStatus,
     JobStore,
+    LocalResultStore,
     MemoryJobStore,
+    ResultStore,
     _slugify,
+    make_job_store,
+    make_result_store,
     result_filename_for,
 )
+from common.utils.config import settings
 
 
 class InlineExecutor:
@@ -186,6 +192,13 @@ class TestToDict:
             .to_dict()["download_ready"]
             is False
         )
+
+    def test_download_ready_with_result_key_without_local_path(self):
+        # Another instance has the metadata but not the file; download_ready
+        # must still be true so the client polls through to materialize.
+        job = _job(status=JobStatus.SUCCEEDED, result_key="conversion-jobs/j1.corpus")
+        assert job.to_dict()["download_ready"] is True
+        assert "result_key" not in job.to_dict()
 
     def test_last_log(self):
         job = _job(logs=["a", "b"])
@@ -455,3 +468,158 @@ class TestCustomStore:
         store.put(j)
         assert store.delete("j1") is j
         assert store.delete("j1") is None
+
+
+class CopyingJobStore(JobStore):
+    """Stand-in for a remote store: every get/put round-trips a copy.
+
+    Catches JobManager bugs that rely on in-process object identity (the
+    MemoryJobStore default), which a shared PostgREST store cannot provide.
+    """
+
+    def __init__(self):
+        self._jobs: dict[str, ConversionJob] = {}
+
+    def get(self, job_id):
+        job = self._jobs.get(job_id)
+        return copy.deepcopy(job) if job is not None else None
+
+    def put(self, job):
+        clone = copy.deepcopy(job)
+        # Shared stores persist `result_key`, not a local path — mimic that
+        # so a second manager cannot cheat by opening the producer's file.
+        clone.result_path = None
+        self._jobs[job.id] = clone
+
+    def list(self, *, owner):
+        jobs = [copy.deepcopy(j) for j in self._jobs.values()]
+        if owner is None:
+            return jobs
+        return [j for j in jobs if j.owner == owner]
+
+    def delete(self, job_id):
+        job = self._jobs.pop(job_id, None)
+        return copy.deepcopy(job) if job is not None else None
+
+
+class DictResultStore(ResultStore):
+    """In-memory blob store with a per-instance cache dir (two-instance sim)."""
+
+    def __init__(self, cache_dir: Path, blobs: dict[str, bytes] | None = None):
+        self.cache_dir = cache_dir
+        self.blobs = blobs if blobs is not None else {}
+
+    def save(self, job_id, path):
+        key = f"conversion-jobs/{job_id}{Path(path).suffix or '.corpus'}"
+        self.blobs[key] = Path(path).read_bytes()
+        return key
+
+    def materialize(self, key, job_id):
+        dest = self.cache_dir / Path(key).name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(self.blobs[key])
+        return dest
+
+    def delete(self, key):
+        self.blobs.pop(key, None)
+
+
+class TestCopyingStore:
+    def test_stall_verdict_persists_for_another_manager(self):
+        store = CopyingJobStore()
+        manager = make_manager(DeferredExecutor(), store=store, stall_timeout_seconds=10)
+        manager.submit(
+            source_format=SourceFormat.PLAIN, name="d", fn=lambda: Path("x"), job_id="j1"
+        )
+        job = store.get("j1")
+        job.status = JobStatus.RUNNING
+        job.started_at = time.time() - 60
+        store.put(job)
+        fetched = manager.get("j1")
+        assert fetched.status == JobStatus.FAILED
+        other = make_manager(DeferredExecutor(), store=store)
+        assert other.get("j1").status == JobStatus.FAILED
+
+    def test_logs_and_display_name_survive_terminal_put(self, tmp_path):
+        store = CopyingJobStore()
+        manager = make_manager(store=store)
+        result = tmp_path / "out.corpus"
+        result.write_bytes(b"data")
+
+        def work():
+            manager.log("j1", "Parsing source...")
+            manager.set_display_name("j1", "Summa")
+            return result
+
+        manager.submit(
+            source_format=SourceFormat.PLAIN, name="d", fn=work, job_id="j1"
+        )
+        job = manager.get("j1")
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.logs == ["Parsing source..."]
+        assert job.display_name == "Summa"
+
+    def test_two_managers_share_result_bytes(self, tmp_path):
+        store = CopyingJobStore()
+        blobs: dict[str, bytes] = {}
+        producer = make_manager(
+            store=store, results=DictResultStore(tmp_path / "a", blobs)
+        )
+        consumer = make_manager(
+            DeferredExecutor(),
+            store=store,
+            results=DictResultStore(tmp_path / "b", blobs),
+        )
+        result = tmp_path / "out.corpus"
+        result.write_bytes(b"archive-bytes")
+        producer.submit(
+            source_format=SourceFormat.PLAIN, name="d", fn=lambda: result, job_id="j1"
+        )
+        job = consumer.get("j1")
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.result_key == "conversion-jobs/j1.corpus"
+        assert job.result_path is None
+        assert job.to_dict()["download_ready"] is True
+        path = consumer.materialize(job)
+        assert path.read_bytes() == b"archive-bytes"
+        assert path.parent == tmp_path / "b"
+
+    def test_reap_deletes_remote_result(self, tmp_path):
+        store = CopyingJobStore()
+        blobs: dict[str, bytes] = {}
+        results = DictResultStore(tmp_path / "cache", blobs)
+        manager = make_manager(
+            DeferredExecutor(), store=store, results=results, retention_seconds=60
+        )
+        result = tmp_path / "out.corpus"
+        result.write_bytes(b"data")
+        manager.submit(
+            source_format=SourceFormat.PLAIN, name="d", fn=lambda: result, job_id="j1"
+        )
+        manager._executor.run_all()
+        job = manager.get("j1")
+        assert job.result_key in blobs
+        with manager._lock:
+            job = store.get("j1")
+            job.finished_at = time.time() - 120
+            store.put(job)
+        manager.list_jobs(owner=None)
+        assert manager.get("j1") is None
+        assert blobs == {}
+
+
+class TestMakeBackends:
+    def test_defaults_to_memory_and_local(self, monkeypatch):
+        monkeypatch.setattr(settings, "job_store", "memory")
+        assert isinstance(make_job_store(), MemoryJobStore)
+        assert isinstance(make_result_store(), LocalResultStore)
+
+    def test_supabase_selection(self, monkeypatch):
+        monkeypatch.setattr(settings, "job_store", "supabase")
+        from admin.services.job_store_supabase import (
+            SupabaseJobStore,
+            SupabaseResultStore,
+        )
+
+        assert isinstance(make_job_store(), SupabaseJobStore)
+        assert isinstance(make_result_store(), SupabaseResultStore)
