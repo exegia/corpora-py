@@ -44,6 +44,7 @@ from typing import Any
 import yaml
 from common.utils.request_context import current_owner
 
+from .jobs import snapshot_key_for
 from .storage import (
     CorpusNotFoundError,
     StorageError,
@@ -78,6 +79,13 @@ _EDITABLE_MANIFEST_KEYS = frozenset(
         "category",
         "written_date",
     }
+)
+
+# history.yml labels stay on the 1.x line (a Bible is not v2). Issue #149.
+_V1_LABEL = re.compile(r"^v?1\.(\d+)")
+_JOB_ARCHIVE = re.compile(
+    r"^job-([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.corpus$"
 )
 
 
@@ -193,9 +201,7 @@ def _ensure_extracted(filename: str) -> _Cached:
         if local_archive is not None:
             # Job-scoped read: extract the on-disk result directly, no Hub I/O.
             if not local_archive.is_file():
-                raise CorpusNotFoundError(
-                    f"Local archive not found: {local_archive!s}"
-                )
+                raise CorpusNotFoundError(f"Local archive not found: {local_archive!s}")
             archive_path: Path = local_archive
         else:
             # Hub read. Raises CorpusNotFoundError / StorageNotConfiguredError /
@@ -429,6 +435,7 @@ def update_manifest(filename: str, updates: dict[str, Any]) -> dict[str, Any]:
     Loads the existing manifest, overwrites only the provided (editable) keys,
     dumps it back, re-zips the extracted archive, uploads it to the Hub, and
     invalidates the local cache so the next read re-fetches the updated bytes.
+    ``version`` is then overwritten by the 1.x history bump (issue #149).
     """
     editable = {k: v for k, v in updates.items() if k in _EDITABLE_MANIFEST_KEYS}
     if not editable:
@@ -443,30 +450,281 @@ def update_manifest(filename: str, updates: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(manifest, dict):
         manifest = {}
     manifest.update(editable)
+    versions = _load_history_versions(cached.extract_dir) or _seed_v1_history(cached.extract_dir)
+    manifest["version"] = _next_1x_label(versions).lstrip("v")
     manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
 
-    name = _republish(filename, cached)
+    name = _republish(
+        filename,
+        cached,
+        title="Updated metadata",
+        files=[{"path": "manifest.yml", "kind": "modified"}],
+    )
     logger.info("Updated manifest for %s (%s)", name, sorted(editable))
     return manifest
 
 
-def _republish(filename: str, cached: _Cached) -> str:
-    """Re-zip the extracted archive, upload it, invalidate the cache.
+def _job_id_from_archive_name(name: str) -> str | None:
+    """Parse the job id out of a job-scoped cache key (``job-<uuid>.corpus``)."""
+    match = _JOB_ARCHIVE.fullmatch(name)
+    return match.group(1) if match else None
 
-    The shared tail of every archive writer (`update_manifest`,
-    `annotate_node`): whoever mutated files under `cached.extract_dir` calls
-    this to publish the change. Returns the normalized archive name.
+
+def _actor() -> dict[str, str] | None:
+    """Request JWT ``sub`` as a history actor, or ``None`` when auth is off."""
+    sub = current_owner.get()
+    if not sub:
+        return None
+    return {"sub": sub}
+
+
+def _v1_minor(value: Any) -> int | None:
+    match = _V1_LABEL.match(str(value or "").strip())
+    return int(match.group(1)) if match else None
+
+
+def _next_1x_label(versions: list[dict[str, Any]]) -> str:
+    """Next ``v1.N`` label. Never emits ``v2`` (issue #149)."""
+    highest = 0
+    for row in versions:
+        for raw in (row.get("label"), row.get("id")):
+            minor = _v1_minor(raw)
+            if minor is not None:
+                highest = max(highest, minor)
+    return f"v1.{highest + 1}"
+
+
+def _load_history_versions(extract_dir: Path) -> list[dict[str, Any]]:
+    path = extract_dir / "history.yml"
+    if not path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    versions = data.get("versions") if isinstance(data, dict) else None
+    if not isinstance(versions, list):
+        return []
+    return [row for row in versions if isinstance(row, dict)]
+
+
+def _seed_v1_history(extract_dir: Path) -> list[dict[str, Any]]:
+    """Invent a v1.0 row from the manifest when the archive has no history.yml."""
+    manifest_path = extract_dir / "manifest.yml"
+    manifest: dict[str, Any] = {}
+    if manifest_path.is_file():
+        loaded = yaml.safe_load(manifest_path.read_text())
+        if isinstance(loaded, dict):
+            manifest = loaded
+    return [
+        {
+            "id": "v1.0",
+            "label": "v1.0",
+            "title": "Converted",
+            "at": str(manifest.get("written_date") or datetime.now(UTC).isoformat()),
+            "current": True,
+            "snapshot_key": None,
+            "files": [
+                {"path": "manifest.yml", "kind": "added"},
+                {"path": "toc.yml", "kind": "added"},
+                {"path": "corpora/", "kind": "added"},
+            ],
+            "author": None,
+            "approved_by": None,
+            "notes": [],
+        }
+    ]
+
+
+def _previous_head_path(name: str) -> Path | None:
+    """The zip bytes that are about to be superseded (local HEAD or Hub download)."""
+    with _lock:
+        local = _local_archives.get(name)
+    if local is not None and local.is_file():
+        return local
+    download = _HUB_CACHE_ROOT / _cache_key(name) / "download" / name
+    return download if download.is_file() else None
+
+
+def _append_history(
+    extract_dir: Path,
+    *,
+    title: str,
+    files: list[dict[str, str]],
+    snapshot_key: str | None,
+    superseded_snapshot_key: str | None,
+) -> str:
+    """Mark the current row superseded, append ``v1.N+1``, bump ``manifest.yml``."""
+    versions = _load_history_versions(extract_dir) or _seed_v1_history(extract_dir)
+    new_label = _next_1x_label(versions)
+    actor = _actor()
+    for row in versions:
+        if row.get("current") and superseded_snapshot_key and not row.get("snapshot_key"):
+            row["snapshot_key"] = superseded_snapshot_key
+        row["current"] = False
+    versions.append(
+        {
+            "id": new_label,
+            "label": new_label,
+            "title": title,
+            "at": datetime.now(UTC).isoformat(),
+            "current": True,
+            "snapshot_key": snapshot_key,
+            "files": files,
+            "author": actor,
+            "approved_by": actor,
+            "notes": [],
+        }
+    )
+    (extract_dir / "history.yml").write_text(
+        yaml.safe_dump({"versions": versions}, sort_keys=False)
+    )
+    manifest_path = extract_dir / "manifest.yml"
+    manifest: dict[str, Any] = {}
+    if manifest_path.is_file():
+        loaded = yaml.safe_load(manifest_path.read_text())
+        if isinstance(loaded, dict):
+            manifest = loaded
+    manifest["version"] = new_label.lstrip("v")
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    return new_label
+
+
+def _snapshot_job_archive(job_id: str, path: Path, label: str) -> str | None:
+    """Best-effort labeled snapshot via the process JobManager (issue #149)."""
+    from . import jobs
+
+    try:
+        return jobs.job_manager.snapshot_file(job_id, path, label)
+    except Exception:
+        logger.warning("Snapshot %s for job %s failed", label, job_id, exc_info=True)
+        return None
+
+
+def _replace_job_head(job_id: str, path: Path) -> None:
+    from . import jobs
+
+    try:
+        jobs.job_manager.replace_result(job_id, path)
+    except Exception:
+        logger.warning("Replacing HEAD for job %s failed", job_id, exc_info=True)
+        raise
+
+
+def _republish(
+    filename: str,
+    cached: _Cached,
+    *,
+    title: str,
+    files: list[dict[str, str]],
+) -> str:
+    """Snapshot previous HEAD, bump 1.x history, re-zip, persist, invalidate.
+
+    Shared tail of every archive writer (`update_manifest`, `annotate_node`).
+    Job-scoped archives (`job-<uuid>.corpus`) write HEAD + snapshots through
+    the result store; Hub archives re-upload via `corpus_storage`. Snapshots
+    live beside HEAD, not inside the zip (issue #149).
     """
     name = _safe_name(filename)
+    job_id = _job_id_from_archive_name(name)
+    versions = _load_history_versions(cached.extract_dir) or _seed_v1_history(cached.extract_dir)
+    superseded = next(
+        (str(row.get("label") or "v1.0") for row in versions if row.get("current")),
+        "v1.0",
+    )
+    if _v1_minor(superseded) is None:
+        superseded = "v1.0"
+    new_label = _next_1x_label(versions)
+    prev_key = snapshot_key_for(job_id, superseded) if job_id else None
+    new_key = snapshot_key_for(job_id, new_label) if job_id else None
+    prev_path = _previous_head_path(name)
+    if job_id and prev_path is not None:
+        _snapshot_job_archive(job_id, prev_path, superseded)
+
+    _append_history(
+        cached.extract_dir,
+        title=title,
+        files=files,
+        snapshot_key=new_key,
+        superseded_snapshot_key=prev_key,
+    )
+
+    with _lock:
+        local = _local_archives.get(name)
+
     with tempfile.TemporaryDirectory(prefix="corpus-detail-") as tmp:
         base = Path(tmp) / Path(name).stem
         archive = shutil.make_archive(str(base), "zip", root_dir=cached.extract_dir)
         out = Path(tmp) / name
         Path(archive).rename(out)
-        corpus_storage.upload(out, name)
+        if local is not None:
+            local.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(out, local)
+            if job_id:
+                _replace_job_head(job_id, local)
+                _snapshot_job_archive(job_id, local, new_label)
+        else:
+            corpus_storage.upload(out, name)
 
     invalidate(name)
     return name
+
+
+def restore_from_snapshot(
+    filename: str,
+    snapshot_path: Path,
+    *,
+    title: str,
+    files: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Replace HEAD contents with a snapshot, keep the live timeline, bump 1.x.
+
+    The snapshot zip is the restored payload. ``history.yml`` stays the
+    current timeline so earlier rows are not rewound; ``_republish`` appends
+    the restore row (issue #148).
+    """
+    src = Path(snapshot_path)
+    if not src.is_file():
+        raise CorpusNotFoundError("Snapshot is no longer available")
+
+    cached = _ensure_extracted(filename)
+    history = [
+        dict(row)
+        for row in (
+            _load_history_versions(cached.extract_dir)
+            or _seed_v1_history(cached.extract_dir)
+        )
+    ]
+
+    with tempfile.NamedTemporaryFile(suffix=".corpus", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        shutil.copy2(src, tmp_path)
+        if cached.extract_dir.exists():
+            shutil.rmtree(cached.extract_dir, ignore_errors=True)
+        cached.extract_dir.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(tmp_path) as zf:
+            _safe_extract(zf, cached.extract_dir)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    cached.api = None
+    cached.api_loaded = False
+    (cached.extract_dir / "history.yml").write_text(
+        yaml.safe_dump({"versions": history}, sort_keys=False)
+    )
+
+    _republish(
+        filename,
+        cached,
+        title=title,
+        files=files
+        or [
+            {"path": "manifest.yml", "kind": "modified"},
+            {"path": "history.yml", "kind": "modified"},
+        ],
+    )
+    return get_versions(filename)
 
 
 # ── Nodes (inspect + annotate) ────────────────────────────────────────────────
@@ -621,9 +879,7 @@ def _require_api(filename: str) -> Any:
     """Load the cfabric api or raise (the node surfaces can't degrade to empty)."""
     api = _load_api(filename)
     if api is None:
-        raise CorpusNotFoundError(
-            f"Corpus payload in {_safe_name(filename)} could not be loaded"
-        )
+        raise CorpusNotFoundError(f"Corpus payload in {_safe_name(filename)} could not be loaded")
     return api
 
 
@@ -716,6 +972,8 @@ def annotate_node(
         raise CorpusNotFoundError(f"Node {node} not found in {_safe_name(filename)}")
 
     cached = _ensure_extracted(filename)
+    sidecar = cached.extract_dir / _ANNOTATIONS_FILE
+    kind = "modified" if sidecar.is_file() else "added"
     data = _read_annotations(cached.extract_dir)
     nodes = data.setdefault("nodes", {})
     entry: dict[str, Any] = nodes.get(str(node)) or {}
@@ -727,10 +985,14 @@ def annotate_node(
     entry["updated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     nodes[str(node)] = entry
 
-    sidecar = cached.extract_dir / _ANNOTATIONS_FILE
     sidecar.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
-    name = _republish(filename, cached)
+    name = _republish(
+        filename,
+        cached,
+        title="Annotated node",
+        files=[{"path": _ANNOTATIONS_FILE, "kind": kind}],
+    )
     logger.info("Annotated node %s in %s (%s)", node, name, sorted(entry))
     return {"node": int(node), **entry}
 
@@ -912,9 +1174,7 @@ def get_sections(
     return {
         "parent": parent,
         "levels": levels,
-        "items": [
-            _section_entry(api, node, grandchild_type=grandchild_type) for node in page
-        ],
+        "items": [_section_entry(api, node, grandchild_type=grandchild_type) for node in page],
         "total": total,
         "offset": offset,
         "limit": limit,

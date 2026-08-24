@@ -183,13 +183,25 @@ def _build_toc(
     }
 
 
-def _build_history(*, written_date: str) -> dict[str, Any]:
+def _actor(author_sub: str | None) -> dict[str, str] | None:
+    """JWT ``sub`` as a history actor, or ``None`` when auth is off.
+
+    Never invents a user (issue #150).
+    """
+    sub = (author_sub or "").strip()
+    return {"sub": sub} if sub else None
+
+
+def _build_history(
+    *, written_date: str, author_sub: str | None = None
+) -> dict[str, Any]:
     """Build the archive-root ``history.yml`` for the initial convert (v1.0).
 
-    ``author`` / ``approved_by`` stay null here so this converter's signature
-    does not grow; JobManager may stamp them later. ``snapshot_key`` is filled
-    after the result-store snapshot PUT (issue #147), not in the zip.
+    ``author`` / ``approved_by`` are the convert submitter's JWT ``sub`` when
+    auth is on, else null. ``snapshot_key`` is filled after the result-store
+    snapshot PUT (issue #147), not in the zip.
     """
+    actor = _actor(author_sub)
     return {
         "versions": [
             {
@@ -204,8 +216,8 @@ def _build_history(*, written_date: str) -> dict[str, Any]:
                     {"path": "toc.yml", "kind": "added"},
                     {"path": "corpora/", "kind": "added"},
                 ],
-                "author": None,
-                "approved_by": None,
+                "author": actor,
+                "approved_by": actor,
                 "notes": [],
             }
         ]
@@ -294,6 +306,7 @@ def convert_to_corpus(
     author_ids: list[str] | str = "",
     assets: list[str | Path] | None = None,
     thumbnail: str | Path | None = None,
+    author_sub: str | None = None,
 ) -> Path:
     """
     Package a Text-Fabric dataset at `tf_dir` into a `.corpus` archive at
@@ -347,7 +360,9 @@ def convert_to_corpus(
         )
         (root / "toc.yml").write_text(yaml.safe_dump(toc, sort_keys=False))
 
-        history = _build_history(written_date=manifest["written_date"])
+        history = _build_history(
+            written_date=manifest["written_date"], author_sub=author_sub
+        )
         (root / "history.yml").write_text(yaml.safe_dump(history, sort_keys=False))
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
