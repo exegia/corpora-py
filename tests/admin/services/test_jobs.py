@@ -233,6 +233,47 @@ class TestSubmit:
         assert fetched.error == f"Conversion failed: RuntimeError (job id {job.id})"
         assert "/private/tmp" not in fetched.error  # no internal paths leak
 
+    def test_job_failed_error_message_is_exposed(self):
+        # JobFailedError messages are client-facing by contract (issue #177):
+        # they surface verbatim instead of the sanitized generic message.
+        from admin.services.jobs import JobFailedError
+
+        manager = make_manager()
+
+        def boom():
+            raise JobFailedError("Converted corpus failed validation: r1; r2")
+
+        job = manager.submit(source_format=SourceFormat.PLAIN, name="doc", fn=boom)
+        fetched = manager.get(job.id)
+        assert fetched.status == JobStatus.FAILED
+        assert fetched.error == "Converted corpus failed validation: r1; r2"
+
+    def test_empty_job_failed_error_falls_back_to_generic(self):
+        from admin.services.jobs import JobFailedError
+
+        manager = make_manager()
+
+        def boom():
+            raise JobFailedError()
+
+        job = manager.submit(source_format=SourceFormat.PLAIN, name="doc", fn=boom)
+        fetched = manager.get(job.id)
+        assert fetched.error == f"Conversion failed: JobFailedError (job id {job.id})"
+
+    def test_set_validation_attaches_summary(self):
+        manager = make_manager()
+        job = manager.submit(
+            source_format=SourceFormat.PLAIN, name="doc", fn=lambda: Path("x")
+        )
+        summary = {"valid": True, "reasons": []}
+        manager.set_validation(job.id, summary)
+        assert manager.get(job.id).validation == summary
+        assert manager.get(job.id).to_dict()["validation"] == summary
+
+    def test_set_validation_unknown_job_is_noop(self):
+        manager = make_manager()
+        manager.set_validation("missing", {"valid": True})  # must not raise
+
     def test_caller_supplied_job_id_used(self):
         manager = make_manager()
         job = manager.submit(

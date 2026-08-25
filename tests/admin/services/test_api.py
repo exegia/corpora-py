@@ -2,6 +2,7 @@
 
 import io
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from admin.services import api as api_module
@@ -226,7 +227,7 @@ class TestRunConversion:
         source = work_dir / "source" / "doc.txt"
         source.write_text("content")
 
-        def failing_converter(src, out):
+        def failing_converter(src, out, **kw):
             raise RuntimeError("converter exploded")
 
         monkeypatch.setitem(
@@ -259,7 +260,7 @@ class TestRunConversion:
         monkeypatch.setitem(
             api_module.CONVERTERS,
             api_module.SourceFormat.TF_ZIP,
-            lambda src, out: Path(out),
+            lambda src, out, **kw: Path(out),
         )
         monkeypatch.setattr(
             api_module,
@@ -292,7 +293,7 @@ class TestRunConversion:
         monkeypatch.setitem(
             api_module.CONVERTERS,
             api_module.SourceFormat.TF_ZIP,
-            lambda src, out: Path(out),
+            lambda src, out, **kw: Path(out),
         )
         monkeypatch.setattr(
             api_module,
@@ -323,7 +324,7 @@ class TestRunConversion:
         monkeypatch.setitem(
             api_module.CONVERTERS,
             api_module.SourceFormat.TF_ZIP,
-            lambda src, out: Path(out),
+            lambda src, out, **kw: Path(out),
         )
         monkeypatch.setattr(
             api_module,
@@ -354,7 +355,7 @@ class TestRunConversion:
         monkeypatch.setitem(
             api_module.CONVERTERS,
             api_module.SourceFormat.TF_ZIP,
-            lambda src, out: Path(out),
+            lambda src, out, **kw: Path(out),
         )
         monkeypatch.setattr(
             api_module,
@@ -549,7 +550,7 @@ class TestRunConversionDisplayName:
         monkeypatch.setitem(
             api_module.CONVERTERS,
             api_module.SourceFormat.TEI,
-            lambda src, out: Path(out),
+            lambda src, out, **kw: Path(out),
         )
         monkeypatch.setattr(
             api_module, "convert_to_corpus", fake_convert_to_corpus
@@ -595,7 +596,7 @@ class TestRunConversionDisplayName:
         monkeypatch.setitem(
             api_module.CONVERTERS,
             api_module.SourceFormat.TF_ZIP,
-            lambda src, out: Path(out),
+            lambda src, out, **kw: Path(out),
         )
         monkeypatch.setattr(
             api_module, "convert_to_corpus", fake_convert_to_corpus
@@ -636,7 +637,7 @@ class TestRunConversionDisplayName:
         monkeypatch.setitem(
             api_module.CONVERTERS,
             api_module.SourceFormat.TEI,
-            lambda src, out: Path(out),
+            lambda src, out, **kw: Path(out),
         )
         monkeypatch.setattr(
             api_module,
@@ -768,3 +769,171 @@ class TestOpenAPIContract:
         expected = api_module.ConversionJobStatus.model_validate(body)
         assert expected.status == JobStatus.QUEUED
         assert expected.result_filename.endswith(".corpus")
+
+
+class TestUploadValidationGate:
+    """Issue #173: POST /convert rejects unconvertible uploads with a report."""
+
+    def test_declared_pdf_but_zip_content_422_with_report(self, client, manager):
+        response = _post(
+            client, filename="doc.pdf", source_format="pdf", content=b"PK\x03\x04zip"
+        )
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert detail["convertible"] is False
+        assert detail["declared_format"] == "pdf"
+        assert detail["detected_format"] == "zip"
+        assert detail["reasons"]
+
+    def test_image_upload_422(self, client, manager):
+        response = _post(
+            client, filename="scan.png", source_format="plain",
+            content=b"\x89PNG\r\n\x1a\nrest",
+        )
+        assert response.status_code == 422
+        assert "image" in response.json()["detail"]["reasons"][0]
+
+    def test_rejected_upload_cleans_work_dir(self, client, manager, tmp_path):
+        _post(client, source_format="plain", content=b"\x00\x01binary")
+        assert list((tmp_path / "work").iterdir()) == []
+
+    def test_gate_warnings_land_on_the_job_log(self, client, manager, monkeypatch):
+        from admin.services.upload_validation import UploadValidationReport
+
+        report = UploadValidationReport(
+            declared_format="plain",
+            detected_format="text",
+            warnings=["2 page(s) need OCR and will be skipped: 3, 7"],
+        )
+        monkeypatch.setattr(api_module, "validate_upload", lambda p, d: report)
+        job_id = _post(client).json()["job_id"]
+        assert "OCR" in manager.get(job_id).logs[0]
+
+
+class TestCategoryFormField:
+    """Issue #176: the optional `category` override reaches the converter."""
+
+    def test_category_forwarded_to_converter(self, client, manager, monkeypatch, tmp_path):
+        from admin.parsers.schema import CorpusCategory
+
+        captured = {}
+
+        def fake_converter(src, out, **kw):
+            captured.update(kw)
+            return Path(out)
+
+        monkeypatch.setitem(
+            api_module.CONVERTERS, api_module.SourceFormat.PLAIN, fake_converter
+        )
+        monkeypatch.setattr(
+            api_module,
+            "convert_to_corpus",
+            lambda tf_dir, corpus_path, **kw: Path(corpus_path),
+        )
+        response = client.post(
+            "/convert",
+            files={"file": ("doc.txt", b"hello world")},
+            data={"source_format": "plain", "name": "n", "category": "book"},
+        )
+        assert response.status_code == 202
+        manager._executor.run_all()
+        assert captured["category"] is CorpusCategory.BOOK
+
+    def test_invalid_category_is_422(self, client, manager):
+        response = client.post(
+            "/convert",
+            files={"file": ("doc.txt", b"hello world")},
+            data={"source_format": "plain", "name": "n", "category": "novel"},
+        )
+        assert response.status_code == 422
+
+    def test_resolved_category_lands_in_manifest_kwargs(
+        self, client, manager, monkeypatch, tmp_path
+    ):
+        from admin.converters import ConvertedDataset
+        from admin.parsers.schema import CorpusCategory
+
+        captured = {}
+
+        def fake_converter(src, out, **kw):
+            return ConvertedDataset.wrap(
+                out, category=CorpusCategory.RELIGIOUS, warnings=["downgraded note"]
+            )
+
+        def fake_convert_to_corpus(tf_dir, corpus_path, **kw):
+            captured.update(kw)
+            return Path(corpus_path)
+
+        monkeypatch.setitem(
+            api_module.CONVERTERS, api_module.SourceFormat.PLAIN, fake_converter
+        )
+        monkeypatch.setattr(api_module, "convert_to_corpus", fake_convert_to_corpus)
+        job_id = _post(client).json()["job_id"]
+        manager._executor.run_all()
+        assert captured["category"] == "religious"
+        # Converter warnings surfaced on the job log.
+        assert any("downgraded note" in line for line in manager.get(job_id).logs)
+
+
+class TestPostConversionValidation:
+    """Issue #177: validate the converted archive; summary on the job payload."""
+
+    def _summary(self, valid, reasons=()):
+        return {
+            "corpus": "c",
+            "valid": valid,
+            "stats": {"nodes": 1},
+            "reasons": list(reasons),
+            "checks": [],
+        }
+
+    def _patch_validator(self, monkeypatch, summary):
+        import corpora_mcp.validate as validate_module
+
+        result = SimpleNamespace(summary=lambda: summary)
+        monkeypatch.setattr(
+            validate_module, "validate_corpus_archive", lambda archive: result
+        )
+
+    def test_valid_summary_attached_to_job(self, manager, monkeypatch, tmp_path):
+        summary = self._summary(True)
+        self._patch_validator(monkeypatch, summary)
+        manager.submit(
+            source_format=api_module.SourceFormat.PLAIN,
+            name="n",
+            fn=lambda: Path("x"),
+            job_id="j-valid",
+        )
+        api_module._validate_converted_corpus(tmp_path / "a.corpus", "j-valid")
+        job = manager.get("j-valid")
+        assert job.validation == summary
+        assert job.to_dict()["validation"] == summary
+
+    def test_invalid_summary_fails_with_top_reasons(
+        self, manager, monkeypatch, tmp_path
+    ):
+        from admin.services.jobs import JobFailedError
+
+        summary = self._summary(False, reasons=["r1", "r2", "r3", "r4"])
+        self._patch_validator(monkeypatch, summary)
+        manager.submit(
+            source_format=api_module.SourceFormat.PLAIN,
+            name="n",
+            fn=lambda: Path("x"),
+            job_id="j-invalid",
+        )
+        with pytest.raises(JobFailedError) as excinfo:
+            api_module._validate_converted_corpus(tmp_path / "a.corpus", "j-invalid")
+        message = str(excinfo.value)
+        assert message.startswith("Converted corpus failed validation: ")
+        assert "r1; r2; r3" in message
+        assert "r4" not in message
+        # The summary still rides the job even though the gate raised.
+        assert manager.get("j-invalid").validation == summary
+
+    def test_validation_field_in_openapi_schema(self, client):
+        spec = client.get("/openapi.json").json()
+        get_op = spec["paths"]["/convert/{job_id}"]["get"]
+        ref = get_op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        schema = spec["components"]["schemas"][ref.rsplit("/", 1)[-1]]
+        assert "validation" in schema["properties"]

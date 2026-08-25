@@ -177,6 +177,35 @@ mid-job; polling is what advances a frozen instance; no real progress percentage
 `description=` kwarg — not the docstrings, because docstrings can't interpolate the size-limit
 constants.
 
+## Upload gate, category, post-conversion validation (`upload_validation.py`, `api.py`, `jobs.py`, issues #173/#176/#177)
+
+`POST /convert` validates the upload **before** submitting the job (issue #173): `validate_upload`
+(`upload_validation.py`) sniffs the first 4 KiB against magic-byte families and rejects with **422**
+anything non-convertible (images/audio/video/non-zip archives/unknown binary/empty) or structurally
+mismatched with the declared `source_format` (declared `pdf`, sniffed `zip`). Sniffing is
+family-level on purpose — magic bytes can't tell EPUB from TEI-ZIP or TEI from XML, so textual
+families cross-accept and the parser stays the authority past family level. Declared PDFs are
+classified via `pdf_inspector`: `scanned`/`image_based` reject ("OCR is required"), `mixed` passes
+with a 1-based skipped-pages warning logged onto the job, and an inspector *crash* (not a
+`ValueError`) lets the upload through — the converter has its own fallback. The 422 `detail` is the
+report dict (`declared_format`/`detected_format`/`convertible`/`reasons`/`warnings`/`pdf`).
+
+The optional `category` form field (issue #176, `document`/`book`/`religious`) is forwarded to the
+converter; the converter's resolved `ConvertedDataset.category` (an upgrade the tree can't express
+is downgraded, with the warning logged on the job) is written to `manifest.category` via
+`convert_to_corpus(category=...)`.
+
+After `convert_to_corpus`, `_validate_converted_corpus` (issue #177) runs
+`corpora_mcp.validate.validate_corpus_archive` (imported lazily — admin doesn't import
+`corpora_mcp` at module load) and attaches its `.summary()` to the job via
+`JobManager.set_validation` — it rides `to_dict()`/`ConversionJobStatus` as `validation`, on
+FAILED jobs too (set before the raise). An invalid archive fails the job with
+`ConversionValidationError` (a `JobFailedError` — the one exception family whose message `_run`
+exposes verbatim in `job.error` instead of the sanitized `"Conversion failed: <type>"` form),
+carrying the top-3 reasons. Test seam: the services conftest autouse-stubs
+`corpora_mcp.validate.validate_corpus_archive` (call-time attribute) to always-valid; gate tests
+re-patch that same seam.
+
 ## Result filename + Content-Disposition (`jobs.py`, `api.py`, issues #108/#109)
 
 Every job exposes a `result_filename` in `to_dict()` (and therefore on the WebSocket/REST status

@@ -15,15 +15,66 @@ and calls `convert_document()` here to do the actual walk.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from tf.convert.walker import CV
 from tf.fabric import Fabric
 
-from ..parsers.schema import Document, DocumentMetadata, Parser, Token, Unit
+from ..parsers.schema import CorpusCategory, Document, DocumentMetadata, Parser, Token, Unit
 
 TypeMapper = Callable[[Unit], str]
+
+
+@dataclass(frozen=True)
+class SectionSpec:
+    """Ordered Text-Fabric section levels for one dataset (issue #174).
+
+    ``types[i]`` is the node type of section level ``i+1`` (coarsest first)
+    and ``features[i]`` is the feature that carries that level's human
+    label in ``T.sectionFromNode`` refs. The walker guarantees every node
+    of a section type actually carries its label feature (see
+    `_section_label`), because a section node without one breaks
+    `T.sectionFromNode` and every ref-based read built on it.
+    """
+
+    types: tuple[str, ...]
+    features: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.types or len(self.types) != len(self.features):
+            raise ValueError("SectionSpec needs one feature per section type")
+
+    @property
+    def feature_for(self) -> dict[str, str]:
+        return dict(zip(self.types, self.features, strict=True))
+
+
+class ConvertedDataset(Path):
+    """The TF dataset path, annotated with what the conversion resolved.
+
+    A plain `Path` to every existing caller; `category` (what should land in
+    ``manifest.category``) and `warnings` (human-readable notes to surface on
+    the job log, e.g. a downgraded category override or skipped OCR pages)
+    ride along for callers that know to look (issues #175/#176).
+    """
+
+    category: CorpusCategory | None
+    warnings: list[str]
+
+    @classmethod
+    def wrap(
+        cls,
+        path: str | Path,
+        *,
+        category: CorpusCategory | None = None,
+        warnings: list[str] | None = None,
+    ) -> "ConvertedDataset":
+        result = cls(path)
+        result.category = category
+        result.warnings = list(warnings or [])
+        return result
 
 
 def metadata_features(metadata: DocumentMetadata) -> dict[str, str]:
@@ -80,12 +131,44 @@ def _unit_features(unit: Unit) -> dict[str, Any]:
     return features
 
 
-def _walk_unit(cv: CV, unit: Unit, otype_for: TypeMapper) -> None:
-    node = cv.node(otype_for(unit))
-    set_features(cv, node, **_unit_features(unit))
+def _section_label(
+    unit: Unit, otype: str, counters: dict[str, int]
+) -> str:
+    """A guaranteed-nonempty label for a section node (issue #174).
 
+    Prefers the unit's own `label` (a TEI `<head>`, a markdown heading),
+    then its source `id`, then a per-parent 1-based ordinal of that type
+    ("Chapter 3" territory, rendered as just "3") -- so `T.sectionFromNode`
+    always has something human-usable at every declared level.
+    """
+    if unit.label and unit.label.strip():
+        return unit.label.strip()
+    if unit.id and unit.id.strip():
+        return unit.id.strip()
+    return str(counters[otype])
+
+
+def _walk_unit(
+    cv: CV,
+    unit: Unit,
+    otype_for: TypeMapper,
+    section_features: dict[str, str] | None = None,
+    counters: dict[str, int] | None = None,
+) -> None:
+    section_features = section_features or {}
+    counters = {} if counters is None else counters
+    otype = otype_for(unit)
+    counters[otype] = counters.get(otype, 0) + 1
+    node = cv.node(otype)
+    features = _unit_features(unit)
+    section_feature = section_features.get(otype)
+    if section_feature is not None and not features.get(section_feature):
+        features[section_feature] = _section_label(unit, otype, counters)
+    set_features(cv, node, **features)
+
+    child_counters: dict[str, int] = {}
     for child in unit.children:
-        _walk_unit(cv, child, otype_for)
+        _walk_unit(cv, child, otype_for, section_features, child_counters)
 
     tokens = unit.tokens
     if not tokens and not unit.children:
@@ -109,7 +192,9 @@ def convert_document(
     *,
     root_type: str,
     otype_for: TypeMapper,
-) -> Path:
+    section_spec: SectionSpec | None = None,
+    category: CorpusCategory | None = None,
+) -> ConvertedDataset:
     """
     Convert `source` (read via `parser`) into a Text-Fabric dataset at
     `output_dir`.
@@ -126,6 +211,8 @@ def convert_document(
         otype_for=otype_for,
         format_value=parser.format.value,
         source_label=source,
+        section_spec=section_spec,
+        category=category,
     )
 
 
@@ -137,7 +224,9 @@ def convert_documents(
     otype_for: TypeMapper,
     format_value: str,
     source_label: str,
-) -> Path:
+    section_spec: SectionSpec | None = None,
+    category: CorpusCategory | None = None,
+) -> ConvertedDataset:
     """
     Convert one or more already-parsed `Document`s into a single Text-Fabric
     dataset at `output_dir`.
@@ -153,12 +242,24 @@ def convert_documents(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
+    # Default: a single section level — the document root, labeled by its
+    # `title`. A caller wanting finer TF sections (chapters, verses — issue
+    # #174) passes a `SectionSpec` whose levels its `otype_for` actually
+    # emits; anything not declared as a section stays an ordinary node type.
+    spec = section_spec or SectionSpec(types=(root_type,), features=("title",))
+    section_features = spec.feature_for
+
     def director(cv: CV) -> None:
         for document in documents:
             root = cv.node(root_type)
-            set_features(cv, root, **metadata_features(document.metadata))
+            features = metadata_features(document.metadata)
+            root_feature = section_features.get(root_type)
+            if root_feature is not None and not features.get(root_feature):
+                features[root_feature] = features["title"]
+            set_features(cv, root, **features)
+            counters: dict[str, int] = {}
             for unit in document.units:
-                _walk_unit(cv, unit, otype_for)
+                _walk_unit(cv, unit, otype_for, section_features, counters)
             cv.terminate(root)
 
     tf = Fabric(locations=str(output_path))
@@ -167,16 +268,12 @@ def convert_documents(
         director,
         "word",
         otext={
-            # A single section level — the document — is enough structure to
-            # satisfy Text-Fabric's validation; formats that want
-            # finer-grained sections still expose them as ordinary node
-            # types (e.g. "chapter", "page") via `otype_for`.
-            "sectionTypes": root_type,
-            "sectionFeatures": "title",
+            "sectionTypes": ",".join(spec.types),
+            "sectionFeatures": ",".join(spec.features),
             "fmt:text-orig-full": "{text}{after}",
         },
         generic={"converter": "corpora-admin", "format": format_value},
     )
     if not good:
         raise RuntimeError(f"Text-Fabric conversion failed for {source_label!r}")
-    return output_path
+    return ConvertedDataset.wrap(output_path, category=category)
