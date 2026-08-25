@@ -37,6 +37,21 @@ class SourceFormat(StrEnum):
     TEI_ZIP = "tei_zip"
 
 
+class CorpusCategory(StrEnum):
+    """How a converted corpus is structured (written to ``manifest.category``).
+
+    - ``document`` — chapterless, few-page files.
+    - ``book`` — multi-chapter works (with or without front matter; cf.
+      https://schema.org/Book).
+    - ``religious`` — bibles, qurans, books of mormon: book/chapter/verse
+      (or surah) nesting.
+    """
+
+    DOCUMENT = "document"
+    BOOK = "book"
+    RELIGIOUS = "religious"
+
+
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 

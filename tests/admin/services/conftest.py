@@ -53,6 +53,35 @@ def manager(monkeypatch):
     return mgr
 
 
+@pytest.fixture(autouse=True)
+def _stub_corpus_validation(monkeypatch):
+    """Make post-conversion validation (issue #177) always pass by default.
+
+    These tests fake `convert_to_corpus` with paths that never exist on
+    disk, so running the real `validate_corpus_archive` would fail every
+    job. Patched at the `corpora_mcp.validate` module attribute (the gate
+    imports it lazily at call time), so gate tests can re-patch the same
+    seam with their own summaries.
+    """
+    import corpora_mcp.validate as validate_module
+
+    class _AlwaysValid:
+        def summary(self):
+            return {
+                "corpus": "",
+                "valid": True,
+                "stats": {},
+                "reasons": [],
+                "checks": [],
+            }
+
+    monkeypatch.setattr(
+        validate_module,
+        "validate_corpus_archive",
+        lambda archive, corpus_name=None: _AlwaysValid(),
+    )
+
+
 @pytest.fixture
 def claims_holder():
     return {"claims": None}

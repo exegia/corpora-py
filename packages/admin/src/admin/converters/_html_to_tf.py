@@ -29,15 +29,40 @@ Features:
 from pathlib import Path
 
 from ..parsers import HtmlParser
-from ._walker import convert_document
+from ..parsers.schema import CorpusCategory
+from ._category import categorize
+from ._walker import ConvertedDataset, convert_documents
 
 
-def convert_html_to_tf(source: str, output_dir: str | Path) -> Path:
-    """Convert an HTML document at `source` (path or URL) into a Text-Fabric dataset."""
-    return convert_document(
-        HtmlParser(),
-        source,
+def convert_html_to_tf(
+    source: str,
+    output_dir: str | Path,
+    *,
+    category: CorpusCategory | None = None,
+) -> ConvertedDataset:
+    """Convert an HTML document at `source` (path or URL) into a Text-Fabric dataset.
+
+    HTML has no chapter/verse vocabulary, so the category is always
+    ``document`` — a higher override downgrades with a warning (issue #176).
+    """
+    parser = HtmlParser()
+    document = parser.parse(source)
+    effective, spec, otype_for, warnings = categorize(
+        [document],
+        category,
+        root_type="document",
+        base_otype_for=lambda unit: "element",
+        max_category=CorpusCategory.DOCUMENT,
+    )
+    result = convert_documents(
+        [document],
         output_dir,
         root_type="document",
-        otype_for=lambda unit: "element",
+        otype_for=otype_for,
+        format_value=parser.format.value,
+        source_label=source,
+        section_spec=spec,
+        category=effective,
     )
+    result.warnings.extend(warnings)
+    return result

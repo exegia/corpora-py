@@ -20,8 +20,13 @@ create table if not exists public.conversion_jobs (
   error text,
   logs jsonb not null default '[]'::jsonb,
   owner text,
-  display_name text
+  display_name text,
+  -- Post-conversion validation summary (issue #177); null until validated.
+  validation jsonb
 );
+
+-- Existing deployments: add the column introduced by issue #177.
+alter table public.conversion_jobs add column if not exists validation jsonb;
 
 create index if not exists conversion_jobs_owner_created_at_idx
   on public.conversion_jobs (owner, created_at desc);

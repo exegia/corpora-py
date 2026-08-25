@@ -10,6 +10,7 @@ Text-Fabric dataset; `convert_to_cfm` compiles that into Context-Fabric's
 """
 
 from ..parsers import SourceFormat
+from ._category import categorize, detect_category
 from ._epub_to_tf import convert_epub_to_tf
 from ._html_to_tf import convert_html_to_tf
 from ._pdf_to_tf import convert_pdf_to_tf
@@ -17,6 +18,7 @@ from ._tei_to_tf import convert_tei_to_tf
 from ._tei_zip_to_tf import convert_tei_zip_to_tf
 from ._text_to_tf import convert_text_to_tf
 from ._tf_zip_to_tf import convert_tf_zip_to_tf
+from ._walker import ConvertedDataset, SectionSpec
 from ._xml_to_tf import convert_xml_to_tf
 from .convert_to_cfm import convert_to_cfm
 from .convert_to_corpus import CorpusArchiveError, convert_to_corpus
@@ -34,7 +36,10 @@ CONVERTERS = {
 
 __all__ = [
     "CONVERTERS",
+    "ConvertedDataset",
     "CorpusArchiveError",
+    "SectionSpec",
+    "categorize",
     "convert_epub_to_tf",
     "convert_html_to_tf",
     "convert_pdf_to_tf",
@@ -45,4 +50,5 @@ __all__ = [
     "convert_xml_to_tf",
     "convert_to_cfm",
     "convert_to_corpus",
+    "detect_category",
 ]

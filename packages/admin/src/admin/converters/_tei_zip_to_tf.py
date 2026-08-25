@@ -27,10 +27,11 @@ from pathlib import Path, PurePosixPath
 from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from ..parsers import TeiParser
-from ..parsers.schema import Document
+from ..parsers.schema import CorpusCategory, Document
+from ._category import categorize
 from ._tei_to_tf import _otype_for
 from ._tf_zip_to_tf import _MAX_FILES, _MAX_UNCOMPRESSED_BYTES, _safe_path
-from ._walker import convert_documents
+from ._walker import ConvertedDataset, convert_documents
 
 _TEI_SUFFIXES = frozenset({".tei", ".xml"})
 
@@ -60,7 +61,12 @@ def _tei_members(archive: ZipFile) -> list[ZipInfo]:
     return sorted(members, key=lambda info: info.filename)
 
 
-def convert_tei_zip_to_tf(source: str, output_dir: str | Path) -> Path:
+def convert_tei_zip_to_tf(
+    source: str,
+    output_dir: str | Path,
+    *,
+    category: CorpusCategory | None = None,
+) -> ConvertedDataset:
     """Convert every TEI/XML document inside ``source`` into one Text-Fabric
     dataset at ``output_dir``."""
     parser = TeiParser()
@@ -84,11 +90,21 @@ def convert_tei_zip_to_tf(source: str, output_dir: str | Path) -> Path:
     except BadZipFile as exc:
         raise ValueError("Uploaded file is not a valid ZIP archive") from exc
 
-    return convert_documents(
+    effective, spec, otype_for, warnings = categorize(
+        documents,
+        category,
+        root_type="text",
+        base_otype_for=_otype_for,
+    )
+    result = convert_documents(
         documents,
         output_dir,
         root_type="text",
-        otype_for=_otype_for,
+        otype_for=otype_for,
         format_value=parser.format.value,
         source_label=source,
+        section_spec=spec,
+        category=effective,
     )
+    result.warnings.extend(warnings)
+    return result

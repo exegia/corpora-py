@@ -174,6 +174,7 @@ class TestRowRoundTrip:
             error=None,
             logs=["a", "b"],
             display_name="Summa",
+            validation={"valid": True, "reasons": []},
         )
         restored = job_from_row(job_to_row(job))
         assert restored.id == job.id
@@ -184,6 +185,14 @@ class TestRowRoundTrip:
         assert restored.logs == ["a", "b"]
         assert restored.display_name == "Summa"
         assert restored.owner == "alice"
+        assert restored.validation == {"valid": True, "reasons": []}
+
+    def test_validation_survives_json_string_row(self):
+        # PostgREST may hand jsonb back as a string depending on headers —
+        # mirror the `logs` decode path.
+        row = job_to_row(_job(validation={"valid": False, "reasons": ["r"]}))
+        row["validation"] = json.dumps(row["validation"])
+        assert job_from_row(row).validation == {"valid": False, "reasons": ["r"]}
 
     def test_ingest_source_format_stays_a_string(self):
         job = _job(source_format="docx")

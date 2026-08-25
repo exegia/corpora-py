@@ -23,8 +23,9 @@
 from pathlib import Path
 
 from ..parsers import EpubParser
-from ..parsers.schema import Unit
-from ._walker import convert_document
+from ..parsers.schema import CorpusCategory, Unit
+from ._category import categorize
+from ._walker import ConvertedDataset, convert_documents
 
 _PARAGRAPH_TAGS = {"p", "blockquote"}
 _LINK_TAGS = {"a"}
@@ -40,12 +41,35 @@ def _otype_for(unit: Unit) -> str:
     return "element"
 
 
-def convert_epub_to_tf(source: str, output_dir: str | Path) -> Path:
-    """Convert an EPUB at `source` (path or URL) into a Text-Fabric dataset."""
-    return convert_document(
-        EpubParser(),
-        source,
+def convert_epub_to_tf(
+    source: str,
+    output_dir: str | Path,
+    *,
+    category: CorpusCategory | None = None,
+) -> ConvertedDataset:
+    """Convert an EPUB at `source` (path or URL) into a Text-Fabric dataset.
+
+    EPUB's vocabulary tops out at chapters (no verse divisions), so the
+    category ceiling is ``book`` (issue #176).
+    """
+    parser = EpubParser()
+    document = parser.parse(source)
+    effective, spec, otype_for, warnings = categorize(
+        [document],
+        category,
+        root_type="book",
+        base_otype_for=_otype_for,
+        max_category=CorpusCategory.BOOK,
+    )
+    result = convert_documents(
+        [document],
         output_dir,
         root_type="book",
-        otype_for=_otype_for,
+        otype_for=otype_for,
+        format_value=parser.format.value,
+        source_label=source,
+        section_spec=spec,
+        category=effective,
     )
+    result.warnings.extend(warnings)
+    return result
