@@ -14,6 +14,9 @@ dependencies = [
     "text-fabric>=13.1.0",
     # PDF parsing
     "pypdf>=6.14.2",
+    # PDF classification (text-based vs scanned) + markdown extraction for
+    # pre-conversion validation and the PDF markdown route
+    "pdf-inspector>=1.17.0",
     # Context-Fabric compilation (.cfm) and .corpus packaging
     "context-fabric>=0.5.7",
     "pyyaml>=6.0.3",

@@ -7,6 +7,9 @@ import stat
 from pathlib import Path, PurePosixPath
 from zipfile import BadZipFile, ZipFile, ZipInfo
 
+from ..parsers.schema import CorpusCategory
+from ._walker import ConvertedDataset
+
 _MAX_FILES = 10_000
 _MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024
 _REQUIRED_FILES = frozenset({"otype.tf", "oslots.tf"})
@@ -44,12 +47,21 @@ def _find_dataset_root(files: dict[PurePosixPath, ZipInfo]) -> PurePosixPath:
     return candidates[0]
 
 
-def convert_tf_zip_to_tf(source: str, output_dir: str | Path) -> Path:
+def convert_tf_zip_to_tf(
+    source: str,
+    output_dir: str | Path,
+    *,
+    category: CorpusCategory | None = None,
+) -> ConvertedDataset:
     """Extract the single Text-Fabric dataset in ``source`` to ``output_dir``.
 
     Archive paths, symlinks, member count, and expanded size are validated
     before any bytes are written so a malformed upload cannot escape or fill
     the conversion work directory.
+
+    The dataset arrives pre-built (its section structure is whatever its
+    author declared), so a requested `category` is recorded as-is for
+    ``manifest.category`` rather than detected (issue #176).
     """
     output_dir = Path(output_dir)
 
@@ -84,4 +96,4 @@ def convert_tf_zip_to_tf(source: str, output_dir: str | Path) -> Path:
     except BadZipFile as exc:
         raise ValueError("Uploaded file is not a valid ZIP archive") from exc
 
-    return output_dir
+    return ConvertedDataset.wrap(output_dir, category=category)

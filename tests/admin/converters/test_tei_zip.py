@@ -81,7 +81,7 @@ class TestConvert:
         def fake_convert_documents(documents, output_dir, **kwargs):
             captured["titles"] = [doc.metadata.title for doc in documents]
             captured["kwargs"] = kwargs
-            return output_dir
+            return module.ConvertedDataset.wrap(output_dir)
 
         monkeypatch.setattr(module, "convert_documents", fake_convert_documents)
 

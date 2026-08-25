@@ -1,12 +1,21 @@
 """_walker: metadata flattening, unit features, and the walk itself (fake CV)."""
 
+import pytest
 from admin.converters._walker import (
+    SectionSpec,
     _unit_features,
     _walk_unit,
+    convert_documents,
     metadata_features,
     set_features,
 )
-from admin.parsers.schema import DocumentMetadata, SourceFormat, Token, Unit
+from admin.parsers.schema import (
+    Document,
+    DocumentMetadata,
+    SourceFormat,
+    Token,
+    Unit,
+)
 
 
 class FakeCV:
@@ -142,3 +151,159 @@ class TestWalkUnit:
         unit = Unit(type="blockquote", tokens=[Token(text="q")])
         _walk_unit(cv, unit, lambda u: "paragraph" if u.type == "blockquote" else "element")
         assert ("node", "paragraph") in cv.calls
+
+
+class TestSectionSpec:
+    def test_length_mismatch_rejected(self):
+        with pytest.raises(ValueError, match="one feature per section type"):
+            SectionSpec(types=("book", "chapter"), features=("label",))
+
+    def test_empty_spec_rejected(self):
+        with pytest.raises(ValueError):
+            SectionSpec(types=(), features=())
+
+    def test_feature_for_maps_type_to_feature(self):
+        spec = SectionSpec(types=("text", "chapter"), features=("title", "label"))
+        assert spec.feature_for == {"text": "title", "chapter": "label"}
+
+
+def _section_walk(unit, section_features):
+    cv = FakeCV()
+    _walk_unit(cv, unit, lambda u: u.type, section_features, {})
+    return cv
+
+
+def _node_features(cv, otype):
+    """Features set on nodes (not slots) of the given otype, in walk order."""
+    return [
+        c[2]
+        for c in cv.calls
+        if c[0] == "feature" and isinstance(c[1], tuple) and c[1][0] == otype
+    ]
+
+
+class TestWalkUnitSections:
+    def test_units_own_label_wins(self):
+        unit = Unit(type="chapter", label="Genesis 1", tokens=[Token(text="x")])
+        cv = _section_walk(unit, {"chapter": "label"})
+        assert _node_features(cv, "chapter")[0]["label"] == "Genesis 1"
+
+    def test_source_id_used_when_label_missing(self):
+        unit = Unit(type="verse", id="GEN.1.1", tokens=[Token(text="x")])
+        cv = _section_walk(unit, {"verse": "label"})
+        assert _node_features(cv, "verse")[0]["label"] == "GEN.1.1"
+
+    def test_ordinal_fallback_when_label_and_id_missing(self):
+        parent = Unit(
+            type="book",
+            label="B",
+            children=[
+                Unit(type="chapter", tokens=[Token(text="x")]),
+                Unit(type="chapter", tokens=[Token(text="y")]),
+            ],
+        )
+        cv = _section_walk(parent, {"book": "label", "chapter": "label"})
+        assert [f["label"] for f in _node_features(cv, "chapter")] == ["1", "2"]
+
+    def test_ordinals_are_per_parent(self):
+        # Chapters restart at 1 under each book — "Chapter 1" of book two,
+        # not "Chapter 3" of the corpus.
+        def book():
+            return Unit(
+                type="book",
+                label="B",
+                children=[
+                    Unit(type="chapter", tokens=[Token(text="x")]),
+                    Unit(type="chapter", tokens=[Token(text="y")]),
+                ],
+            )
+
+        cv = FakeCV()
+        counters: dict[str, int] = {}
+        features = {"chapter": "label"}
+        _walk_unit(cv, book(), lambda u: u.type, features, counters)
+        _walk_unit(cv, book(), lambda u: u.type, features, counters)
+        assert [f["label"] for f in _node_features(cv, "chapter")] == ["1", "2", "1", "2"]
+
+    def test_existing_feature_value_not_overwritten(self):
+        # A TEI div carrying its own n="3" as the section feature keeps it.
+        unit = Unit(type="chapter", attrs={"label": "III"}, tokens=[Token(text="x")])
+        cv = _section_walk(unit, {"chapter": "label"})
+        assert _node_features(cv, "chapter")[0]["label"] == "III"
+
+    def test_non_section_types_get_no_label_injected(self):
+        unit = Unit(type="paragraph", tokens=[Token(text="x")])
+        cv = _section_walk(unit, {"chapter": "label"})
+        assert "label" not in _node_features(cv, "paragraph")[0]
+
+
+class TestConvertDocumentsSections:
+    """Real Text-Fabric walk — verifies the otext contract end to end (#174)."""
+
+    def _bible_doc(self):
+        def chapter(verses):
+            return Unit(
+                type="chapter",
+                children=[
+                    Unit(type="verse", tokens=[Token(text=f"word{i}", after=" ")])
+                    for i in range(verses)
+                ],
+            )
+
+        return Document(
+            metadata=DocumentMetadata(title="Tiny Bible", source_format=SourceFormat.XML),
+            units=[Unit(type="book", label="Genesis", children=[chapter(2), chapter(1)])],
+        )
+
+    def _convert(self, tmp_path, spec):
+        return convert_documents(
+            [self._bible_doc()],
+            tmp_path / "tf",
+            root_type="text",
+            otype_for=lambda u: u.type,
+            format_value="xml",
+            source_label="test",
+            section_spec=spec,
+        )
+
+    def test_multi_level_spec_lands_in_otext(self, tmp_path):
+        spec = SectionSpec(
+            types=("text", "book", "chapter", "verse"),
+            features=("title", "label", "label", "label"),
+        )
+        self._convert(tmp_path, spec)
+        otext = (tmp_path / "tf" / "otext.tf").read_text()
+        assert "@sectionTypes=text,book,chapter,verse" in otext
+        assert "@sectionFeatures=title,label,label,label" in otext
+
+    def test_default_spec_is_root_with_title(self, tmp_path):
+        self._convert(tmp_path, None)
+        otext = (tmp_path / "tf" / "otext.tf").read_text()
+        assert "@sectionTypes=text\n" in otext
+        assert "@sectionFeatures=title\n" in otext
+
+    def test_every_section_node_carries_its_label(self, tmp_path):
+        spec = SectionSpec(
+            types=("text", "book", "chapter", "verse"),
+            features=("title", "label", "label", "label"),
+        )
+        self._convert(tmp_path, spec)
+        label = (tmp_path / "tf" / "label.tf").read_text()
+        # The book keeps its own label; unlabeled chapters and verses get
+        # per-parent ordinals so T.sectionFromNode never hits an empty ref.
+        assert "Genesis" in label
+        values = [
+            line.split("\t")[-1]
+            for line in label.splitlines()
+            if line and not line.startswith("@") and line.strip()
+        ]
+        assert values.count("1") >= 2  # chapter 1 + verse 1s
+        assert "2" in values
+
+    def test_root_label_falls_back_to_title(self, tmp_path):
+        # A spec labeling the root by a feature metadata doesn't provide —
+        # the walker backfills it from the document title.
+        spec = SectionSpec(types=("text", "book"), features=("label", "label"))
+        self._convert(tmp_path, spec)
+        label = (tmp_path / "tf" / "label.tf").read_text()
+        assert "Tiny Bible" in label

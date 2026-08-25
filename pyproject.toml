@@ -37,6 +37,7 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "lxml>=6.1.1",
     "pypdf>=6.14.2",
+    "pdf-inspector>=1.17.0",
     "pyyaml>=6.0.3",
     "huggingface-hub>=1.0",
     "docling-core>=2.30",
