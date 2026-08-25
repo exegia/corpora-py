@@ -99,6 +99,7 @@ def job_to_row(job: ConversionJob) -> dict[str, Any]:
         "logs": list(job.logs),
         "owner": job.owner,
         "display_name": job.display_name,
+        "validation": job.validation,
     }
 
 
@@ -107,6 +108,9 @@ def job_from_row(row: dict[str, Any]) -> ConversionJob:
     logs = row.get("logs") or []
     if isinstance(logs, str):
         logs = json.loads(logs)
+    validation = row.get("validation")
+    if isinstance(validation, str):
+        validation = json.loads(validation)
     status_raw = row.get("status") or JobStatus.QUEUED
     return ConversionJob(
         id=row["id"],
@@ -124,6 +128,7 @@ def job_from_row(row: dict[str, Any]) -> ConversionJob:
         logs=list(logs),
         owner=row.get("owner"),
         display_name=row.get("display_name"),
+        validation=validation,
     )
 
 

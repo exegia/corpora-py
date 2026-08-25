@@ -1,6 +1,6 @@
 [project]
 name = "corpora-py"
-version = "1.3.2"
+version = "2.0.0"
 description = "Graph-based biblical and religious text study platform (all-in-one umbrella)"
 readme = "README.md"
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
@@ -37,6 +37,7 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "lxml>=6.1.1",
     "pypdf>=6.14.2",
+    "pdf-inspector>=1.17.0",
     "pyyaml>=6.0.3",
     "huggingface-hub>=1.0",
     "docling-core>=2.30",

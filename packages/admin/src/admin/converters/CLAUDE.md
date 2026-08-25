@@ -22,10 +22,18 @@ every `_{format}_to_tf.py`.
   "remove unlinked nodes" pass. A leaf `Unit` with no tokens and no children (a blank PDF page, an `<img>`, an `<hr>`)
   would otherwise vanish along with its attributes — `_walk_unit()` gives genuinely empty leaves one placeholder
   empty-text slot so they survive.
-- **`otext.sectionTypes`/`sectionFeatures` can't be empty**, but also don't need to be elaborate: every converter uses a
-  single section level (the root `book`/`document`/`text` node, with `title` as its section feature). Finer structure
-  (chapters, pages, divs) is still expressed as ordinary node types via `otype_for` — it just isn't declared as TF
-  "sections", which would require strict, consistent nesting we can't guarantee across arbitrary source documents.
+- **`otext.sectionTypes`/`sectionFeatures` can't be empty.** The default is a single section level (the root
+  `book`/`document`/`text` node, with `title` as its section feature), but a converter can declare finer levels by
+  passing a `SectionSpec` to `convert_documents()` (issue #174) — `_category.categorize()` derives one
+  (`book`/`chapter`/`verse`) from the roles actually present in the parsed tree, because **a declared section level
+  with zero nodes breaks the TF walk**. The walker guarantees every node of a declared section type carries its label
+  feature (`_section_label`: unit label → source id → per-parent 1-based ordinal), since a section node without one
+  breaks `T.sectionFromNode`. Structure not declared as a section stays ordinary node types via `otype_for`.
+- **Category classification (issue #176)**: `_category.categorize(documents, requested, ...)` detects
+  `document`/`book`/`religious` from section roles (`verse`/`chapter`/`book` unit types, TEI `div@type`, level-1
+  markdown sections), honors a downgrade override, downgrades an unexpressible upgrade with a warning, and returns the
+  `SectionSpec` + `otype_for` wrapper to match. Converters return `ConvertedDataset` (a `Path` subclass) whose
+  `.category` lands in `manifest.category` and `.warnings` on the job log.
 - **`SKIP_TAGS` in `parsers/_html.py` is scoped to tags that only make sense to drop when nested inside `<body>`**
   (script/style/noscript/svg/math). It used to include `"head"` for HTML's metadata tag, which silently ate TEI's
   `<head>` (a heading element, reused by the shared walker) — don't add HTML-specific tag names back to that set without

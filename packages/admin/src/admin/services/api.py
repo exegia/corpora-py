@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers import PARSERS
-from ..parsers.schema import SourceFormat
+from ..parsers.schema import CorpusCategory, SourceFormat
 from .corpus_detail import (
     annotate_node,
     get_content,
@@ -53,6 +53,7 @@ from .corpus_detail_api import _run as _run_detail
 from .jobs import (
     _CORPUS_SUFFIX,
     ConversionJob,
+    JobFailedError,
     JobQueueFullError,
     JobStatus,
     JobStoreError,
@@ -63,6 +64,7 @@ from .jobs import (
     result_filename_for,
     snapshot_key_for,
 )
+from .upload_validation import validate_upload
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +148,12 @@ class ConversionJobStatus(BaseModel):
         "conversion pipeline has no percentage hook."
     )
     last_log: str | None
+    validation: dict[str, Any] | None = Field(
+        description="Post-conversion corpus validation summary "
+        "(`corpus`/`valid`/`stats`/`reasons`/`checks`) — set once the "
+        "converted archive has been checked (issue #177); an invalid "
+        "archive also fails the job with the top reasons in `error`."
+    )
     result_filename: str = Field(
         description="The filename a client should persist the result under "
         "(always ends in `.corpus` for /convert jobs); matches the "
@@ -325,6 +333,38 @@ def _derive_display_name(
     return _clean_filename_stem(source_path.name) or name
 
 
+class ConversionValidationError(JobFailedError):
+    """The converted archive failed post-conversion validation (issue #177).
+
+    The message is client-facing by design (see `JobFailedError`): the top
+    validation reasons are exactly what the submitter needs to see in
+    `job.error`.
+    """
+
+
+def _validate_converted_corpus(archive: Path, job_id: str) -> None:
+    """Run `validate_corpus_archive` over the freshly-built archive (#177).
+
+    The summary is attached to the job either way (via
+    `JobManager.set_validation`, so it rides the terminal status); an
+    invalid archive raises `ConversionValidationError` so the job fails
+    with the top reasons in `error` instead of shipping a broken corpus.
+    Imported lazily: `corpora_mcp` is a sibling workspace package that
+    admin doesn't import at module load.
+    """
+    from corpora_mcp.validate import validate_corpus_archive
+
+    job_manager.log(job_id, "Validating converted corpus...")
+    summary = validate_corpus_archive(archive).summary()
+    job_manager.set_validation(job_id, summary)
+    if not summary.get("valid"):
+        reasons = [str(r) for r in summary.get("reasons") or []]
+        detail = "; ".join(reasons[:3]) or "corpus integrity checks failed"
+        raise ConversionValidationError(
+            f"Converted corpus failed validation: {detail}"
+        )
+
+
 def _run_conversion(
     *,
     source_path: Path,
@@ -333,6 +373,7 @@ def _run_conversion(
     name: str,
     description: str,
     job_id: str,
+    category: CorpusCategory | None = None,
 ) -> Path:
     """Blocking pipeline: parse -> Text-Fabric -> .cfm -> .corpus.
 
@@ -374,7 +415,14 @@ def _run_conversion(
             )
         converter = CONVERTERS[source_format]
         tf_dir = work_dir / "tf"
-        converter(str(source_path), tf_dir)
+        dataset = converter(str(source_path), tf_dir, category=category)
+        # Converters return a `ConvertedDataset` carrying the resolved
+        # category (auto-detected, possibly downgrading the request — issue
+        # #176) and human-readable warnings (skipped OCR pages, downgraded
+        # overrides) that belong on the job log.
+        resolved = getattr(dataset, "category", None) or category
+        for warning in getattr(dataset, "warnings", []):
+            job_manager.log(job_id, warning)
 
         job_manager.log(
             job_id,
@@ -389,8 +437,10 @@ def _run_conversion(
             name=display_name,
             description=description,
             author_sub=author_sub,
+            category=resolved.value if resolved else "",
         )
 
+        _validate_converted_corpus(result, job_id)
         job_manager.log(job_id, "Conversion complete.")
         return result
     finally:
@@ -408,9 +458,12 @@ def _run_conversion(
             f"{_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
         },
         422: {
-            "model": ErrorDetail,
-            "description": "Invalid upload filename, or no converter is "
-            "registered for `source_format`.",
+            "description": "Invalid upload filename, no converter registered "
+            "for `source_format`, or the upload failed pre-conversion "
+            "validation — in that last case `detail` is a report object "
+            "(declared/detected format, `convertible`, `reasons`, `warnings`, "
+            "and a `pdf` classification payload for PDF uploads) rather than "
+            "a string.",
         },
         429: {
             "model": ErrorDetail,
@@ -438,6 +491,14 @@ async def create_conversion(
     source_format: SourceFormat = Form(...),
     name: str = Form(...),
     description: str = Form(""),
+    category: CorpusCategory | None = Form(
+        default=None,
+        description="Optional corpus category override "
+        "(`document`/`book`/`religious`). Auto-detected from the parsed "
+        "structure when omitted; an override requesting more structure than "
+        "the source carries is downgraded with a warning on the job log "
+        "(issue #176).",
+    ),
 ) -> dict[str, str]:
     """Upload a source document and start converting it in the background.
 
@@ -469,6 +530,12 @@ async def create_conversion(
     try:
         source_path = await _save_upload(file, work_dir / "source")
 
+        # Pre-conversion gate (issue #173): sniff the real file type, refuse
+        # anything that can only fail minutes later in the background job.
+        report = validate_upload(source_path, source_format)
+        if not report.convertible:
+            raise HTTPException(status_code=422, detail=report.to_dict())
+
         try:
             job = job_manager.submit(
                 job_id=job_id,
@@ -482,6 +549,7 @@ async def create_conversion(
                     name=name,
                     description=description,
                     job_id=job_id,
+                    category=category,
                 ),
             )
         except JobQueueFullError as exc:
@@ -503,6 +571,12 @@ async def create_conversion(
         # exceptions this function already knows how to raise.
         shutil.rmtree(work_dir, ignore_errors=True)
         raise
+
+    # Non-fatal upload findings (e.g. a mixed PDF's OCR-needing pages) go on
+    # the job log so a client watching the job sees them without a second
+    # response channel.
+    for warning in report.warnings:
+        job_manager.log(job.id, warning)
 
     logger.info("Queued conversion job %s (%s, %s)", job.id, source_format.value, name)
     return {

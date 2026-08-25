@@ -16,6 +16,10 @@ Node Types:
 - text: Root node for the entire TEI document
 - div: A TEI division (chapter, book, ...); its `type` attribute survives
   as an ordinary feature (e.g. `type="chapter"`)
+- book / chapter / verse: divisions promoted from `div` when the resolved
+  corpus category (`book` / `religious`, issue #176) declares them as
+  Text-Fabric section levels — a `<div type="chapter">` in a `religious`
+  corpus lands as a `chapter` node, not a generic `div`
 - paragraph: <p> elements
 - element: Any other TEI element (l, seg, note, ...)
 - word: Individual words (slots)
@@ -30,8 +34,9 @@ Features:
 from pathlib import Path
 
 from ..parsers import TeiParser
-from ..parsers.schema import Unit
-from ._walker import convert_document
+from ..parsers.schema import CorpusCategory, Unit
+from ._category import categorize
+from ._walker import ConvertedDataset, convert_documents
 
 
 def _otype_for(unit: Unit) -> str:
@@ -42,12 +47,30 @@ def _otype_for(unit: Unit) -> str:
     return "element"
 
 
-def convert_tei_to_tf(source: str, output_dir: str | Path) -> Path:
+def convert_tei_to_tf(
+    source: str,
+    output_dir: str | Path,
+    *,
+    category: CorpusCategory | None = None,
+) -> ConvertedDataset:
     """Convert a TEI document at `source` (path or URL) into a Text-Fabric dataset."""
-    return convert_document(
-        TeiParser(),
-        source,
+    parser = TeiParser()
+    document = parser.parse(source)
+    effective, spec, otype_for, warnings = categorize(
+        [document],
+        category,
+        root_type="text",
+        base_otype_for=_otype_for,
+    )
+    result = convert_documents(
+        [document],
         output_dir,
         root_type="text",
-        otype_for=_otype_for,
+        otype_for=otype_for,
+        format_value=parser.format.value,
+        source_label=source,
+        section_spec=spec,
+        category=effective,
     )
+    result.warnings.extend(warnings)
+    return result

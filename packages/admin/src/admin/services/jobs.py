@@ -130,6 +130,17 @@ def result_filename_for(
     return f"{slug}{_GRAPH_SUFFIX}"
 
 
+class JobFailedError(Exception):
+    """A job failure whose message is safe to expose in ``job.error``.
+
+    `JobManager._run` normally replaces exception text with a generic
+    message (internal paths, library internals must not round-trip to
+    clients). Raise this — with a deliberately client-facing message —
+    when the failure reason *is* the product surface, e.g. a converted
+    corpus failing post-conversion validation (issue #177).
+    """
+
+
 class JobQueueFullError(Exception):
     """Raised by `JobManager.submit` when too many jobs are queued/running.
 
@@ -346,6 +357,14 @@ class ConversionJob:
     # is derived from this once set, so the on-disk archive name follows the
     # human title, not the upload filename.
     display_name: str | None = None
+    # Post-conversion validation summary (issue #177):
+    # `corpora_mcp.validate.validate_corpus_archive(...).summary()` — keys
+    # `corpus` / `valid` / `stats` / `reasons` / `checks`. `None` until the
+    # worker runs validation (and for /ingest jobs, which have no archive).
+    # Set via `JobManager.set_validation` so it appears on the terminal
+    # status; an invalid archive also fails the job with the top reasons in
+    # `error` (see `_run_conversion` in `api.py`).
+    validation: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         # The on-disk `result_path.name` (e.g. `job-abc123.corpus`) is a
@@ -380,6 +399,7 @@ class ConversionJob:
             "error": self.error,
             "logs": list(self.logs),
             "last_log": self.logs[-1] if self.logs else None,
+            "validation": self.validation,
             "result_filename": result_filename,
             "download_ready": self.status == JobStatus.SUCCEEDED
             and (self.result_path is not None or bool(self.result_key)),
@@ -544,7 +564,10 @@ class JobManager:
             logger.exception("Conversion job %s failed", job.id)
             result_path = None
             result_key = None
-            error = f"Conversion failed: {type(exc).__name__} (job id {job.id})"
+            if isinstance(exc, JobFailedError) and str(exc):
+                error = str(exc)
+            else:
+                error = f"Conversion failed: {type(exc).__name__} (job id {job.id})"
 
         with self._lock:
             # Re-read: `log` / `set_display_name` / a stall check on another
@@ -651,6 +674,20 @@ class JobManager:
             if job is None:
                 return
             job.display_name = display_name
+            self._store.put(job)
+
+    def set_validation(self, job_id: str, summary: dict[str, Any]) -> None:
+        """Attach a post-conversion validation summary to a job (issue #177).
+
+        Called from a worker thread after `validate_corpus_archive` runs, so
+        the summary rides the terminal status regardless of pass/fail. Same
+        lock + no-op-on-unknown-id semantics as `log`/`set_display_name`.
+        """
+        with self._lock:
+            job = self._store.get(job_id)
+            if job is None:
+                return
+            job.validation = summary
             self._store.put(job)
 
     def get(self, job_id: str) -> ConversionJob | None:
