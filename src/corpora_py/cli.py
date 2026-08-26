@@ -222,11 +222,29 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("corpus", help="Path to a .corpus archive.")
     validate.set_defaults(func=_cmd_validate)
 
+    ui = subparsers.add_parser(
+        "ui", help="Open the interactive terminal UI (also: bare `corpora`)."
+    )
+    ui.set_defaults(func=_cmd_ui)
+
     return parser
 
 
+def _cmd_ui(_args: argparse.Namespace) -> int:
+    # Imported lazily: textual is only needed once the TUI actually opens,
+    # and the scripting subcommands must not pay its import cost.
+    from .tui import run
+
+    return run()
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    resolved = list(sys.argv[1:] if argv is None else argv)
+    # Bare `corpora` opens the terminal UI (issue #188 follow-up); the
+    # subcommands remain the scripting interface.
+    if not resolved:
+        resolved = ["ui"]
+    args = build_parser().parse_args(resolved)
     return args.func(args)
 
 
