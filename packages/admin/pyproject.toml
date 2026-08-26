@@ -1,6 +1,6 @@
 [project]
 name = "corpora-admin"
-version = "2.2.0"
+version = "3.0.0"
 requires-python = ">=3.13"
 keywords = ["exegia", "corpora", "bible", "epub", "text-fabric", "converter"]
 
