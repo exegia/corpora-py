@@ -376,7 +376,7 @@ wheels = [
 
 [[package]]
 name = "corpora-admin"
-version = "2.1.0"
+version = "2.2.0"
 source = { editable = "packages/admin" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -422,7 +422,7 @@ provides-extras = ["docling"]
 
 [[package]]
 name = "corpora-common"
-version = "2.1.0"
+version = "2.2.0"
 source = { editable = "packages/common" }
 dependencies = [
     { name = "cryptography" },
@@ -443,7 +443,7 @@ requires-dist = [
 
 [[package]]
 name = "corpora-mcp"
-version = "2.1.0"
+version = "2.2.0"
 source = { editable = "packages/mcp" }
 dependencies = [
     { name = "corpora-common" },
@@ -467,7 +467,7 @@ provides-extras = ["sse"]
 
 [[package]]
 name = "corpora-py"
-version = "2.1.0"
+version = "2.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
