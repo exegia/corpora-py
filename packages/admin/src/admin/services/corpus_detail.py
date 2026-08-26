@@ -731,6 +731,50 @@ def restore_from_snapshot(
     return get_versions(filename)
 
 
+def diff_archives(before: Path, after: Path) -> list[dict[str, Any]]:
+    """Path-level diff between two ``.corpus`` zips (issue #151).
+
+    Compares the zip central directories only (member size + CRC-32) — no
+    extraction, no content dump, which keeps a diff over a multi-hundred-MB
+    archive cheap and honors the issue's "do not dump ``.tf``" rule.
+    ``kind`` uses the history.yml vocabulary (``added``/``removed``/
+    ``modified``); ``before``/``after`` carry the member size on the side(s)
+    where the path exists. Unchanged members are omitted.
+    """
+
+    def _members(path: Path) -> dict[str, tuple[int, int]]:
+        with zipfile.ZipFile(path) as zf:
+            return {
+                info.filename: (info.file_size, info.CRC)
+                for info in zf.infolist()
+                if not info.is_dir()
+            }
+
+    old = _members(Path(before))
+    new = _members(Path(after))
+    files: list[dict[str, Any]] = []
+    for member in sorted(old.keys() | new.keys()):
+        in_old, in_new = member in old, member in new
+        if in_old and not in_new:
+            files.append(
+                {"path": member, "kind": "removed", "before": {"size": old[member][0]}}
+            )
+        elif in_new and not in_old:
+            files.append(
+                {"path": member, "kind": "added", "after": {"size": new[member][0]}}
+            )
+        elif old[member] != new[member]:
+            files.append(
+                {
+                    "path": member,
+                    "kind": "modified",
+                    "before": {"size": old[member][0]},
+                    "after": {"size": new[member][0]},
+                }
+            )
+    return files
+
+
 # ── Nodes (inspect + annotate) ────────────────────────────────────────────────
 
 # Sidecar file at the archive root (next to manifest.yml) recording node-level

@@ -196,6 +196,80 @@ def test_job_restore_current_is_409(client, succeeded_job):
     assert resp.status_code == 409
 
 
+def test_job_diff_after_mutation(client, succeeded_job):
+    """GET /diff between a snapshot label and current HEAD (issue #151)."""
+    client.patch(f"/convert/{succeeded_job}/manifest", json={"description": "A"})
+
+    resp = client.get(
+        f"/convert/{succeeded_job}/diff", params={"from": "v1.0", "to": "v1.1"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["from"]["label"] == "v1.0"
+    assert body["to"]["label"] == "v1.1"
+    changed = {row["path"]: row for row in body["files"]}
+    # The manifest PATCH rewrote manifest.yml and the 1.x bump touched the
+    # history sidecar; the untouched .tf payload must not appear.
+    assert changed["manifest.yml"]["kind"] == "modified"
+    assert changed["manifest.yml"]["before"]["size"] > 0
+    assert changed["manifest.yml"]["after"]["size"] > 0
+    assert "history.yml" in changed
+    assert not any(path.endswith(".tf") for path in changed)
+    # No .tf content is dumped — every row is path + kind + sizes only.
+    assert all(set(row) <= {"path", "kind", "before", "after"} for row in body["files"])
+
+
+def test_job_diff_same_version_is_empty(client, succeeded_job):
+    client.patch(f"/convert/{succeeded_job}/manifest", json={"description": "A"})
+    resp = client.get(
+        f"/convert/{succeeded_job}/diff", params={"from": "v1.1", "to": "v1.1"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["files"] == []
+
+
+def test_job_diff_two_snapshot_labels(client, succeeded_job):
+    """Both sides can be non-current snapshots (v1.0 vs v1.1 after two bumps)."""
+    client.patch(f"/convert/{succeeded_job}/manifest", json={"description": "A"})
+    client.patch(f"/convert/{succeeded_job}/manifest", json={"description": "B"})
+    resp = client.get(
+        f"/convert/{succeeded_job}/diff", params={"from": "v1.0", "to": "v1.1"}
+    )
+    assert resp.status_code == 200
+    paths = {row["path"] for row in resp.json()["files"]}
+    assert "manifest.yml" in paths
+
+
+def test_job_diff_unknown_version_is_404(client, succeeded_job):
+    resp = client.get(
+        f"/convert/{succeeded_job}/diff", params={"from": "v1.0", "to": "v9.9"}
+    )
+    assert resp.status_code == 404
+
+
+def test_job_diff_missing_snapshot_is_404(client, succeeded_job, manager):
+    client.patch(f"/convert/{succeeded_job}/manifest", json={"description": "A"})
+    job = manager.get(succeeded_job)
+    snapshot = Path(job.result_path).parent / f"{succeeded_job}-v1.0.corpus"
+    snapshot.unlink()
+    resp = client.get(
+        f"/convert/{succeeded_job}/diff", params={"from": "v1.0", "to": "v1.1"}
+    )
+    assert resp.status_code == 404
+
+
+def test_job_diff_queued_is_409(client):
+    job_id = client.post(
+        "/convert",
+        files={"file": ("mini.txt", b"placeholder")},
+        data={"source_format": "plain", "name": "Mini"},
+    ).json()["job_id"]
+    resp = client.get(
+        f"/convert/{job_id}/diff", params={"from": "v1.0", "to": "v1.1"}
+    )
+    assert resp.status_code == 409
+
+
 def test_job_restore_queued_is_409(client):
     job_id = client.post(
         "/convert",
