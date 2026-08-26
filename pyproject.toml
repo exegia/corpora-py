@@ -1,6 +1,6 @@
 [project]
 name = "corpora-py"
-version = "2.0.0"
+version = "2.1.0"
 description = "Graph-based biblical and religious text study platform (all-in-one umbrella)"
 readme = "README.md"
 authors = [{ name = "Emmanuel De Freitas", email = "emmanuel@exegia.co" }]
@@ -57,6 +57,8 @@ docling = ["docling>=2.0"]
 cf-mcp = "corpora_mcp.server:main"
 # Combined FastAPI app: MCP server + admin conversion API
 corpora-api = "corpora_py.app:main"
+# Terminal conversion CLI over the same pipeline (issue #188)
+corpora = "corpora_py.cli:main"
 
 [build-system]
 requires = ["hatchling"]

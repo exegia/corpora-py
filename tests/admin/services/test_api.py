@@ -246,6 +246,66 @@ class TestRunConversion:
             pass
         assert not work_dir.exists()
 
+    def test_converter_valueerror_becomes_job_failed_error(
+        self, tmp_path, monkeypatch, manager
+    ):
+        """A converter's user-facing ValueError message must reach `job.error`
+        verbatim (issue #184) — JobFailedError is the sanctioned passthrough."""
+        from admin.services.jobs import JobFailedError
+
+        work_dir = tmp_path / "work" / "job-v"
+        (work_dir / "source").mkdir(parents=True)
+        source = work_dir / "source" / "dataset.zip"
+        source.write_bytes(b"fake zip")
+
+        def failing_converter(src, out, **kw):
+            raise ValueError(
+                "ZIP contains multiple Text-Fabric datasets: a, b"
+            )
+
+        monkeypatch.setitem(
+            api_module.CONVERTERS, api_module.SourceFormat.TF_ZIP, failing_converter
+        )
+        with pytest.raises(JobFailedError) as excinfo:
+            api_module._run_conversion(
+                source_path=source,
+                work_dir=work_dir,
+                source_format=api_module.SourceFormat.TF_ZIP,
+                name="n",
+                description="",
+                job_id="j",
+            )
+        assert str(excinfo.value) == "ZIP contains multiple Text-Fabric datasets: a, b"
+
+    def test_converter_valueerror_with_private_path_stays_sanitized(
+        self, tmp_path, monkeypatch, manager
+    ):
+        """A ValueError naming a server-side path must NOT ride into
+        `job.error` — it re-raises as-is and gets the generic message."""
+        from admin.services.jobs import JobFailedError
+
+        work_dir = tmp_path / "work" / "job-p"
+        (work_dir / "source").mkdir(parents=True)
+        source = work_dir / "source" / "dataset.zip"
+        source.write_bytes(b"fake zip")
+
+        def leaky_converter(src, out, **kw):
+            raise ValueError(f"cannot open {src}")
+
+        monkeypatch.setitem(
+            api_module.CONVERTERS, api_module.SourceFormat.TF_ZIP, leaky_converter
+        )
+        with pytest.raises(ValueError) as excinfo:
+            api_module._run_conversion(
+                source_path=source,
+                work_dir=work_dir,
+                source_format=api_module.SourceFormat.TF_ZIP,
+                name="n",
+                description="",
+                job_id="j",
+            )
+        assert not isinstance(excinfo.value, JobFailedError)
+
     def test_success_writes_corpus_to_results_root(self, tmp_path, monkeypatch, manager):
         # Uses TF_ZIP (no parser -> no source title) so the request `name`
         # is the display_name and the archive filename is slugified from it.
