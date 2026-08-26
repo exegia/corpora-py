@@ -8,6 +8,7 @@ import pytest
 from admin.converters._tf_zip_to_tf import (
     _MAX_FILES,
     _find_dataset_root,
+    _parse_tf_version,
     _safe_path,
     convert_tf_zip_to_tf,
 )
@@ -54,11 +55,11 @@ class TestFindDatasetRoot:
 
     def test_single_dataset_found(self):
         files = self._files("ds/otype.tf", "ds/oslots.tf", "ds/text.tf")
-        assert _find_dataset_root(files) == PurePosixPath("ds")
+        assert _find_dataset_root(files) == (PurePosixPath("ds"), [])
 
     def test_root_level_dataset(self):
         files = self._files("otype.tf", "oslots.tf")
-        assert _find_dataset_root(files) == PurePosixPath(".")
+        assert _find_dataset_root(files) == (PurePosixPath("."), [])
 
     def test_no_dataset_raises(self):
         with pytest.raises(ValueError, match="does not contain a Text-Fabric dataset"):
@@ -72,6 +73,58 @@ class TestFindDatasetRoot:
         files = self._files("a/otype.tf", "a/oslots.tf", "b/otype.tf", "b/oslots.tf")
         with pytest.raises(ValueError, match="multiple Text-Fabric datasets"):
             _find_dataset_root(files)
+
+    def test_versioned_layout_picks_latest(self):
+        files = self._files(
+            "moby/0.1/otype.tf",
+            "moby/0.1/oslots.tf",
+            "moby/0.2pre/otype.tf",
+            "moby/0.2pre/oslots.tf",
+            "moby/0.2/otype.tf",
+            "moby/0.2/oslots.tf",
+        )
+        root, warnings = _find_dataset_root(files)
+        assert root == PurePosixPath("moby/0.2")
+        assert warnings == ["Selected dataset version 0.2 (also found: 0.1, 0.2pre)"]
+
+    def test_versioned_layout_multi_component(self):
+        files = self._files(
+            "ds/1.7.3/otype.tf",
+            "ds/1.7.3/oslots.tf",
+            "ds/1.10/otype.tf",
+            "ds/1.10/oslots.tf",
+        )
+        root, _ = _find_dataset_root(files)
+        assert root == PurePosixPath("ds/1.10")
+
+    def test_version_dirs_under_different_parents_still_raise(self):
+        files = self._files(
+            "a/0.1/otype.tf", "a/0.1/oslots.tf", "b/0.2/otype.tf", "b/0.2/oslots.tf"
+        )
+        with pytest.raises(ValueError, match="multiple Text-Fabric datasets"):
+            _find_dataset_root(files)
+
+    def test_non_version_siblings_still_raise(self):
+        files = self._files(
+            "ds/0.1/otype.tf",
+            "ds/0.1/oslots.tf",
+            "ds/extras/otype.tf",
+            "ds/extras/oslots.tf",
+        )
+        with pytest.raises(ValueError, match="multiple Text-Fabric datasets"):
+            _find_dataset_root(files)
+
+
+class TestParseTfVersion:
+    def test_ordering_matches_text_fabric(self):
+        ordered = ["0.1", "0.2pre", "0.2", "0.2.1", "0.10", "1.0pre", "1.0", "1.7.3"]
+        keys = [_parse_tf_version(name) for name in ordered]
+        assert all(key is not None for key in keys)
+        assert keys == sorted(keys)  # type: ignore[type-var]
+
+    @pytest.mark.parametrize("bad", ["extras", "v0.2", "0.2-pre", "", "final", "0..2"])
+    def test_non_versions_rejected(self, bad):
+        assert _parse_tf_version(bad) is None
 
 
 class TestConvert:
@@ -89,6 +142,26 @@ class TestConvert:
         extracted = sorted(p.name for p in out.iterdir())
         assert extracted == ["oslots.tf", "otype.tf"]
         assert (out / "otype.tf").read_bytes() == b"@node\n"
+
+    def test_versioned_zip_extracts_latest_with_warning(self, tmp_path):
+        src = make_zip(
+            tmp_path / "versioned.zip",
+            {
+                "moby/0.1/otype.tf": b"@node old\n",
+                "moby/0.1/oslots.tf": b"@edge old\n",
+                "moby/0.2pre/otype.tf": b"@node pre\n",
+                "moby/0.2pre/oslots.tf": b"@edge pre\n",
+                "moby/0.2/otype.tf": b"@node new\n",
+                "moby/0.2/oslots.tf": b"@edge new\n",
+            },
+        )
+        out = convert_tf_zip_to_tf(src, tmp_path / "out")
+        extracted = sorted(p.name for p in out.iterdir())
+        assert extracted == ["oslots.tf", "otype.tf"]
+        assert (out / "otype.tf").read_bytes() == b"@node new\n"
+        assert out.warnings == [
+            "Selected dataset version 0.2 (also found: 0.1, 0.2pre)"
+        ]
 
     def test_not_a_zip_raises_valueerror(self, tmp_path):
         bad = tmp_path / "fake.zip"

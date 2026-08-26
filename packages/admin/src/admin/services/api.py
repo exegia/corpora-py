@@ -365,6 +365,17 @@ def _validate_converted_corpus(archive: Path, job_id: str) -> None:
         )
 
 
+def _mentions_private_path(message: str, work_dir: Path) -> bool:
+    """True when an exception message leaks a server-side filesystem path.
+
+    Guards `_run_conversion`'s ValueError passthrough: `job.error`
+    round-trips to clients, so a message naming the job work dir, the temp
+    dir, or the results root must stay behind the generic sanitized form.
+    """
+    private = (str(work_dir), tempfile.gettempdir(), str(_RESULTS_ROOT))
+    return any(path and path in message for path in private)
+
+
 def _run_conversion(
     *,
     source_path: Path,
@@ -415,7 +426,19 @@ def _run_conversion(
             )
         converter = CONVERTERS[source_format]
         tf_dir = work_dir / "tf"
-        dataset = converter(str(source_path), tf_dir, category=category)
+        try:
+            dataset = converter(str(source_path), tf_dir, category=category)
+        except ValueError as exc:
+            # Parsers/converters raise `ValueError` with deliberately
+            # user-facing messages ("ZIP contains multiple Text-Fabric
+            # datasets: ...", "not a valid ZIP archive"). Without this,
+            # `JobManager._run` sanitizes them to a bare exception class and
+            # the user never learns what to fix (issue #184). Messages that
+            # mention server-side paths keep the sanitized form.
+            message = str(exc).strip()
+            if message and not _mentions_private_path(message, work_dir):
+                raise JobFailedError(message) from exc
+            raise
         # Converters return a `ConvertedDataset` carrying the resolved
         # category (auto-detected, possibly downgrading the request — issue
         # #176) and human-readable warnings (skipped OCR pages, downgraded

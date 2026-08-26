@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import stat
 from pathlib import Path, PurePosixPath
@@ -29,7 +30,30 @@ def _safe_path(info: ZipInfo) -> PurePosixPath:
     return path
 
 
-def _find_dataset_root(files: dict[PurePosixPath, ZipInfo]) -> PurePosixPath:
+_VERSION_COMPONENT = re.compile(r"^(\d+)([A-Za-z][A-Za-z0-9]*)?$")
+
+
+def _parse_tf_version(name: str) -> tuple[tuple[int, int, str], ...] | None:
+    """Parse a TF-style version directory name (``0.2``, ``0.2pre``, ``1.7.3``).
+
+    Returns a sort key mirroring Text-Fabric's own ordering: components
+    compare numerically, and a pre-release suffix sorts *before* the bare
+    release it precedes (``0.2pre`` < ``0.2`` < ``0.2.1``). ``None`` when the
+    name is not a version at all.
+    """
+    components: list[tuple[int, int, str]] = []
+    for part in name.split("."):
+        match = _VERSION_COMPONENT.match(part)
+        if match is None:
+            return None
+        suffix = match.group(2) or ""
+        components.append((int(match.group(1)), 0 if suffix else 1, suffix))
+    return tuple(components)
+
+
+def _find_dataset_root(
+    files: dict[PurePosixPath, ZipInfo],
+) -> tuple[PurePosixPath, list[str]]:
     candidates: list[PurePosixPath] = []
     for path in files:
         if path.name != "otype.tf":
@@ -41,10 +65,29 @@ def _find_dataset_root(files: dict[PurePosixPath, ZipInfo]) -> PurePosixPath:
         raise ValueError(
             "ZIP does not contain a Text-Fabric dataset (otype.tf and oslots.tf are required)"
         )
-    if len(candidates) > 1:
-        roots = ", ".join(str(path) for path in sorted(candidates, key=str))
-        raise ValueError(f"ZIP contains multiple Text-Fabric datasets: {roots}")
-    return candidates[0]
+    if len(candidates) == 1:
+        return candidates[0], []
+
+    # Text-Fabric's standard layout keeps versions as sibling directories
+    # (`0.1/`, `0.2/`, `0.2pre/`); its own tooling loads the latest. Mirror
+    # that here instead of rejecting every real-world versioned export
+    # (issue #184); the hard error below stays for genuinely ambiguous
+    # archives (unrelated roots, e.g. two different corpora in one zip).
+    versions = {path: _parse_tf_version(path.name) for path in candidates}
+    parents = {path.parent for path in candidates}
+    if len(parents) == 1 and all(key is not None for key in versions.values()):
+        selected = max(candidates, key=lambda path: versions[path] or ())
+        others = ", ".join(
+            path.name
+            for path in sorted(candidates, key=lambda path: versions[path] or ())
+            if path != selected
+        )
+        return selected, [
+            f"Selected dataset version {selected.name} (also found: {others})"
+        ]
+
+    roots = ", ".join(str(path) for path in sorted(candidates, key=str))
+    raise ValueError(f"ZIP contains multiple Text-Fabric datasets: {roots}")
 
 
 def convert_tf_zip_to_tf(
@@ -53,7 +96,12 @@ def convert_tf_zip_to_tf(
     *,
     category: CorpusCategory | None = None,
 ) -> ConvertedDataset:
-    """Extract the single Text-Fabric dataset in ``source`` to ``output_dir``.
+    """Extract the Text-Fabric dataset in ``source`` to ``output_dir``.
+
+    A ZIP using Text-Fabric's standard versioned layout (sibling version
+    directories like ``0.1/``, ``0.2/``, ``0.2pre/``) imports its latest
+    version, with the choice recorded on ``ConvertedDataset.warnings`` so it
+    surfaces in the conversion log (issue #184).
 
     Archive paths, symlinks, member count, and expanded size are validated
     before any bytes are written so a malformed upload cannot escape or fill
@@ -76,7 +124,7 @@ def convert_tf_zip_to_tf(
                 raise ValueError("Expanded Text-Fabric ZIP exceeds the 2 GiB limit")
 
             files = {_safe_path(info): info for info in infos}
-            dataset_root = _find_dataset_root(files)
+            dataset_root, warnings = _find_dataset_root(files)
             dataset_files = {
                 path: info
                 for path, info in files.items()
@@ -96,4 +144,4 @@ def convert_tf_zip_to_tf(
     except BadZipFile as exc:
         raise ValueError("Uploaded file is not a valid ZIP archive") from exc
 
-    return ConvertedDataset.wrap(output_dir, category=category)
+    return ConvertedDataset.wrap(output_dir, category=category, warnings=warnings)
