@@ -49,9 +49,9 @@ uv run corpora-api
 uv run corpora convert book.epub --name "My Book" -o book.corpus
 uv run corpora validate book.corpus
 
-# End users install the same CLI via Homebrew (exegia/homebrew-tap; the
+# End users install the same CLI via Homebrew (exegia/corpora-cli; the
 # formula is auto-bumped on each release tag by publish.yml's bump-tap job)
-brew install exegia/tap/corpora
+brew tap exegia/corpora-cli https://github.com/exegia/corpora-cli && brew install corpora
 
 # Docker — MCP-only image
 docker build -f dockerfiles/Dockerfile.client -t corpora-mcp .
