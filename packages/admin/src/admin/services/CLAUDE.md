@@ -206,6 +206,22 @@ carrying the top-3 reasons. Test seam: the services conftest autouse-stubs
 `corpora_mcp.validate.validate_corpus_archive` (call-time attribute) to always-valid; gate tests
 re-patch that same seam.
 
+## Transport-free pipeline seam (`conversion.py`, issue #188)
+
+The end-to-end orchestration (display-name derivation → converter → `convert_to_corpus` →
+post-conversion validation gate) lives in `conversion.run_conversion` — transport-free, reporting
+progress through `on_log`/`on_display_name`/`on_validation` callbacks and raising
+`ConversionError` (user-facing message, the issue #184 passthrough) / `CorpusValidationError`
+(carries the validation summary). Two callers: `api._run_conversion` (wraps it with `JobManager`
+bookkeeping and maps the errors to `JobFailedError`/`ConversionValidationError`) and the
+`corpora` CLI (`corpora_py.cli` — terminal conversions with no server). Seams that must not
+break: `api._run_conversion` passes `converters=CONVERTERS` / `convert_fn=convert_to_corpus`
+from its own module globals at call time so the tests' `monkeypatch.setattr(api_module, ...)` /
+`setitem(api_module.CONVERTERS, ...)` patches keep working, and the validator import stays lazy
+inside `conversion.validate_archive` (the `corpora_mcp.validate.validate_corpus_archive`
+call-time attribute the services conftest stubs). A converter `ValueError` naming a path in
+`private_paths` is re-raised unwrapped so it stays behind the sanitized generic message.
+
 ## Converter errors reach `job.error` (issue #184)
 
 Parsers/converters raise `ValueError` with deliberately user-facing messages ("ZIP contains

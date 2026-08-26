@@ -57,6 +57,8 @@ docling = ["docling>=2.0"]
 cf-mcp = "corpora_mcp.server:main"
 # Combined FastAPI app: MCP server + admin conversion API
 corpora-api = "corpora_py.app:main"
+# Terminal conversion CLI over the same pipeline (issue #188)
+corpora = "corpora_py.cli:main"
 
 [build-system]
 requires = ["hatchling"]

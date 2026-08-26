@@ -21,7 +21,6 @@ are how a client finds out when it's done.
 from __future__ import annotations
 
 import logging
-import re
 import shutil
 import tempfile
 import uuid
@@ -34,8 +33,16 @@ from pydantic import BaseModel, Field
 
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
-from ..parsers import PARSERS
 from ..parsers.schema import CorpusCategory, SourceFormat
+from .conversion import (
+    ConversionError,
+    CorpusValidationError,
+    clean_filename_stem,
+    derive_display_name,
+    extract_source_title,
+    run_conversion,
+    validate_archive,
+)
 from .corpus_detail import (
     annotate_node,
     get_content,
@@ -263,74 +270,12 @@ def _resolve_corpus_path(name: str, job_id: str) -> tuple[Path, str]:
     return path, filename
 
 
-def _clean_filename_stem(filename: str) -> str:
-    """Turn an upload filename into a human-readable fallback title.
-
-    Strips the extension, replaces ``-`` and ``_`` with spaces, collapses
-    repeated whitespace, and strips. ``"summa-theologia-1200-ENG.xml"`` ->
-    ``"summa theologia 1200 ENG"``. This is the last-resort fallback (see
-    `_derive_display_name`) for when the source has no extractable title and
-    the client supplied no `name` -- not a title-caser, so the original
-    letter casing survives untouched.
-    """
-    stem = Path(filename).stem
-    return re.sub(r"\s+", " ", stem.replace("-", " ").replace("_", " ")).strip()
-
-
-def _extract_source_title(
-    source_format: SourceFormat, source_path: Path
-) -> str | None:
-    """Read the source document's own title, if a parser knows how.
-
-    Uses the format parser's lightweight ``parse_metadata`` (headers only --
-    TEI ``teiHeader``, PDF ``info``, HTML ``<title>``, EPUB ``dc:title``),
-    not the full parse, so this is cheap to run before the expensive TF
-    walk. Returns ``None`` for formats without a parser (``tf_zip`` --
-    already a dataset, no source metadata; ``tei_zip`` -- multiple
-    documents, no single title), so the caller falls back to the request
-    ``name`` / filename stem (see issue #109).
-    """
-    parser = PARSERS.get(source_format)
-    if parser is None:
-        return None
-    try:
-        return parser.parse_metadata(str(source_path)).title
-    except Exception:
-        logger.warning(
-            "Metadata extraction failed for %s (%s) -- falling back to "
-            "request name",
-            source_path.name,
-            source_format.value,
-            exc_info=True,
-        )
-        return None
-
-
-def _derive_display_name(
-    *,
-    source_format: SourceFormat,
-    source_path: Path,
-    name: str,
-) -> str:
-    """Pick the human-readable title that becomes ``manifest.name``.
-
-    Priority (see issue #109):
-    1. The source document's own title (TEI ``titleStmt``, PDF
-       ``info.title``, HTML ``<title>``, EPUB ``dc:title``) -- a person would
-       read this.
-    2. The request ``name`` (whatever the client sent -- may already be
-       human-readable).
-    3. A cleaned upload filename stem (spaces, not kebab).
-
-    Never returns an empty string: the filename stem is the final stop and
-    always has at least the stem of the uploaded file.
-    """
-    source_title = _extract_source_title(source_format, source_path)
-    if source_title and source_title.strip():
-        return source_title.strip()
-    if name and name.strip():
-        return name.strip()
-    return _clean_filename_stem(source_path.name) or name
+# Display-name derivation moved to `conversion.py` (issue #188) so the
+# `corpora` CLI shares it; these bindings keep this module's historical
+# private names working for existing callers and tests.
+_clean_filename_stem = clean_filename_stem
+_extract_source_title = extract_source_title
+_derive_display_name = derive_display_name
 
 
 class ConversionValidationError(JobFailedError):
@@ -349,13 +294,12 @@ def _validate_converted_corpus(archive: Path, job_id: str) -> None:
     `JobManager.set_validation`, so it rides the terminal status); an
     invalid archive raises `ConversionValidationError` so the job fails
     with the top reasons in `error` instead of shipping a broken corpus.
-    Imported lazily: `corpora_mcp` is a sibling workspace package that
-    admin doesn't import at module load.
+    The validator import stays lazy (inside `conversion.validate_archive`):
+    `corpora_mcp` is a sibling workspace package that admin doesn't import
+    at module load.
     """
-    from corpora_mcp.validate import validate_corpus_archive
-
     job_manager.log(job_id, "Validating converted corpus...")
-    summary = validate_corpus_archive(archive).summary()
+    summary = validate_archive(archive)
     job_manager.set_validation(job_id, summary)
     if not summary.get("valid"):
         reasons = [str(r) for r in summary.get("reasons") or []]
@@ -363,17 +307,6 @@ def _validate_converted_corpus(archive: Path, job_id: str) -> None:
         raise ConversionValidationError(
             f"Converted corpus failed validation: {detail}"
         )
-
-
-def _mentions_private_path(message: str, work_dir: Path) -> bool:
-    """True when an exception message leaks a server-side filesystem path.
-
-    Guards `_run_conversion`'s ValueError passthrough: `job.error`
-    round-trips to clients, so a message naming the job work dir, the temp
-    dir, or the results root must stay behind the generic sanitized form.
-    """
-    private = (str(work_dir), tempfile.gettempdir(), str(_RESULTS_ROOT))
-    return any(path and path in message for path in private)
 
 
 def _run_conversion(
@@ -405,69 +338,45 @@ def _run_conversion(
     during a multi-minute conversion instead of a status stuck on "running"
     with no other signal.
     """
-    display_name = _derive_display_name(
-        source_format=source_format, source_path=source_path, name=name
-    )
-    job_manager.set_display_name(job_id, display_name)
+    job = job_manager.get(job_id)
     try:
-        if source_format == SourceFormat.TF_ZIP:
-            job_manager.log(
-                job_id, "Inspecting ZIP and importing Text-Fabric dataset..."
-            )
-        elif source_format == SourceFormat.TEI_ZIP:
-            job_manager.log(
-                job_id,
-                "Extracting TEI documents from ZIP and building Text-Fabric dataset...",
-            )
-        else:
-            job_manager.log(
-                job_id,
-                f"Parsing {source_format.value} source and building Text-Fabric dataset...",
-            )
-        converter = CONVERTERS[source_format]
-        tf_dir = work_dir / "tf"
-        try:
-            dataset = converter(str(source_path), tf_dir, category=category)
-        except ValueError as exc:
-            # Parsers/converters raise `ValueError` with deliberately
-            # user-facing messages ("ZIP contains multiple Text-Fabric
-            # datasets: ...", "not a valid ZIP archive"). Without this,
-            # `JobManager._run` sanitizes them to a bare exception class and
-            # the user never learns what to fix (issue #184). Messages that
-            # mention server-side paths keep the sanitized form.
-            message = str(exc).strip()
-            if message and not _mentions_private_path(message, work_dir):
-                raise JobFailedError(message) from exc
-            raise
-        # Converters return a `ConvertedDataset` carrying the resolved
-        # category (auto-detected, possibly downgrading the request — issue
-        # #176) and human-readable warnings (skipped OCR pages, downgraded
-        # overrides) that belong on the job log.
-        resolved = getattr(dataset, "category", None) or category
-        for warning in getattr(dataset, "warnings", []):
-            job_manager.log(job_id, warning)
-
-        job_manager.log(
-            job_id,
-            "Text-Fabric dataset ready. Compiling cache and packaging .corpus archive...",
-        )
-        corpus_path, _filename = _resolve_corpus_path(display_name, job_id)
-        job = job_manager.get(job_id)
-        author_sub = job.owner if job is not None else None
-        result = convert_to_corpus(
-            tf_dir,
-            corpus_path,
-            name=display_name,
+        return run_conversion(
+            source_path=source_path,
+            work_dir=work_dir,
+            source_format=source_format,
+            output_path_for=lambda display: _resolve_corpus_path(display, job_id)[0],
+            name=name,
             description=description,
-            author_sub=author_sub,
-            category=resolved.value if resolved else "",
+            category=category,
+            author_sub=job.owner if job is not None else None,
+            # Passed from this module's globals at call time so the test
+            # seams (`monkeypatch.setattr(api_module, "convert_to_corpus")`,
+            # `monkeypatch.setitem(api_module.CONVERTERS, ...)`) keep
+            # working.
+            converters=CONVERTERS,
+            convert_fn=convert_to_corpus,
+            # `job.error` round-trips to clients, so a converter message
+            # naming any of these server-side paths keeps the sanitized
+            # generic form instead of the verbatim passthrough (issue #184).
+            private_paths=(
+                str(work_dir),
+                tempfile.gettempdir(),
+                str(_RESULTS_ROOT),
+            ),
+            on_log=lambda message: job_manager.log(job_id, message),
+            on_display_name=lambda display: job_manager.set_display_name(
+                job_id, display
+            ),
+            on_validation=lambda summary: job_manager.set_validation(
+                job_id, summary
+            ),
         )
-
-        _validate_converted_corpus(result, job_id)
-        job_manager.log(job_id, "Conversion complete.")
-        return result
-    finally:
-        shutil.rmtree(work_dir, ignore_errors=True)
+    except CorpusValidationError as exc:
+        raise ConversionValidationError(str(exc)) from exc
+    except ConversionError as exc:
+        # `JobFailedError` is the one family whose message `JobManager._run`
+        # exposes verbatim in `job.error` (issue #184).
+        raise JobFailedError(str(exc)) from exc
 
 
 @router.post(
