@@ -34,6 +34,12 @@ every `_{format}_to_tf.py`.
   markdown sections), honors a downgrade override, downgrades an unexpressible upgrade with a warning, and returns the
   `SectionSpec` + `otype_for` wrapper to match. Converters return `ConvertedDataset` (a `Path` subclass) whose
   `.category` lands in `manifest.category` and `.warnings` on the job log.
+- **`_tf_zip_to_tf` accepts TF's standard versioned layout (issue #184)**: when every candidate
+  dataset root is a sibling directory whose name parses as a TF-style version (`0.1`, `0.2pre`,
+  `1.7.3`), it imports the highest version (pre-release suffixes sort before the release they
+  precede) and records the choice on `ConvertedDataset.warnings`. The "multiple datasets" hard
+  error remains only for genuinely ambiguous archives (candidates under different parents, or
+  sibling dirs with non-version names).
 - **`SKIP_TAGS` in `parsers/_html.py` is scoped to tags that only make sense to drop when nested inside `<body>`**
   (script/style/noscript/svg/math). It used to include `"head"` for HTML's metadata tag, which silently ate TEI's
   `<head>` (a heading element, reused by the shared walker) — don't add HTML-specific tag names back to that set without

@@ -206,6 +206,15 @@ carrying the top-3 reasons. Test seam: the services conftest autouse-stubs
 `corpora_mcp.validate.validate_corpus_archive` (call-time attribute) to always-valid; gate tests
 re-patch that same seam.
 
+## Converter errors reach `job.error` (issue #184)
+
+Parsers/converters raise `ValueError` with deliberately user-facing messages ("ZIP contains
+multiple Text-Fabric datasets: …"). `_run_conversion` wraps a converter-stage `ValueError` in
+`JobFailedError` — the one family whose message `JobManager._run` exposes verbatim — so the user
+sees the real reason instead of `"Conversion failed: ValueError (job id …)"`. Guard:
+`_mentions_private_path` keeps any message naming the work dir, temp dir, or results root on the
+sanitized generic form. Non-`ValueError` exceptions stay sanitized as before.
+
 ## Result filename + Content-Disposition (`jobs.py`, `api.py`, issues #108/#109)
 
 Every job exposes a `result_filename` in `to_dict()` (and therefore on the WebSocket/REST status
