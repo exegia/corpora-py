@@ -53,6 +53,7 @@ packages/admin/
       convert_to_corpus.py      # .tf + .cfm -> .corpus archive
       __init__.py               # CONVERTERS: dict[SourceFormat, converter fn]
     services/                 # HTTP surface over the pipeline above (FastAPI routers)  (see services/CLAUDE.md)
+      conversion.py             # transport-free run_conversion() seam (shared by api.py and the `corpora` CLI)
       api.py                    # POST/GET /convert (upload, poll, download)
       ingest_api.py             # POST/GET /ingest (Docling -> canonical graph.json; needs [docling] extra)
       websocket.py              # /convert/{id}/ws (status push)
