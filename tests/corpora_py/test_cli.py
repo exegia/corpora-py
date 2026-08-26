@@ -5,9 +5,13 @@ The happy path runs the real pipeline end-to-end (plain text -> Text-Fabric
 coverage philosophy as the converter tests, kept cheap with a tiny source.
 Everything else (format inference, gate rejection, overwrite refusal, exit
 codes) is exercised through `main()` with argv lists, never a subprocess.
+The `library` commands are exercised against a fake storage backend
+monkeypatched at the `make_corpus_storage` seam (the real backends are
+covered by the storage service suite).
 """
 
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -46,9 +50,7 @@ class TestConvert:
         assert cli.main(["validate", str(output)]) == 0
         assert "Validation: valid" in capsys.readouterr().err
 
-    def test_default_output_is_slugified_title_in_cwd(
-        self, tmp_path, monkeypatch, capsys
-    ):
+    def test_default_output_is_slugified_title_in_cwd(self, tmp_path, monkeypatch, capsys):
         source = _write_sample(tmp_path / "My Great Book.txt")
         monkeypatch.chdir(tmp_path)
 
@@ -157,3 +159,96 @@ class TestFormatInference:
         source = tmp_path / "dataset.zip"
         source.write_text("x")
         assert cli._infer_format(source, "tei_zip").value == "tei_zip"
+
+
+class _FakeStored:
+    def __init__(self, filename):
+        self.filename = filename
+        self.size_bytes = 2 * 1024 * 1024
+        self.repo_id = "user/archives"
+        self.url = f"https://hub/{filename}"
+
+
+class _FakeStorage:
+    def __init__(self):
+        self.deleted: list[str] = []
+
+    def list(self):
+        return [_FakeStored("alpha.corpus"), _FakeStored("beta.corpus")]
+
+    def download(self, filename, dest_dir):
+        return Path(dest_dir) / filename
+
+    def delete(self, filename):
+        self.deleted.append(filename)
+
+    def upload(self, local_path, filename=None):
+        return _FakeStored(Path(local_path).name)
+
+
+@pytest.fixture
+def fake_storage(monkeypatch):
+    storage = _FakeStorage()
+    import admin.services.storage as storage_module
+
+    monkeypatch.setattr(storage_module, "make_corpus_storage", lambda: storage)
+    return storage
+
+
+class TestLibrary:
+    def test_list_renders_table_and_count(self, fake_storage, capsys):
+        assert cli.main(["library", "list"]) == 0
+        captured = capsys.readouterr()
+        assert "alpha.corpus" in captured.out
+        assert "2.0 MB" in captured.out
+        assert "user/archives" in captured.out
+        assert "2 stored corpora." in captured.err
+
+    def test_unconfigured_storage_exits_with_message(self, monkeypatch):
+        import admin.services.storage as storage_module
+
+        def raising():
+            raise storage_module.StorageNotConfiguredError("set HF_STORAGE_REPO")
+
+        monkeypatch.setattr(storage_module, "make_corpus_storage", raising)
+        with pytest.raises(SystemExit) as excinfo:
+            cli.main(["library", "list"])
+        assert "storage not configured" in str(excinfo.value)
+
+    def test_publish_prints_url(self, fake_storage, tmp_path, capsys):
+        corpus = tmp_path / "alpha.corpus"
+        corpus.write_bytes(b"zip")
+        assert cli.main(["library", "publish", str(corpus)]) == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "https://hub/alpha.corpus"
+        assert "Published: alpha.corpus" in captured.err
+
+    def test_publish_requires_existing_file(self, fake_storage):
+        with pytest.raises(SystemExit) as excinfo:
+            cli.main(["library", "publish", "/nope.corpus"])
+        assert "not found" in str(excinfo.value)
+
+    def test_download_prints_destination(self, fake_storage, tmp_path, capsys):
+        assert cli.main(["library", "download", "alpha.corpus", "--dest", str(tmp_path)]) == 0
+        assert capsys.readouterr().out.strip() == str(tmp_path / "alpha.corpus")
+
+    def test_delete_with_yes(self, fake_storage, capsys):
+        assert cli.main(["library", "delete", "alpha.corpus", "--yes"]) == 0
+        assert fake_storage.deleted == ["alpha.corpus"]
+        assert "Deleted: alpha.corpus" in capsys.readouterr().err
+
+    def test_delete_without_yes_refuses_when_not_a_tty(self, fake_storage):
+        # pytest's captured stdin is not a tty, so the guard must trip
+        # before any prompt.
+        with pytest.raises(SystemExit) as excinfo:
+            cli.main(["library", "delete", "alpha.corpus"])
+        assert "--yes" in str(excinfo.value)
+        assert fake_storage.deleted == []
+
+
+class TestBareInvocation:
+    def test_bare_corpora_prints_help(self, capsys):
+        # The Textual TUI is gone: bare `corpora` prints the overview and
+        # exits 2 like any other bad usage.
+        assert cli.main([]) == 2
+        assert "convert" in capsys.readouterr().err

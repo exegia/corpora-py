@@ -49,10 +49,11 @@ uv run corpora-api
 uv run corpora convert book.epub --name "My Book" -o book.corpus
 uv run corpora validate book.corpus
 
-# Bare `corpora` (or `corpora ui`) opens the Textual terminal UI instead:
-# tabs for Convert / Validate / Library (storage list/publish/download/delete
-# + a corpus detail screen), one per corpora-api surface (src/corpora_py/tui.py)
-uv run corpora
+# The `library` subcommands cover the corpora-api /storage surfaces
+# (list/publish/download/delete + a manifest/sections view) with Rich
+# tables; output stays line-oriented and scriptable (no TUI).
+uv run corpora library list
+uv run corpora library show book.corpus --ref "My Book 1"
 
 # End users install the same CLI via Homebrew (exegia/corpora-cli; the
 # formula is auto-bumped on each release tag by publish.yml's bump-tap job)
