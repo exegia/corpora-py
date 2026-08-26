@@ -8,7 +8,10 @@ import {
   type ValidationOutcome,
 } from "~/lib/atoms/upload-atom"
 import {
+  JobGoneError,
   type JobStatusMessage,
+  POLL_DEFAULTS,
+  type PollFailureReason,
   pollJobStatus,
   subscribeJobStatus,
 } from "~/lib/hooks/use-socket"
@@ -312,11 +315,33 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
 
   const startPolling = () => {
     if (fallback || settled) return
-    fallback = pollJobStatus(async () => {
-      const response = await apiFetch(`${API_URL}/convert/${jobId}`)
-      if (!response.ok) throw new Error(`Status check failed (${response.status})`)
-      return (await response.json()) as JobStatusMessage
-    }, handleMessage)
+    fallback = pollJobStatus(
+      async () => {
+        const response = await apiFetch(`${API_URL}/convert/${jobId}`)
+        // The backend 404s unknown (and foreign) job ids -- for a job we
+        // were already tracking that means it's gone for good (instance
+        // eviction, backend restart), which pollJobStatus treats as
+        // terminal instead of retrying forever (issue #189).
+        if (response.status === 404) throw new JobGoneError()
+        if (!response.ok) throw new Error(`Status check failed (${response.status})`)
+        return (await response.json()) as JobStatusMessage
+      },
+      handleMessage,
+      {
+        onFailure: (reason) => {
+          const messages: Record<PollFailureReason, string> = {
+            gone: "The conversion job no longer exists on the server. Try the upload again.",
+            timeout: `Conversion timed out: no result after ${Math.round(POLL_DEFAULTS.deadlineMs / 60_000)} minutes. Try the upload again.`,
+            unreachable: "Lost contact with the server while tracking the conversion. Try the upload again.",
+          }
+          updateEntry(id, (draft) => {
+            draft.status = "error"
+            draft.error = messages[reason]
+          })
+          stopTracking(id)
+        },
+      }
+    )
   }
 
   const closeSocket = subscribeJobStatus(
