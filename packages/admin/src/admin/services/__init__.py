@@ -31,6 +31,7 @@ fail in a slim admin-only install. The umbrella app imports them explicitly.
 
 from . import (
     api,
+    conversion,
     corpus_detail,
     corpus_detail_api,
     ingest_api,
@@ -45,6 +46,7 @@ from . import (
 
 __all__ = [
     "api",
+    "conversion",
     "corpus_detail",
     "corpus_detail_api",
     "ingest_api",

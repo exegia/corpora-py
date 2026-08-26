@@ -44,6 +44,11 @@ uv run cf-mcp \
 # Start the combined FastAPI app (MCP at /mcp + conversion API at /convert)
 uv run corpora-api
 
+# Convert a document in the terminal (same pipeline as POST /convert, no
+# server -- issue #188; .zip sources need an explicit --format tf_zip|tei_zip)
+uv run corpora convert book.epub --name "My Book" -o book.corpus
+uv run corpora validate book.corpus
+
 # Docker — MCP-only image
 docker build -f dockerfiles/Dockerfile.client -t corpora-mcp .
 docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro \
