@@ -59,7 +59,7 @@ Reader / Structure / Analytics) is **not** backed by `/storage`. The contract is
   `POST /storage`s a library corpus on the user's behalf, and never talks to Supabase Storage at all
   (Supabase appears in this repo only as a JWT issuer — see the root `CLAUDE.md`'s Auth section).
 - **Explore reads come from the job, not the Hub.** The job-scoped detail endpoints
-  (`GET /convert/{job_id}/{manifest,index,sections,content,nodes/{node},versions}`, see
+  (`GET /convert/{job_id}/{manifest,index,sections,content,nodes/{node},versions,diff}`, see
   `api.py`) serve the same response shapes as `/storage/{filename}/…` from the job's result
   archive — no Hub download, no filename matching. With the default in-memory store that
   archive is the converting instance's on-disk `result_path`; with `JOB_STORE=supabase`
@@ -230,6 +230,16 @@ multiple Text-Fabric datasets: …"). `_run_conversion` wraps a converter-stage 
 sees the real reason instead of `"Conversion failed: ValueError (job id …)"`. Guard:
 `_mentions_private_path` keeps any message naming the work dir, temp dir, or results root on the
 sanitized generic form. Non-`ValueError` exceptions stay sanitized as before.
+
+## Snapshot diff (`GET /convert/{job_id}/diff`, issue #151)
+
+`?from=&to=` accept a history row's `id` or `label` (`_find_version_row`); the `current` row diffs
+against HEAD, any other materializes its snapshot via `_materialize_version` (shared with
+`/restore`: 404 unknown version / missing snapshot, 503 job-store trouble, 409 non-succeeded job).
+`corpus_detail.diff_archives` compares the two zips' central directories only (member size +
+CRC-32 — no extraction, no `.tf` content) and returns `files: [{path, kind, before?, after?}]`
+with the history.yml `added`/`removed`/`modified` vocabulary; unchanged members are omitted.
+Read-only: nothing is bumped, snapshotted, or republished.
 
 ## Result filename + Content-Disposition (`jobs.py`, `api.py`, issues #108/#109)
 

@@ -45,6 +45,7 @@ from .conversion import (
 )
 from .corpus_detail import (
     annotate_node,
+    diff_archives,
     get_content,
     get_index,
     get_manifest,
@@ -787,6 +788,24 @@ async def restore_job_corpus(
     key = register_local_archive(_job_corpus_key(job_id), archive)
     versions = (await _run_detail(lambda: get_versions(key)))["versions"]
     needle = payload.version_id.strip()
+    row = _find_version_row(versions, needle)
+    if row.get("current"):
+        raise HTTPException(
+            status_code=409, detail=f"{needle} is already the current version"
+        )
+    label = str(row.get("label") or needle)
+    snapshot = _materialize_version(job_id, label, row)
+
+    title = f"Restored {label}"
+    return await _run_detail(
+        lambda: restore_from_snapshot(key, snapshot, title=title)
+    )
+
+
+def _find_version_row(
+    versions: list[dict[str, Any]], needle: str
+) -> dict[str, Any]:
+    """The history row whose ``id`` or ``label`` matches, or 404."""
     row = next(
         (
             item
@@ -798,14 +817,14 @@ async def restore_job_corpus(
     )
     if row is None:
         raise HTTPException(status_code=404, detail=f"Unknown version {needle!r}")
-    if row.get("current"):
-        raise HTTPException(
-            status_code=409, detail=f"{needle} is already the current version"
-        )
-    label = str(row.get("label") or needle)
+    return row
+
+
+def _materialize_version(job_id: str, label: str, row: dict[str, Any]) -> Path:
+    """A local archive path for one history row's snapshot, or 404/503."""
     snap_key = row.get("snapshot_key") or snapshot_key_for(job_id, label)
     try:
-        snapshot = job_manager.materialize_snapshot(job_id, snap_key or "")
+        return job_manager.materialize_snapshot(job_id, snap_key or "")
     except SnapshotMissingError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except JobStoreNotConfiguredError as extra:
@@ -816,7 +835,48 @@ async def restore_job_corpus(
             status_code=503, detail="Job store unavailable"
         ) from extra
 
-    title = f"Restored {label}"
-    return await _run_detail(
-        lambda: restore_from_snapshot(key, snapshot, title=title)
-    )
+
+@router.get(
+    "/{job_id}/diff",
+    responses={
+        **_JOB_DETAIL_RESPONSES,
+        404: {
+            "model": ErrorDetail,
+            "description": "Unknown job, version, or missing snapshot.",
+        },
+    },
+)
+async def diff_job_versions(
+    job_id: str,
+    request: Request,
+    from_version: str = Query(alias="from", min_length=1),
+    to_version: str = Query(alias="to", min_length=1),
+) -> dict[str, Any]:
+    """Path-level diff between two versions of the converted archive (issue #151).
+
+    ``from``/``to`` accept a history row's ``id`` or ``label``; the row
+    marked ``current`` diffs against HEAD, any other resolves its stored
+    snapshot. The diff lists member paths that were added, removed, or
+    modified (size + CRC comparison) — no ``.tf`` content is dumped.
+    Read-only: nothing is bumped, snapshotted, or republished.
+    """
+    archive = _resolve_succeeded(job_id, request)
+    key = register_local_archive(_job_corpus_key(job_id), archive)
+    versions = (await _run_detail(lambda: get_versions(key)))["versions"]
+
+    sides: list[tuple[dict[str, Any], Path]] = []
+    for needle in (from_version.strip(), to_version.strip()):
+        row = _find_version_row(versions, needle)
+        if row.get("current"):
+            sides.append((row, archive))
+        else:
+            label = str(row.get("label") or needle)
+            sides.append((row, _materialize_version(job_id, label, row)))
+
+    (from_row, before), (to_row, after) = sides
+    files = await _run_detail(lambda: diff_archives(before, after))
+    return {
+        "from": {"id": from_row.get("id"), "label": from_row.get("label")},
+        "to": {"id": to_row.get("id"), "label": to_row.get("label")},
+        "files": files,
+    }
