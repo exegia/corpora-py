@@ -44,18 +44,10 @@ uv run cf-mcp \
 # Start the combined FastAPI app (MCP at /mcp + conversion API at /convert)
 uv run corpora-api
 
-# Convert a document in the terminal (same pipeline as POST /convert, no
-# server -- issue #188; .zip sources need an explicit --format tf_zip|tei_zip)
-uv run corpora convert book.epub --name "My Book" -o book.corpus
-uv run corpora validate book.corpus
-
-# Bare `corpora` (or `corpora ui`) opens the Textual terminal UI instead:
-# tabs for Convert / Validate / Library (storage list/publish/download/delete
-# + a corpus detail screen), one per corpora-api surface (src/corpora_py/tui.py)
-uv run corpora
-
-# End users install the same CLI via Homebrew (exegia/corpora-cli; the
-# formula is auto-bumped on each release tag by publish.yml's bump-tap job)
+# The `corpora` terminal CLI (convert/validate/library over the same
+# pipeline as POST /convert) lives in exegia/corpora-cli — a separate
+# package that depends on this distribution from PyPI. End users install
+# it via Homebrew from that repo:
 brew tap exegia/corpora-cli https://github.com/exegia/corpora-cli && brew install corpora
 
 # Docker — MCP-only image

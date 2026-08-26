@@ -1,6 +1,6 @@
 [project]
 name = "corpora-common"
-version = "2.2.0"
+version = "3.0.0"
 requires-python = ">=3.13"
 dependencies = [
     "pydantic-settings>=2.14.2",
