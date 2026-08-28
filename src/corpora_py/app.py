@@ -30,6 +30,10 @@ Layout:
                    delete, backed by `HF_STORAGE_REPO`. Shares its implementation
                    with the `storage_*` MCP tools (`admin.services.storage_mcp`),
                    registered onto the MCP server below.
+    /ai/*       -- AI curation surface (`corpora_py.ai`): scoped chat,
+                   Context-Fabric validation, suggested fixes, apply/undo with
+                   version-history tracking. Currently a contract-first stub
+                   (501s) -- see `corpora_py/ai/router.py` and issue #214.
     /health     -- liveness check for the combined app.
 
 This ships as a sidecar spawned by a Tauri+Supabase desktop app, not a public
@@ -89,6 +93,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp.utilities.lifespan import combine_lifespans
 
+from .ai import router as ai_router
 from .auth import AuthMiddleware
 
 # The `storage_*` MCP tools live in `admin.services.storage_mcp` (admin owns
@@ -156,6 +161,10 @@ app.include_router(ingest_router)
 app.include_router(validation_router)
 app.include_router(storage_router)
 app.include_router(corpus_detail_router)
+# Contract-first stub for the reader's AI curation panel (all write/chat
+# routes answer 501 until exegia/corpora-py#214 lands) -- mounted now so the
+# OpenAPI document freezes the /ai shapes corpora-web builds mocks against.
+app.include_router(ai_router)
 
 
 @app.get("/health", tags=["Health"])
