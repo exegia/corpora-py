@@ -7,7 +7,7 @@ tags:
   - context-fabric
 ---
 
-# Context Fabric — Canonical Content Graph & API Contract (v1)
+## Context Fabric — Canonical Content Graph & API Contract (v1)
 
 A universal schema for every corpus this platform converts, stores, and serves: religious
 scripture (book/chapter/verse, surah/ayah), monographs (chapter/section/paragraph), letters
@@ -50,7 +50,7 @@ aligned-with). Everything source-specific survives losslessly in a namespaced `e
 JSON Schema **Draft 2020-12**, shipped inside the `corpora-common` package so installed parsers
 and services can validate against them at runtime:
 
-```
+```shell
 packages/common/src/common/schemas/context_fabric/v1/
   common.defs.schema.json      # Id, SemVer, LangTag, Ext, Provenance, NodeCategory, …
   corpus.schema.json            work.schema.json          edition.schema.json
