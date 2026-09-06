@@ -1,4 +1,11 @@
-# 02 — Node Taxonomy
+---
+title: 02 — Node Taxonomy
+description: Category enum, namespaced types, alias registries per tradition and per source format, unknown-type behavior.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
 
 This document specifies the two-axis typing system for ContentNodes in the **Context Fabric canonical content graph, v1**: the closed `category` enum (rendering/query contract, frozen per schema major), the open namespaced `type` grammar, and the alias registries that map each tradition's and each source format's vocabulary onto canonical types. Normative definitions live in the schemas — `NodeCategory` and `NamespacedType` in [common.defs.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/common.defs.schema.json), their use in [content-node.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/content-node.schema.json) — this document is the registry the schemas defer to ("namespaces are registered in the taxonomy doc").
 
@@ -22,7 +29,7 @@ Everything else a source format knows about a node that doesn't fit these axes g
 The 12 values of `NodeCategory`, with the rendering contract a client MUST satisfy when it does not recognize the node's `type`:
 
 | Category | Definition | Rendering contract | Example types |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `root` | The single top node of an edition (`parentId: null`) | Document container: render title/metadata chrome, then children. Never rendered as body content | `generic:book`, `acad:article`, `letter:letter`, `oratory:speech` |
 | `division` | Major named/numbered structural division; the backbone of navigation | Table-of-contents entry and navigation unit; start a new nav context; render `label`/`heading` prominently | `bible:book`, `bible:chapter`, `quran:surah`, `generic:part`, `tei:div` |
 | `section` | Mid-level grouping inside a division | Titled grouping in reading flow; TOC-eligible at lower priority; render heading then children | `generic:section`, `acad:section`, `letter:opening`, `letter:closing` |
@@ -49,7 +56,7 @@ Grammar (`NamespacedType` in the schema): `^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$` 
 **Namespace = tradition or source format.** Registered v1 namespaces:
 
 | Namespace | Scope | Owner of local names |
-|---|---|---|
+| --- | --- | --- |
 | `generic` | Tradition-neutral structure (book, chapter, section, paragraph, element…) | This spec |
 | `phys` | Physical artifacts promoted to nodes (`phys:page`) | This spec |
 | `bible` | Biblical tradition | `bible` alias registry (§4.1) |
@@ -58,6 +65,7 @@ Grammar (`NamespacedType` in the schema): `^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$` 
 | `acad` | Academic papers | §4.5 |
 | `oratory` | Speeches | §4.6 |
 | `transcript` | Sessions/interviews/hearings | §4.7 |
+| `ling` | Linguistic segmentation below the block: sentence, clause, word | §4.8 |
 | `tei` | TEI source vocabulary carried through as-is | TEI element names (§5) |
 | `x-*` | Vendor experiments; never canonical | The vendor |
 
@@ -80,7 +88,7 @@ Alias registries serve **reference resolution**: they map the names humans type 
 Reference hierarchy: `bible:book` (code-addressed, USFM 3.0 book codes) → `bible:chapter` → `bible:verse`.
 
 | Canonical type | Category | Addressed by | Source/display aliases (examples) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `bible:book` | `division` | `code` (USFM: `GEN`, `PSA`, `JHN`, `ROM`…) | John / Jn / Joh / Johannes / Juan / Jean → `JHN`; Psalms / Ps / Psalm → `PSA` |
 | `bible:chapter` | `division` | `ordinal` | "chapter 3", "ch. 3", "cap. 3" → ordinal 3 |
 | `bible:verse` | `block` | `ordinal` | "verse 16", "v. 16" → ordinal 16 |
@@ -92,7 +100,7 @@ Reference hierarchy: `bible:book` (code-addressed, USFM 3.0 book codes) → `bib
 Reference hierarchy: `quran:surah` → `quran:ayah`. Surahs are ordinal-addressed; names are aliases, not codes.
 
 | Canonical type | Category | Addressed by | Source/display aliases (examples) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `quran:surah` | `division` | `ordinal` (1–114) | Al-Fatihah / The Opening → 1; Al-Baqarah / The Cow / البقرة → 2 |
 | `quran:ayah` | `block` | `ordinal` | "ayah 255", "verse 255" → ordinal 255 |
 
@@ -103,7 +111,7 @@ Named references to sub-surah content are alias-registry entries resolving to fu
 General books use `generic:*` types; the `monograph` reference scheme declares which of them are levels.
 
 | Canonical type | Category | Addressed by | Aliases (examples) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `generic:book` | `root` | — (work/edition scope) | — |
 | `generic:part` | `division` | `ordinal` | "Part II" → 2; "Book Two" → 2 |
 | `generic:chapter` | `division` | `ordinal` | "Chapter IV", "chap. 4" → 4 |
@@ -115,7 +123,7 @@ General books use `generic:*` types; the `monograph` reference scheme declares w
 Letters cited by internal structure or — for scanned/archival letters — by page (`phys:page` as a reference level; see [examples/letter-page.json](../../../packages/common/src/common/schemas/context_fabric/v1/examples/letter-page.json), scheme `letter`, `letter/page-2/paragraph-1`).
 
 | Canonical type | Category | Addressed by | Aliases (examples) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `letter:letter` | `root` | — | — |
 | `letter:opening` | `section` | — | salutation, greeting |
 | `letter:body` | `section` | — | — |
@@ -127,7 +135,7 @@ Letters cited by internal structure or — for scanned/archival letters — by p
 ### 4.5 `academic`
 
 | Canonical type | Category | Addressed by | Aliases (examples) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `acad:article` | `root` | — | paper, article |
 | `acad:abstract` | `section` | — | summary |
 | `acad:section` | `section` | `ordinal` | "§2", "Section 2", "2.1" (nested sections nest nodes) |
@@ -139,18 +147,30 @@ Letters cited by internal structure or — for scanned/archival letters — by p
 ### 4.6 `oratory`
 
 | Canonical type | Category | Addressed by | Aliases (examples) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `oratory:speech` | `root` | — | address, oration |
 | `oratory:paragraph` | `block` | `ordinal` | "¶3" → 3 |
 
 ### 4.7 `transcript`
 
 | Canonical type | Category | Addressed by | Aliases (examples) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `transcript:session` | `root` | `ordinal` | "session 2", "day 2", "hearing 2" → 2 |
 | `transcript:utterance` | `block` | `ordinal` | turn, utterance, Q/A exchange number |
 
 `transcript:turn` is an accepted alias of `transcript:utterance`. The speaker is **not** a type or a level: the display name goes in `label` ("Interviewer") and stable speaker identity in `ext` under the `transcript` namespace (`{"transcript": {"speakerId": "S1", "speakerRole": "interviewer"}}`), as in [examples/transcript.json](../../../packages/common/src/common/schemas/context_fabric/v1/examples/transcript.json). Timecodes live in fragment `locators` (`timeStart`/`timeEnd`).
+
+### 4.8 `ling` (sub-block levels, any scheme)
+
+Linguistic segmentation below the `block` level. These are not a tradition: any scheme may append them as optional trailing reference levels (see [03 §3.1](03-references.md)), and an edition opts in by listing them in `structureProfile.levels`. Boundaries belong to one analysis (a BHSA-style syntax layer, one translation's word order), so a reference that reaches a `ling:*` level is always `kind: "edition"`. Rationale and the compact encoding: [Inter-corpus references](../inter-corpus-refs.md).
+
+| Canonical type | Category | Addressed by | Aliases (examples) |
+| --- | --- | --- | --- |
+| `ling:sentence` | `inline` | `ordinal` | "sentence 2", "s. 2" → 2 |
+| `ling:clause` | `inline` | `ordinal` | "clause 1", "cl. 1" → 1 |
+| `ling:word` | `inline` | `ordinal` | "word 3", "w. 3" → 3 |
+
+`inline` is the category because each is a span inside its parent block's flow; a client that does not know `ling:*` renders the text unchanged. `refOrdinal` is the 1-based position under the parent node. No current converter in this repo emits these types; they are for linguistic corpora such as BHSA.
 
 ## 5. Source-format alias tables (today's converters)
 
@@ -159,7 +179,7 @@ Today's converters (`packages/admin/src/admin/converters/`) map parser `Unit.typ
 ### `epub` (`_epub_to_tf.py` — root `book`; otypes `chapter`, `paragraph`, `link`, `element`)
 
 | TF otype | Canonical type | Category | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `book` (root) | `generic:book` | `root` | Carries document metadata |
 | `chapter` | `generic:chapter` | `division` | From spine items |
 | `paragraph` | `generic:paragraph` | `block` | From paragraph-class tags |
@@ -169,14 +189,14 @@ Today's converters (`packages/admin/src/admin/converters/`) map parser `Unit.typ
 ### `pdf` (`_pdf_to_tf.py` — root `book`; every unit is a `page`)
 
 | TF otype | Canonical type | Category | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `book` (root) | `generic:book` | `root` | |
 | `page` | `phys:page` | `milestone` | Pages are the only structure today, so they enter `structureProfile` as the sole reference level (`refOrdinal` = 1-based page); `pageIndex`/`printedLabel` also recorded as locators |
 
 ### `tei` (`_tei_to_tf.py` — root `text`; otypes `div`, `paragraph`, `element`)
 
 | TF otype | Canonical type | Category | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `text` (root) | `tei:text` | `root` | |
 | `div` | `tei:div` | `division` | TEI `@type` (e.g. `div type="chapter"`) preserved in `ext.tei` |
 | `paragraph` | `tei:p` | `block` | From TEI `<p>` |
@@ -185,14 +205,14 @@ Today's converters (`packages/admin/src/admin/converters/`) map parser `Unit.typ
 ### `html` (`_html_to_tf.py` — root `document`; every unit is `element`)
 
 | TF otype | Canonical type | Category | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `document` (root) | `generic:document` | `root` | |
 | `element` | `generic:element` | `block` | Tag name and attributes preserved in `ext.src/html`; a future converter may refine known tags (`p` → `generic:paragraph`/`block`, `a` → `generic:link`/`inline`, `h1–h6` → `generic:heading`/`heading`) without a schema change — that is the point of the open axis |
 
 ### `plain` (`_text_to_tf.py` — root `book`; every unit is a `paragraph`)
 
 | TF otype | Canonical type | Category | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `book` (root) | `generic:book` | `root` | |
 | `paragraph` | `generic:paragraph` | `block` | Blank-line-separated paragraphs |
 
@@ -205,7 +225,7 @@ survive in `ext["src/docling"]`; Docling page/bbox provenance lands as `Physical
 (`pageIndex` 0-based, bbox normalized to top-left-origin points) — pages are locators, never nodes.
 
 | Docling item label | Canonical type | Category | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | (document root) | `generic:document` | `root` | |
 | `title` | `generic:title` | `heading` | Also becomes the Work/Edition title |
 | `section_header` | `generic:section` + `generic:heading` | `section` + `heading` | Headers **fold** into nesting `generic:section` containers by their level; the header text survives as a child heading node |
@@ -242,7 +262,7 @@ Two homes exist for "extra" content: standoff [Annotation](../../../packages/com
 > If the content is *anchored to a point or span of text* and the base text reads correctly without it, it is an **Annotation**. If the content *occupies its own position in document order* — you would hit it while paging through — it is a **ContentNode**.
 
 | Content | Modeling | Why |
-|---|---|---|
+| --- | --- | --- |
 | Footnote/endnote marker `†` on a phrase | Annotation `kind: note:footnote`, `target.fragmentId` (+ char offsets via range), `marker: "†"`, body `text` or `nodeId` for rich bodies | Anchored to a span; base text stands alone |
 | Translator's/editorial gloss on a verse | Annotation `kind: note:editorial`, `target.nodeId` | Anchored to a node |
 | Cross-reference ("cf. John 1:1") | Annotation `kind: ref:crossref`, body `reference` | Anchored; body is a Reference, resolved like any other |
