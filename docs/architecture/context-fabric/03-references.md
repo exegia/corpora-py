@@ -1,3 +1,13 @@
+---
+title: "03 — References: canonical addressing and resolution"
+description: Reference grammar, scheme registry, alias resolution, worked examples, sub-block levels, versification alignment.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+  - references
+---
+
 # 03 — References: canonical addressing and resolution
 
 This document specifies how Context Fabric addresses content: the Reference value object (an ordered list of typed segments scoped to a scheme, and optionally a work and edition), the serialized canonical string form, the scheme registry that drives resolution, and the resolution algorithm that turns a human-entered string like `Bible/KJV/John/3/16` into a node id. Identity and addressing are deliberately separate axes — a node's identity is its opaque UUIDv7 `id` and nothing else; a Reference is a *query* that resolves to ids through codes and 1-based ordinals, never through display labels. The machine-readable contract lives in [reference.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/reference.schema.json), with the per-edition binding declared in [edition.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/edition.schema.json) (`structureProfile`) and the address components carried on nodes in [content-node.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/content-node.schema.json) (`code`, `refOrdinal`).
@@ -37,7 +47,7 @@ level-name     = lowercase local name of the segment's levelType
                  (the part after ":" in the NamespacedType, e.g. "chapter" of "generic:chapter") ;
 ```
 
-Examples: `bible/JHN/3/16`, `quran/2/255`, `monograph/chapter-4/section-2/paragraph-3`, `letter/page-2/paragraph-1`.
+Examples: `bible/JHN/3/16`, `quran/2/255`, `monograph/chapter-4/section-2/paragraph-3`, `letter/page-2/paragraph-1`, and with the optional sub-block levels of §3.1: `bible/GEN/1/1/word-3`, `bible/GEN/1/1/clause-2/word-1`.
 
 ### 2.2 JSON structural form
 
@@ -69,7 +79,7 @@ A segment must carry `ordinal` or `code` (both allowed). Which one is *expected*
 Parsing a serialized token, in order:
 
 1. **All digits** → `bare-ordinal`. Assigned to the next unfilled level of the scheme's declared level sequence, left to right. Legal only when token *position* uniquely determines the level — i.e. the reference starts at the top of the level sequence with no gaps (`quran/2/255`: position 1 = surah, position 2 = ayah).
-2. **Matches `level-name "-" digits`** where `level-name` is the local name of a declared level → `level-ordinal`. Required whenever a bare number would be ambiguous: schemes with a variable-depth or optional-level hierarchy (`monograph` documents may or may not have sections), references that skip levels, and `phys:page` levels (whose bare number could be mistaken for a content ordinal). This is why the monograph and letter examples spell every token out.
+2. **Matches `level-name "-" digits`** where `level-name` is the local name of a declared level → `level-ordinal`. Required whenever a bare number would be ambiguous: schemes with a variable-depth or optional-level hierarchy (`monograph` documents may or may not have sections), references that skip levels, `phys:page` levels (whose bare number could be mistaken for a content ordinal), and the optional `ling:*` sub-block levels of §3.1 (`sentence-2`, `clause-1`, `word-3`). This is why the monograph and letter examples spell every token out.
 3. **Anything else** → `code`. Looked up in the scheme's alias registry and normalized to the canonical `Code` for a code-addressed level (`John` → `JHN`).
 
 Serialization is the inverse and is deterministic per scheme: emit `code` for code-addressed levels; emit `bare-ordinal` when the scheme's fixed level sequence makes the position unambiguous; otherwise emit `level-ordinal`. A given structured Reference always serializes to exactly one canonical string.
@@ -94,6 +104,18 @@ An **Edition binds a scheme to concrete nodes** via `structureProfile.levels`: o
 | `academic` | `acad:section` → ordinal, `acad:paragraph` → ordinal | level-ordinal | canonical |
 | `oratory` | `oratory:paragraph` → ordinal | level-ordinal | canonical |
 | `transcript` | `transcript:utterance` → ordinal | level-ordinal | canonical |
+
+### 3.1 Optional sub-block levels (`ling:*`)
+
+Every scheme's level sequence implicitly ends with three optional trailing levels, registered in [02 §4.8](02-node-taxonomy.md): `ling:sentence` → ordinal, `ling:clause` → ordinal, `ling:word` → ordinal. They sit under the scheme's finest `block` level (`bible:verse`, `quran:ayah`, `*:paragraph`). Rules:
+
+- An edition **opts in** by listing the levels it has in `structureProfile.levels`; `StructureLevel` needs no new field. An edition that lists none is unaffected.
+- Tokens are always `level-ordinal` (§2.3 rule 2): `sentence-N`, `clause-N`, `word-N`. Levels above them keep their existing token style, so every pre-existing canonical string is unchanged.
+- Any of the three may be skipped. A skipped level counts under the nearest **present** ancestor: `bible/GEN/1/1/word-3` is the third word of the verse, `bible/GEN/1/1/clause-2/word-1` the first word of its second clause. Both may name the same node and must then resolve identically.
+- A Reference containing a `ling:*` segment is **`kind: "edition"`** and requires `editionSlug`/`editionId`; the parser rejects it as `canonical`. Sentence, clause and word boundaries are properties of one analysis, not of the work. Cross-edition word alignment uses `aligned-with` edges (§7), never ordinal equality.
+- Ranges (§6) and failure modes (§8) are unchanged; an edition without the level answers `partial` with the deepest matched ancestor.
+
+The compact `co0001_bk001_ch001_pa001_st001_cl001_wo001` token is a lossless encoding of such an edition-kind Reference; see [Inter-corpus references](../inter-corpus-refs.md).
 
 ## 4. Alias resolution
 
@@ -129,7 +151,7 @@ Matching at each step uses **only** `ContentNode.code` (code-addressed levels) o
 
 ## 5. Worked resolutions
 
-All JSON below is copied verbatim from the CI-validated fixtures in [examples/](../../../packages/common/src/common/schemas/context_fabric/v1/examples/).
+All JSON below is copied verbatim from the CI-validated fixtures listed in [examples/index.json](../../../packages/common/src/common/schemas/context_fabric/v1/examples/index.json).
 
 ### 5.1 `Bible/KJV/John/3/16` → `bible/JHN/3/16`
 
@@ -213,6 +235,29 @@ From [letter-page.json](../../../packages/common/src/common/schemas/context_fabr
 
 `kind: "edition"`: page boundaries belong to the 1863 scan, so the address is only meaningful against `editionSlug: "scan-1863"`. Matched chain: `phys:page` node `refOrdinal: 2` (a `milestone`-category node *in the logical tree* — see [04 §7](04-physical-location.md)) → paragraph node `018f0002-0000-7000-8000-000000000102`, `refOrdinal: 1`.
 
+### 5.5 `Bible/KJV/John/3/16/word-3` → `bible/JHN/3/16/word-3` (kind: edition)
+
+From [scripture-word.json](../../../packages/common/src/common/schemas/context_fabric/v1/examples/scripture-word.json):
+
+```json
+{
+  "scheme": "bible",
+  "kind": "edition",
+  "workSlug": "john",
+  "editionSlug": "kjv",
+  "segments": [
+    { "levelType": "bible:book", "code": "JHN" },
+    { "levelType": "bible:chapter", "ordinal": 3 },
+    { "levelType": "bible:verse", "ordinal": 16 },
+    { "levelType": "ling:word", "ordinal": 3 }
+  ],
+  "canonical": "bible/JHN/3/16/word-3",
+  "display": "John 3:16 (KJV), word 3"
+}
+```
+
+The first three tokens parse as in §5.1; `word-3` parses under rule 2 of §2.3 as the optional `ling:word` level of §3.1, with `ling:sentence` and `ling:clause` skipped, so the ordinal counts words under the verse. The `ling:*` segment forces `kind: "edition"`. Matched chain: the §5.1 verse node `018f0000-0000-7000-8000-000000000103` → child where `type=ling:word` and `refOrdinal=3`: node `018f0000-0000-7000-8000-000000000303`, text "so" (`category: inline`, sibling `ordinal` 2).
+
 ## 6. Ranges and named references
 
 **Ranges.** A range is a **pair of References** — `start` and `end` — of the same scheme (and, for `kind: "edition"`, the same edition). The server resolves both endpoints, then expands to every node between them **in document order** (the `ordinal`-under-ancestor ordering, not `refOrdinal` arithmetic — this makes ranges robust across skipped canonical numbers). The result is a `RangeResponse` ([api-payloads.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/api-payloads.schema.json)): `nodes[]` in order, `total`, and keyset pagination via `nextCursor`; its `ref` field echoes the reference that produced the run when applicable. Endpoints may differ in depth (`bible/JHN/3/16` → `bible/JHN/4`): the range covers from the first endpoint's first leaf to the last leaf under the second endpoint.
@@ -261,5 +306,7 @@ Every outcome maps to `ResolveResponse.status` in [api-payloads.schema.json](../
 | Level-type mismatch | `letter/paragraph-1/page-2` (segments out of declared level order) | `not_found` | normalized reference (structurally valid, unmatchable) | `[]` |
 | Edition lacks the level | `letter/page-2/paragraph-1` against a reading edition with no `phys:page` nodes | `partial` (falls back to what matches — here nothing above the page, so effectively the root) or `resolved` via `aligned-with` into the paged edition (§7) | normalized reference | ancestor / aligned nodes |
 | Nothing matches at all | out-of-range at the first segment | `not_found` | normalized reference | `[]` |
+| Edition lacks a `ling:*` level | `bible/GEN/1/1/word-3` against an edition with no `ling:word` in its `structureProfile` | `partial` | normalized reference | the verse node (deepest matched ancestor) |
+| Sub-block reference without an edition | `bible/GEN/1/1/word-3` with `kind: canonical` and no `editionSlug` | `not_found` | `null` (rejected at parse, §3.1) | `[]` |
 
 Two invariants for implementers: (1) `partial` always returns the *deepest successfully matched* node so clients can degrade gracefully ("couldn't find v. 40, showing chapter 3"); (2) `ambiguous` must enumerate every candidate in `matches` — silently picking one is forbidden, because a Reference is a contract, not a suggestion.
