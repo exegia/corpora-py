@@ -1,10 +1,19 @@
+---
+title: 08 — Invariants, Failure Semantics, and Versioning
+description: Invariants, failure cases, schema/parser versioning, compatibility guarantees.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # 08 — Invariants, Failure Semantics, and Versioning
 
 This document is the normative rulebook for Context Fabric v1 (spec item K): the structural
 invariants every conforming producer and store MUST uphold, the defined behavior for every
 failure case, and the versioning contracts — schema, parser, and data — that let clients and
 servers evolve independently without breaking each other. Where a rule is enforceable by the
-[machine-readable schemas](../../../packages/common/src/common/schemas/context_fabric/v1/), the
+[machine-readable schemas](../../../packages/common/src/common/schemas/context_fabric/v1/common.defs.schema.json), the
 schema is the enforcement point; everything else names the service or database layer responsible.
 
 See also: [README.md](README.md) · [01-domain-model.md](01-domain-model.md) ·
@@ -181,7 +190,7 @@ Anything on the MUST-NOT list is a **v2**: a new `/v2/` schema directory publish
 with `/v1/` still served and validated for the entire v1 support window. Servers MAY serve both
 majors simultaneously (negotiated by route or by `schemaVersion`); they MUST NOT silently upgrade
 a stored v1 document to v2 shape on read. Fixtures under
-[examples/](../../../packages/common/src/common/schemas/context_fabric/v1/examples/) are normative
+[examples/index.json](../../../packages/common/src/common/schemas/context_fabric/v1/examples/index.json) are normative
 and CI-enforced by
 [tests/common/test_context_fabric_schemas.py](../../../tests/common/test_context_fabric_schemas.py);
 a MINOR that adds capability MUST extend a fixture to exercise it.

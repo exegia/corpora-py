@@ -6,6 +6,7 @@
     "letter-page.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
     "academic-paper.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
     "speech.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse",
-    "transcript.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/RangeResponse"
+    "transcript.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/RangeResponse",
+    "scripture-word.json": "https://schemas.exegia.co/context-fabric/v1/api-payloads.schema.json#/$defs/NodeResponse"
   }
 }

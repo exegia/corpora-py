@@ -1,6 +1,15 @@
+---
+title: 01 — Domain Model
+description: Bounded contexts, entity catalog, ER diagram, semantic vs structural nodes, multi-edition model.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # 01 — Domain Model
 
-This document defines the bounded contexts and the entity catalog of the **Context Fabric canonical content graph, v1**: what each entity is, which fields it carries (exactly as declared in the CI-validated JSON Schemas under [`packages/common/src/common/schemas/context_fabric/v1/`](../../../packages/common/src/common/schemas/context_fabric/v1)), the cardinalities between entities, and the modeling rules that govern semantic vs structural nodes, text-bearing vs non-text-bearing nodes, and the multi-edition/language model. The schemas are the source of truth; this document explains them.
+This document defines the bounded contexts and the entity catalog of the **Context Fabric canonical content graph, v1**: what each entity is, which fields it carries (exactly as declared in the CI-validated JSON Schemas under [`packages/common/src/common/schemas/context_fabric/v1/`](../../../packages/common/src/common/schemas/context_fabric/v1/common.defs.schema.json)), the cardinalities between entities, and the modeling rules that govern semantic vs structural nodes, text-bearing vs non-text-bearing nodes, and the multi-edition/language model. The schemas are the source of truth; this document explains them.
 
 See also: [README.md](README.md) · [02-node-taxonomy.md](02-node-taxonomy.md) · [03-references.md](03-references.md) · [04-physical-location.md](04-physical-location.md) · [05-api-payloads.md](05-api-payloads.md) · [06-queries-and-storage.md](06-queries-and-storage.md) · [07-migration-mapping.md](07-migration-mapping.md) · [08-invariants-and-versioning.md](08-invariants-and-versioning.md)
 
