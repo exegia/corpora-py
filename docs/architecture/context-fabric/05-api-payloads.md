@@ -1,6 +1,15 @@
+---
+title: 05 — API Payloads
+description: Response envelopes, worked payloads, normative client-consumption rules.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # 05 — API Payloads
 
-This document specifies the response envelopes that Context Fabric servers hand to client applications — the four top-level shapes (`NodeResponse`, `RangeResponse`, `ResolveResponse`, `SearchResponse`), the `NodePayload` denormalization they all carry, and the normative rules a client must follow to consume them safely. The machine-readable contract is [`api-payloads.schema.json`](../../../packages/common/src/common/schemas/context_fabric/v1/api-payloads.schema.json); the six worked examples below are copied from the CI-validated fixtures in [`examples/`](../../../packages/common/src/common/schemas/context_fabric/v1/examples/) and are normative.
+This document specifies the response envelopes that Context Fabric servers hand to client applications — the four top-level shapes (`NodeResponse`, `RangeResponse`, `ResolveResponse`, `SearchResponse`), the `NodePayload` denormalization they all carry, and the normative rules a client must follow to consume them safely. The machine-readable contract is [`api-payloads.schema.json`](../../../packages/common/src/common/schemas/context_fabric/v1/api-payloads.schema.json); the six worked examples below are copied from the CI-validated fixtures in [`examples/index.json`](../../../packages/common/src/common/schemas/context_fabric/v1/examples/index.json) and are normative.
 
 See also: [README](README.md) · [01 Domain Model](01-domain-model.md) · [02 Node Taxonomy](02-node-taxonomy.md) · [03 References](03-references.md) · [04 Physical Location](04-physical-location.md) · [06 Queries & Storage](06-queries-and-storage.md) · [07 Migration Mapping](07-migration-mapping.md) · [08 Invariants & Versioning](08-invariants-and-versioning.md)
 

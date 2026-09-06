@@ -1,3 +1,12 @@
+---
+title: Context Fabric — Canonical Content Graph & API Contract (v1)
+description: Entry point and reading order for the Context Fabric v1 spec series.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # Context Fabric — Canonical Content Graph & API Contract (v1)
 
 A universal schema for every corpus this platform converts, stores, and serves: religious
@@ -34,6 +43,7 @@ aligned-with). Everything source-specific survives losslessly in a namespaced `e
 | [06-queries-and-storage.md](06-queries-and-storage.md) | H, I | Query patterns, hierarchy-storage evaluation, PostgreSQL DDL (ltree), worked SQL |
 | [07-migration-mapping.md](07-migration-mapping.md) | grounding | Exact mapping from today's `Unit`/Text-Fabric/`.corpus` pipeline; phased adoption plan |
 | [08-invariants-and-versioning.md](08-invariants-and-versioning.md) | K | Invariants, failure cases, schema/parser versioning, compatibility guarantees |
+| [../inter-corpus-refs.md](../inter-corpus-refs.md) | draft | Compact positional address (`co0001_bk001_ch001_pa001…`) for cross-corpus pointers; how it relates to canonical References |
 
 ## Machine-readable schemas
 
