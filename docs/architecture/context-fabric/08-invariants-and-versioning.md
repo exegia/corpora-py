@@ -1,10 +1,19 @@
+---
+title: 08 — Invariants, Failure Semantics, and Versioning
+description: Invariants, failure cases, schema/parser versioning, compatibility guarantees.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # 08 — Invariants, Failure Semantics, and Versioning
 
 This document is the normative rulebook for Context Fabric v1 (spec item K): the structural
 invariants every conforming producer and store MUST uphold, the defined behavior for every
 failure case, and the versioning contracts — schema, parser, and data — that let clients and
 servers evolve independently without breaking each other. Where a rule is enforceable by the
-[machine-readable schemas](../../../packages/common/src/common/schemas/context_fabric/v1/), the
+[machine-readable schemas](../../../packages/common/src/common/schemas/context_fabric/v1/common.defs.schema.json), the
 schema is the enforcement point; everything else names the service or database layer responsible.
 
 See also: [README.md](README.md) · [01-domain-model.md](01-domain-model.md) ·
@@ -101,7 +110,7 @@ queries silently return wrong subtrees.
 ### Enforcement matrix
 
 | Invariant | Schema | Service | DB (Phase 4) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | I1 one root, same-edition parents | shape only | ✔ ingest | ✔ partial unique index + trigger |
 | I2 acyclic | — | ✔ ingest | ✔ path rebuild fails |
 | I3 ordinal unique per parent | `minimum: 0` | ✔ ingest | ✔ `UNIQUE (parent_id, ordinal)` |
@@ -123,7 +132,7 @@ Defined behavior for every anticipated failure. "Envelope" refers to
 [api-payloads.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/api-payloads.schema.json).
 
 | # | Failure | Required behavior |
-|---|---|---|
+| --- | --- | --- |
 | F1 | **Malformed reference string** (unparseable per the grammar of [03-references.md](03-references.md)) | HTTP 400 / `ResolveResponse` with `status: "not_found"`, `reference: null`, empty `matches`, and the raw `input` echoed. Never guess. |
 | F2 | **Well-formed but unresolvable reference** (verse 200 of a 36-verse chapter) | `ResolveResponse.status: "not_found"` (nothing matched) or `"partial"` (a prefix of the segments resolved — return the deepest resolved node in `matches`). Multiple I6-violating candidates → `"ambiguous"` with all candidates listed. |
 | F3 | **Unknown `category`** | **Reject** (schema validation error at ingest; 422 at the API). The enum is closed and frozen per major — an unknown category means the payload is from a different major. |
@@ -147,7 +156,7 @@ Defined behavior for every anticipated failure. "Envelope" refers to
   3. *Removed:* only at the **next major** (`/v2/`).
 - **Data migrations are new edition revisions.** Reshaping already-ingested content (re-running an
   improved parser, re-chunking fragments, fixing a wrong hierarchy) is expressed as a new Edition
-  + `Relationship(supersedes)` per I8 — never as in-place rewriting of an existing edition's
+  - `Relationship(supersedes)` per I8 — never as in-place rewriting of an existing edition's
   nodes. Bulk backfills that add *optional* fields (e.g. computing missing `charStart`) are the
   one exception: they may update rows in place because they change no identity and no existing
   value, and each touched entity records a `corrections[]` entry.
@@ -163,6 +172,7 @@ Payloads carry `schemaVersion` (semver) and the schemas carry the major in their
 (`https://schemas.exegia.co/context-fabric/v1/…`). The two MUST agree on the major.
 
 A **MINOR** version MAY:
+
 - add optional properties to any entity;
 - add new `$defs` (including new response envelopes in `api-payloads.schema.json`);
 - add enum values **only to open sets** — e.g. `SourceAsset.sourceFormat`, well-known
@@ -172,6 +182,7 @@ A **MINOR** version MAY:
   invalid.
 
 A MINOR (or PATCH) MUST NOT:
+
 - add `required` fields or remove/rename any field;
 - add, remove, or re-mean `NodeCategory` values (closed, frozen per major — F3);
 - change `ValidationState`, `Reference.kind`, `ResolveResponse.status`, or any other closed enum;
@@ -181,7 +192,7 @@ Anything on the MUST-NOT list is a **v2**: a new `/v2/` schema directory publish
 with `/v1/` still served and validated for the entire v1 support window. Servers MAY serve both
 majors simultaneously (negotiated by route or by `schemaVersion`); they MUST NOT silently upgrade
 a stored v1 document to v2 shape on read. Fixtures under
-[examples/](../../../packages/common/src/common/schemas/context_fabric/v1/examples/) are normative
+[examples/index.json](../../../packages/common/src/common/schemas/context_fabric/v1/examples/index.json) are normative
 and CI-enforced by
 [tests/common/test_context_fabric_schemas.py](../../../tests/common/test_context_fabric_schemas.py);
 a MINOR that adds capability MUST extend a fixture to exercise it.

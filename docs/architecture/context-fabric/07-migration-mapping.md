@@ -1,9 +1,18 @@
+---
+title: "07 — Migration Mapping: Today's Pipeline → the Canonical Content Graph"
+description: Exact mapping from today's Unit/Text-Fabric/.corpus pipeline; phased adoption plan.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # 07 — Migration Mapping: Today's Pipeline → the Canonical Content Graph
 
 This document grounds the Context Fabric v1 model in the code that exists today: it maps every
 field of the current `Document`/`Unit` parser schema, the shared Text-Fabric walker, and the
 `.corpus` archive onto the canonical entities defined by the
-[v1 JSON Schemas](../../../packages/common/src/common/schemas/context_fabric/v1/), names the
+[v1 JSON Schemas](../../../packages/common/src/common/schemas/context_fabric/v1/common.defs.schema.json), names the
 concrete gaps the canonical model closes, and lays out a phased adoption plan that never rips out
 the Text-Fabric runtime.
 

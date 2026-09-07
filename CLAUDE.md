@@ -8,27 +8,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install all workspace packages in editable/dev mode
 uv sync
 
-# Install dependencies (also installs dotenvx for encrypted .env)
-uv run scripts/setup.py
+# Install dependencies (dotenvx for encrypted .env, example deps, embedded Python)
+make setup
 
 # Run tests
 uv run pytest
+make test
 
 # Run a single test file or test
 uv run pytest path/to/test_file.py::test_name
+
+# Everything a PR runs (uv sync + lint-check + test)
+make ci
+
+# Every target, with its purpose
+make help
 
 # Build individual workspace wheels
 uv build --package corpora-common --wheel --out-dir dist/
 uv build --package corpora-mcp    --wheel --out-dir dist/
 uv build --package corpora-admin  --wheel --out-dir dist/
 
-# Build all workspace wheels at once (shorthand via script)
-uv run scripts/publish.py          # patch bump + publish
-uv run scripts/publish.py minor
-uv run scripts/publish.py 1.2.3
+# Build all workspace wheels at once into dist/
+make build-wheel
+
+# Bump version, commit, tag, and trigger the PyPI publish workflow
+make publish                       # patch (default)
+make publish PUBLISH_ARGS=minor
+make publish PUBLISH_ARGS=1.2.3
 
 # Clean caches and build artifacts
-uv run scripts/clean.py
+make clean
 
 # Start MCP server only (stdio — for Claude Desktop)
 uv run cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA
@@ -200,9 +210,13 @@ Code is organized into decoupled workspace packages under `packages/`:
 
 ### Module layers
 
-**`corpora_mcp.server`** — The primary user-facing surface. A FastMCP server exposing 11 tools to AI clients (Claude
-Desktop, etc.). The `cf-mcp` CLI entry point (`corpora_mcp.server:main`)
-lives here. **`corpora_mcp.corpus`** holds the singleton `CorpusManager` that loads/manages
+**`corpora_mcp.server`** — The primary user-facing surface. A FastMCP server exposing **15** tools in a standalone
+`cf-mcp` process (Claude Desktop, etc.) — 12 defined here (11 query tools plus `validate_corpus`) and the
+`reference_*` trio registered from `corpora_mcp.reference`. Mounted in the combined app
+(`corpora_py.app`) the same server carries **30** tools, or **26** with `HF_READ_ONLY=true`, because `admin` registers
+`storage_*`, `corpus_*` and `corpus_reference_*` onto it and skips the 4 write tools when the Hub is locked. Count them
+with `asyncio.run(mcp._list_tools())` rather than trusting this line. The `cf-mcp` CLI entry point
+(`corpora_mcp.server:main`) lives here. **`corpora_mcp.corpus`** holds the singleton `CorpusManager` that loads/manages
 `context-fabric` (`cfabric.Fabric`) corpora at runtime.
 
 **`admin.parsers`** — Format-specific parsers (EPUB/HTML/XML/TEI/PDF/plain text), each reducing its source into the same
@@ -231,10 +245,15 @@ Earlier revisions of this repo (and of this file) described a `shared` package w
 git-based Text-Fabric dataset fetcher), and `shared.models` /
 `shared.schemas` (shared enums and Pydantic schemas). **None of this exists in the current
 `packages/common/src/common/` tree** — it was not carried over during the `shared`→`common`
-package rename/consolidation (there is no `supabase`/`auth`/`corpus`/`models`/`schemas`
-submodule under `common/`, and no file anywhere in the repo references `supabase` or defines an `auth` module). If you
-need this functionality, it has to be rebuilt, not just imported — don't write code that assumes `common.auth` or
-similar exists without checking first.
+package rename/consolidation. There is still no `supabase`/`auth`/`corpus`/`models`/`schemas` submodule under
+`common/` and nothing defines an `auth` module, so if you need that functionality it has to be rebuilt, not just
+imported — don't write code that assumes `common.auth` or similar exists without checking first.
+
+**What `common` does have** (an earlier version of this section undercounted it): `utils/` — settings, logging,
+`jwt_auth`, `tfref`/`refdisplay`/`refcompact`, request context — and `schemas/` (the Context Fabric v1 JSON Schemas).
+And Supabase *is* referenced in the repo, just never as a client SDK: `supabase/migrations/` holds the SQL, and
+`admin.services.storage_supabase` / `job_store_supabase` are the opt-in REST backends selected by `STORAGE_BACKEND`
+and `JOB_STORE` (see "Auth" below). Grep before assuming either way.
 
 ### Environment / config
 
@@ -253,9 +272,40 @@ integration — see "Dropped/missing functionality" above.)
 1. Datasets live locally under `~/.exegia/datasets/` as Text-Fabric directories.
 2. `CorpusManager.load(path)` (in `corpora_mcp.corpus`) wraps `cfabric.Fabric` and holds
    `(Fabric, api)` pairs keyed by name.
-3. All 11 MCP tools call `corpus_manager.get_api(corpus_name)` to get the TF API and then use `api.S`, `api.F`, `api.T`,
+3. All the query MCP tools call `corpus_manager.get_api(corpus_name)` to get the TF API and then use `api.S`, `api.F`, `api.T`,
    etc.
 4. Pagination state for `search()` / `search_continue()` is held in a module-level dict with 5-minute cursor TTL.
+
+### Reference identifiers (`common.utils.tfref`, `/refs`, `reference_*` / `corpus_reference_*` tools)
+
+One schema-agnostic grammar for citing any node in any corpus:
+`[corpus[@version]/]Sec1[:Sec2...][!<otype><i>[-<j>]]` (e.g. `bhsa@2021/Deut:4:2!clause1`,
+`mobydick@1.0/Moby-Dick:3!word12`) plus a `urn:tf:` twin. The section path is whatever `T.sectionTypes` declares; the
+selector is the node's 1-based position among nodes of its type that **start** in that section (anchor-to-first-slot, so
+a clause spilling into the next verse is counted once). `@version` is optional on input and always emitted on output.
+
+- **`common.utils.tfref`** — grammar + resolution, byte-identical to `skills/tf-reference-id/scripts/tfref.py`
+  (`tests/common/test_tfref.py` pins this; edit one, copy over the other). Works on a live `tf`/`cfabric` api or straight
+  from a `.tf` directory (stdlib loader). It also papers over two cfabric gaps on one-level corpora (`T.nodeFromSection`
+  / `T.sectionFromNode` raise there) by falling back to the section features.
+- **`common.utils.refdisplay`** — label (`Deut 4:2 · clause 1`), compact pill token (`Deut 4:2 cl1`), share URL from
+  `REFERENCE_URL_TEMPLATE` (`{ref}` placeholder; default `/refs/resolve?ref={ref}`), and the `corpus` metadata block
+  (title/authors/year/corpusId/version from `manifest.yml` + `toc.yml`).
+- **`admin.services.reference`** (+ `reference_api` at `/refs`, `reference_mcp` → `corpus_reference_*`) — over stored
+  archives; the corpus id in a reference is the library filename stem (`bhsa.corpus` → `bhsa`), the version is the
+  manifest's. `POST /refs` (node → ref), `GET /refs/resolve?ref=` (ref → node + metadata; 400 bad grammar, 404 unknown,
+  409 version mismatch), `GET|POST /refs/shortcode` (presentation bundle).
+- **`corpora_mcp.reference`** (`reference_create` / `reference_resolve` / `reference_shortcode`) — the same over
+  `CorpusManager` corpora in a standalone `cf-mcp`; corpus id = the loaded name, metadata from a `manifest.yml` beside
+  or above the dataset dir when present.
+- **`common.utils.refcompact`** — the compact positional token of `docs/architecture/inter-corpus-refs.md`
+  (`cobhsa_bk005_ch004_pa002_cl001`) as a *serialization* of a resolved node: emitted as `token` on every `/refs`
+  payload, accepted by `/refs/resolve`. Not a citation — `docs/architecture/reference-forms.md` records the decision:
+  tfref short form = the UI's canonical citation string; compact token = serialization; the canonical Reference of
+  `context-fabric/03-references.md` = future edition-independent address (no resolver in the repo yet).
+
+Agent skills checked into the repo live under `skills/` (`skills/tf-reference-id` is the first); `skills-lock.json`
+tracks the externally sourced ones only.
 
 ### Conversion job flow (admin, exposed at `/convert`)
 
@@ -355,46 +405,46 @@ dev/tests, and still independently buildable — but are **not** published to Py
 
 The `build-sidecar` workflow builds the same four wheels, then bundles them per-platform (macOS arm64/x64, Windows) into
 a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun apps. The bundle step runs
-`python -m scripts.build --skip-build` and resolves workspace deps from `dist/` via `--find-links` (no PyPI needed).
+`make build-bundle` (`bin/build/build.sh`) and resolves workspace deps from `dist/` via `--find-links` (no PyPI
+needed).
 
 Testing runs in two places. The `check` job in `pr.yml` runs `make ci` (`uv sync` + `make lint-check` +
-`make test` — 364 tests as of this writing) on one runner, single-job on purpose: it is a *required status check* on
+`make test` — 719 tests as of 2026-09-06) on one runner, single-job on purpose: it is a *required status check* on
 `main`, `dev`, `next` and `release/v*`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
 `check` the ruleset names, which would leave every PR unmergeable. The breadth that used to live in
 `test.yml` (ubuntu + macOS × 3.13/3.14) moved to `matrix.yml`, which runs on every push to `next` or a release branch, and weekly.
 
-## Demo App
+## Example app (`example/`)
 
-A React/Electrobun desktop app that exercises the conversion pipeline:
+The React Router 8 + Electrobun app that exercises the whole API — convert, explore, corpus detail/reader, and a
+browser-side chat agent over `/mcp`. It ships two ways from one codebase: an Electrobun desktop bundle, and a static
+SPA deployed to `corpora-py-example.vercel.app`. See `example/README.md`.
 
 ```bash
-cd demo
-npm install
-npm run dev  # Start dev server
-npm run build # Build Electrobun bundle
+cd example
+bun install
+bun run vite:dev      # web dev server
+bun run desktop:dev   # Electrobun app, watch mode
+# or from the repo root: make dev  (Vite + Electrobun together)
 ```
 
-The demo integrates with `corpora-api` (the FastAPI sidecar) via WebSocket for file uploads and conversion status.
+It talks to `corpora-api` over HTTP + WebSocket; `VITE_API_URL` (build-time, Vite-inlined) picks the backend and
+defaults to `http://127.0.0.1:8000`.
+
+> **`demo/` is a dead leftover** — 34 tracked files, no `package.json`, nothing builds it. An earlier version of this
+> file documented it as the demo app with `demo/src/components/ui/` and a `demo/tailwind.config.ts`; none of that is
+> real. Work in `example/`, and delete `demo/` when convenient.
 
 ## UI Components (shadcn)
 
-The demo app uses [shadcn/ui](https://ui.shadcn.com) for React components — a collection of copy-paste component
-primitives built on Radix UI and Tailwind CSS.
-
-### Adding components
+`example/` uses [shadcn/ui](https://ui.shadcn.com) on **Base UI** (`@base-ui/react`, not Radix), plus the ReUI
+registry. Config is `example/components.json` (style `base-vega`, Lucide icons, `~/*` aliases).
 
 ```bash
-cd demo
-npx shadcn-ui@latest add <component-name>
+cd example
+bunx shadcn@latest add <component-name>     # not `shadcn-ui`, which is the old package
 ```
 
-Popular components used in this project: `button`, `card`, `dialog`, `input`, `label`, `select`, `toast`,
-`dropdown-menu`, etc.
-
-### Setup
-
-- Components are copied to `demo/src/components/ui/`
-- Styled with Tailwind CSS (see `demo/tailwind.config.ts`)
-- Import and use directly: `import { Button } from "@/components/ui/button"`
-
-Refer to [shadcn/ui docs](https://ui.shadcn.com/docs/components/button) for component props and usage patterns.
+- Components land in `example/app/components/ui/` (ReUI ones in `components/reui/`)
+- Tailwind CSS 4 — **no `tailwind.config.ts`**; theme and imports live in `example/app/app.css`
+- Import via the alias: `import { Button } from "~/components/ui/button"`

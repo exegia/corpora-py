@@ -1,6 +1,15 @@
+---
+title: 06 — Queries and Storage
+description: Query patterns, hierarchy-storage evaluation, PostgreSQL DDL (ltree), worked SQL.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # 06 — Queries and Storage
 
-This document defines the query patterns every Context Fabric server must answer efficiently — ancestry, subtree, adjacency, range, reference resolution, and search — evaluates the candidate storage models for an unlimited-depth ordered hierarchy, commits to **materialized path (Postgres `ltree`) with a `parent_id` adjacency column as the normalized source of truth**, and provides an implementation-ready DDL sketch plus worked SQL for each pattern. The entity shapes stored here are the v1 schemas in [`packages/common/src/common/schemas/context_fabric/v1/`](../../../packages/common/src/common/schemas/context_fabric/v1/); the payloads these queries feed are specified in [05](05-api-payloads.md).
+This document defines the query patterns every Context Fabric server must answer efficiently — ancestry, subtree, adjacency, range, reference resolution, and search — evaluates the candidate storage models for an unlimited-depth ordered hierarchy, commits to **materialized path (Postgres `ltree`) with a `parent_id` adjacency column as the normalized source of truth**, and provides an implementation-ready DDL sketch plus worked SQL for each pattern. The entity shapes stored here are the v1 schemas in [`packages/common/src/common/schemas/context_fabric/v1/`](../../../packages/common/src/common/schemas/context_fabric/v1/common.defs.schema.json); the payloads these queries feed are specified in [05](05-api-payloads.md).
 
 See also: [README](README.md) · [01 Domain Model](01-domain-model.md) · [02 Node Taxonomy](02-node-taxonomy.md) · [03 References](03-references.md) · [04 Physical Location](04-physical-location.md) · [05 API Payloads](05-api-payloads.md) · [07 Migration Mapping](07-migration-mapping.md) · [08 Invariants & Versioning](08-invariants-and-versioning.md)
 

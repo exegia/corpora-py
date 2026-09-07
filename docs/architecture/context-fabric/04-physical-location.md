@@ -1,3 +1,12 @@
+---
+title: "04 — Physical location: locators, fragments, and source assets"
+description: PhysicalLocator model, nodes spanning pages, pages holding many nodes, timecoded media.
+type: spec
+tags:
+  - architecture
+  - context-fabric
+---
+
 # 04 — Physical location: locators, fragments, and source assets
 
 This document specifies how Context Fabric maps logical content back onto its physical carriers — PDF pages, EPUB anchors, OCR blocks, audio timecodes — without ever letting physical layout leak into logical structure. The instrument is the **PhysicalLocator**, an embeddable value object defined in [physical-locator.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/physical-locator.schema.json), attached to [TextFragments](../../../packages/common/src/common/schemas/context_fabric/v1/text-fragment.schema.json) (preferred) and [ContentNodes](../../../packages/common/src/common/schemas/context_fabric/v1/content-node.schema.json), and pointing into [SourceAssets](../../../packages/common/src/common/schemas/context_fabric/v1/source-asset.schema.json). Fragments are the join: a node that spans pages has multiple fragments with different page locators; a page that holds parts of several nodes holds fragments of different nodes locating to it.
