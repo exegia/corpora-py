@@ -192,7 +192,7 @@ convert_to_corpus(tf_dir, "commentary.corpus", name="MyCommentary", language_cod
 Once a job succeeds, its result is readable *before* you publish it —
 `/convert/{id}/sections`, `/index`, `/content`, `/nodes/{n}`, `/manifest` — and
 editable, with `/versions`, `/diff` and `/restore` over the archive's own git
-history. The same surface exists for published archives under
+history. The same layer (minus `/diff`) covers published archives under
 `/storage/{filename}/…`. See [`packages/admin/README.md`](packages/admin/README.md).
 
 ---
