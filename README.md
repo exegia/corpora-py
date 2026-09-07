@@ -49,8 +49,10 @@ flowchart LR
 
 ```bash
 curl -sF file=@book.epub -F source_format=epub -F name='My Book' \
-  localhost:8000/convert
+  localhost:8000/convert | tee job.json
 # → {"job_id": "1ec2121b-…", "status_url": "/convert/1ec2121b-…", "ws_url": "…/ws"}
+
+JOB=$(jq -r .job_id job.json)      # every command below uses it
 ```
 
 `source_format`: `epub` · `pdf` · `html` · `xml` · `tei` · `tei_zip` · `plain` · `tf_zip`
@@ -99,7 +101,7 @@ describe_corpus() → list_features() → search(…, "count") → search(…, "
 curl "localhost:8000/refs/resolve?ref=bhsa@2021/Deut:4:2!clause1"
 ```
 
-One grammar for every corpus — `corpus@version/Section:Section!type N`:
+One grammar for every corpus — `corpus@version/Section:Section!typeN`:
 
 | Reference | Means |
 |---|---|
@@ -112,7 +114,8 @@ One grammar for every corpus — `corpus@version/Section:Section!type N`:
 ### 6. Publish and browse a library
 
 ```bash
-curl -sF file=@my-book.corpus localhost:8000/storage    # → Hugging Face Hub
+curl -sX POST localhost:8000/storage \
+  -H 'content-type: application/json' -d "{\"job_id\": \"$JOB\"}"   # publish
 curl -s localhost:8000/storage                          # what's published
 curl -s localhost:8000/storage/my-book.corpus/content   # read it
 ```
@@ -184,7 +187,8 @@ convert_to_corpus(tf_dir, "book.corpus", name="My Book", language_code="en")
 ```python
 from corpora_mcp.corpus import corpus_manager
 
-api = corpus_manager.load("~/.exegia/datasets/BHSA", name="BHSA")
+name = corpus_manager.load("~/.exegia/datasets/BHSA", name="BHSA")
+api = corpus_manager.get_api(name)          # Text-Fabric api: api.F, api.T, api.S
 ```
 
 `pip install corpora-py` ships all of it — `corpora_mcp`, `admin` and `common`
@@ -195,12 +199,13 @@ are bundled in that one wheel; there is no separate `corpora-mcp` on PyPI.
 ## Docker
 
 ```bash
-docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro \
-  ghcr.io/exegia/corpora-py
+make docker-build-corpora        # or: docker build -f dockerfiles/Dockerfile -t corpora-py .
+docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro corpora-py
 ```
 
-Build locally: `make docker-build-corpora` · MCP-only image:
-`dockerfiles/Dockerfile.client` · Compose: `dockerfiles/docker-compose.yml`
+Images are also published to `ghcr.io/exegia/corpora-py` (login required).
+MCP-only image: `dockerfiles/Dockerfile.client` · Compose:
+`docker compose -f dockerfiles/docker-compose.yml up corpora`
 
 ---
 
