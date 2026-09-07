@@ -22,8 +22,11 @@ pip install corpora-py          # or: uv add corpora-py
 ```
 
 ```bash
-AUTH_REQUIRED=false corpora-api    # http://127.0.0.1:8000
+AUTH_REQUIRED=false corpora-api    # http://127.0.0.1:8000 — leave it running
 ```
+
+The examples below run in a **second shell** and pipe through
+[`jq`](https://jqlang.github.io/jq/) (`brew install jq`).
 
 Auth is **on** by default and fails closed (401 without a Supabase JWT).
 `AUTH_REQUIRED=false` is for local use — see [Settings](#settings).
