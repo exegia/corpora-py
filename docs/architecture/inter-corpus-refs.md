@@ -5,9 +5,11 @@ tags:
   - architecture
   - references
   - context-fabric
-status: draft
+status: accepted-with-amendments
 type: spec
 ---
+> **Status (2026-09-07).** This form is implemented in `common.utils.refcompact` as a *serialization* of a resolved node — it is emitted as `token` beside every reference and accepted by `/refs/resolve`, but it is **not** the citation string the UI shows or stores; that is the tfref short form (`bhsa@2021/Deut:4:2!clause1`). The amendments below (corpus slug instead of a hex id, prefixes bound by section depth, `pa` as a block unit on shallow corpora, `ph`, ranges, no version slot) are decided in [reference-forms.md](./reference-forms.md).
+
 A compact, single-token address that names one node in one corpus, so a note, annotation or cross-reference in corpus A can point at a node in corpus B without carrying a URL or a UUID.
 
 This is a **positional** address (ordinal walk down the tree). It complements, and does not replace, the scheme-based **canonical** addressing in [03 — References](./context-fabric/03-references.md) (`bible/JHN/3/16`), which resolves through codes and alias registries. See [Relationship to canonical references](#relationship-to-canonical-references).
@@ -158,8 +160,10 @@ flowchart LR
 
 ## Open issues
 
-1. **Corpus id collision.** Four hex characters give 65,536 values; taking them from the tail of a UUID makes two corpora colliding a matter of luck, not policy. Prefer a registry-assigned short id (or the full corpus slug the library already uses as its filename) over a UUID suffix. Nothing in the pipeline assigns a corpus UUID today: the library keys corpora by `.corpus` filename and jobs by `job-<uuid>` (see [api.py](../../packages/admin/src/admin/services/api.py)).
+Items 1, 2, 4 and 5 are decided in [reference-forms.md](./reference-forms.md); the text below is kept as the original rationale.
+
+1. **Corpus id collision.** *Decided: the library slug (`cobhsa`), `_` folded to `-`.* Four hex characters give 65,536 values; taking them from the tail of a UUID makes two corpora colliding a matter of luck, not policy. Prefer a registry-assigned short id (or the full corpus slug the library already uses as its filename) over a UUID suffix. Nothing in the pipeline assigns a corpus UUID today: the library keys corpora by `.corpus` filename and jobs by `job-<uuid>` (see [api.py](../../packages/admin/src/admin/services/api.py)).
 2. **Prefix clash in the original draft.** `se` was used for both *section* and *sentence*. This draft uses `bk` for the top level and `st` for sentence; adjust if other prefixes read better.
 3. **Three digits is not enough once levels are skipped.** Counting verses from the start of a long book exceeds 999 (TODO: cite a book/verse count source once ingested). Hence the rule that padding is cosmetic and ordinals are unbounded.
-4. **`pa` is overloaded.** Paragraph and verse are different node types in the taxonomy (`generic:paragraph` vs `bible:verse`) but share one prefix here. That is fine for a positional address as long as a corpus has exactly one `block`-category level under `ch`; corpora that have both (verse-per-paragraph editions) need a decision.
-5. **Sub-paragraph levels exist only in linguistic corpora.** None of the current converters emit them. The [proposal above](#proposal-extend-canonical-references-to-the-word) registers `ling:*` types so that editions which do have them (BHSA-style) can be addressed; the compact form must not claim `st`/`cl`/`wo` for an edition whose `structureProfile` lacks them.
+4. **`pa` is overloaded.** *Decided: `pa` is the 3rd section level when the corpus declares one, else the `paragraph`/`para`/`verse` node type under the innermost section.* Paragraph and verse are different node types in the taxonomy (`generic:paragraph` vs `bible:verse`) but share one prefix here. That is fine for a positional address as long as a corpus has exactly one `block`-category level under `ch`; corpora that have both (verse-per-paragraph editions) need a decision.
+5. **Sub-paragraph levels exist only in linguistic corpora.** *Decided: `st`/`cl`/`ph`/`wo` are emitted only for node types the corpus actually has; `to_compact` refuses others and the API returns `token: null`.* None of the current converters emit them. The [proposal above](#proposal-extend-canonical-references-to-the-word) registers `ling:*` types so that editions which do have them (BHSA-style) can be addressed; the compact form must not claim `st`/`cl`/`wo` for an edition whose `structureProfile` lacks them.
