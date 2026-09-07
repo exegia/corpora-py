@@ -25,7 +25,7 @@ import threading
 from typing import Any
 
 import yaml
-from common.utils import refdisplay, tfref
+from common.utils import refcompact, refdisplay, tfref
 from common.utils.tfref import Adapter, Ref
 
 from .corpus_detail import _ensure_extracted, _require_api, _safe_name, get_manifest
@@ -43,6 +43,17 @@ def corpus_id_for(filename: str) -> str:
 
 def filename_for(corpus_id: str) -> str:
     return _safe_name(corpus_id)
+
+
+def _filename_for_slug(slug: str) -> str:
+    """A compact token folds `_` to `-`; try the slug as-is, then unfolded."""
+    for candidate in (slug, slug.replace("-", "_")):
+        try:
+            _require_api(candidate)
+        except Exception:  # noqa: BLE001 - try the next spelling
+            continue
+        return _safe_name(candidate)
+    return _safe_name(slug)
 
 
 def _read_toc(filename: str) -> dict[str, Any]:
@@ -78,6 +89,14 @@ def corpus_metadata(filename: str) -> dict[str, Any]:
     return refdisplay.corpus_metadata(
         corpus_id=corpus_id_for(filename), manifest=manifest, toc=toc, version=adapter.version
     )
+
+
+def _token(target: int | list[int], adapter: Adapter, corpus_id: str) -> str | None:
+    """Compact token, or None for node types the compact form cannot encode."""
+    try:
+        return refcompact.to_compact(target, adapter, corpus_id)
+    except tfref.RefError:
+        return None
 
 
 def _node_payload(adapter: Adapter, ref: Ref, nodes: int | list[int]) -> dict[str, Any]:
@@ -121,6 +140,7 @@ def create_reference(
     payload.update(
         ref=ref_str,
         urn=ref.urn(),
+        token=_token(target, adapter, corpus_id),
         corpus=refdisplay.corpus_metadata(
             corpus_id=corpus_id, manifest=manifest, toc=toc, version=adapter.version
         ),
@@ -132,7 +152,22 @@ def resolve_reference(
     ref_str: str, filename: str | None = None, *, lang: str | None = None
 ) -> dict[str, Any]:
     """Node(s) + corpus metadata for a reference. `filename` overrides the
-    corpus id embedded in the reference (and is required when there is none)."""
+    corpus id embedded in the reference (and is required when there is none).
+
+    Accepts the short form, the `urn:tf:` form, or a compact positional token
+    (`co<slug>_bk001_...`); the latter is translated through the corpus first.
+    """
+    if refcompact.is_compact(ref_str):
+        filename = filename or _filename_for_slug(refcompact.slug_of(ref_str))
+        _, nodes_c = refcompact.from_compact(ref_str, _adapter(filename)[0])
+        created = create_reference(
+            filename,
+            nodes_c[0] if isinstance(nodes_c, list) else nodes_c,
+            nodes_c[-1] if isinstance(nodes_c, list) else None,
+            lang=lang,
+        )
+        created["input"] = ref_str
+        return created
     ref = tfref.parse(ref_str)
     if filename is None:
         if not ref.corpus:
@@ -154,6 +189,9 @@ def resolve_reference(
         ref=canonical,
         input=ref_str,
         urn=tfref.parse(canonical).urn(),
+        token=_token(
+            [nodes[0], nodes[-1]] if isinstance(nodes, list) else nodes, adapter, corpus_id
+        ),
         corpus=refdisplay.corpus_metadata(
             corpus_id=corpus_id, manifest=manifest, toc=toc, version=adapter.version
         ),
@@ -175,15 +213,20 @@ def shortcode(
     filled in, canonical spelling); a bare string with no known corpus is
     formatted as-is so the UI can still render a pill for foreign references.
     """
+    token: str | None = None
     if ref_str is None:
         if filename is None or node is None:
             raise tfref.ParseError("shortcode needs either a reference or a corpus + node")
         created = create_reference(filename, node, end_node)
-        ref_str = created["ref"]
+        ref_str, token = created["ref"], created["token"]
+    elif refcompact.is_compact(ref_str):
+        resolved = resolve_reference(ref_str, filename)
+        ref_str, token = resolved["ref"], resolved["token"]
     else:
         ref = tfref.parse(ref_str)
         target = filename or (filename_for(ref.corpus) if ref.corpus else None)
         if target is not None:
-            ref_str = resolve_reference(ref_str, target)["ref"]
+            resolved = resolve_reference(ref_str, target)
+            ref_str, token = resolved["ref"], resolved["token"]
     ref = tfref.parse(ref_str)
-    return refdisplay.shortcode_payload(ref, ref_str, url_template=url_template)
+    return refdisplay.shortcode_payload(ref, ref_str, url_template=url_template, token=token)

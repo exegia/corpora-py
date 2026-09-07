@@ -159,6 +159,8 @@ Node ↔ `corpus@version/Sec:...!otypeN` strings over stored archives, same one-
 rules are `common.utils.tfref` — see the root CLAUDE.md "Reference identifiers" section. All three routes are reads, so
 `HF_READ_ONLY` does not gate them. Corpus id = archive stem, version = `manifest.yml` `version`; a reference pinning a
 different version is refused (**409**), not silently re-resolved, because positional indices shift between builds.
+Every payload also carries `token`, the compact positional form (`common.utils.refcompact`, `null` for node types
+it cannot encode); `/refs/resolve` accepts a token in place of a reference string. See `docs/architecture/reference-forms.md`.
 
 ## Docling ingestion (`ingest_api.py`)
 

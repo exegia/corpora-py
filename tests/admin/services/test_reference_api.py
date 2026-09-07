@@ -199,3 +199,33 @@ def test_shortcode_unknown_library_corpus_is_404(client):
         client.get("/refs/shortcode", params={"ref": "bhsa@2021/Deut:4:2!clause1"}).status_code
         == 404
     )
+
+
+# ── compact token (serialization of the same node) ─────────────────────────────
+
+
+def test_create_and_resolve_carry_compact_token(client):
+    created = client.post("/refs", json={"corpus": "mini", "node": 39}).json()
+    assert created["token"] == "comini_bk001_pa003"
+    resolved = client.get("/refs/resolve", params={"ref": "comini_bk001_pa003"}).json()
+    assert resolved["node"] == 39 and resolved["ref"] == "mini@2.3.0/mini!paragraph3"
+    assert (
+        resolved["input"] == "comini_bk001_pa003" and resolved["corpus"]["title"] == "Mini Corpus"
+    )
+    rng = client.get("/refs/resolve", params={"ref": "comini_bk001_wo002-004"}).json()
+    assert rng["nodes"] == [2, 3, 4] and rng["ref"] == "mini@2.3.0/mini!word2-4"
+
+
+def test_shortcode_includes_token(client):
+    body = client.get("/refs/shortcode", params={"ref": "mini/mini!word3"}).json()
+    assert body["token"] == "comini_bk001_wo003"
+    body = client.get("/refs/shortcode", params={"ref": "comini_bk001_wo003"}).json()
+    assert body["ref"] == "mini@2.3.0/mini!word3" and body["label"] == "mini · word 3"
+
+
+def test_compact_token_errors(client):
+    assert client.get("/refs/resolve", params={"ref": "comini_bk001_pa099"}).status_code == 404
+    assert (
+        client.get("/refs/resolve", params={"ref": "comini_bk001_bk001"}).status_code == 400
+    )
+    assert client.get("/refs/resolve", params={"ref": "coabsent_bk001"}).status_code == 404

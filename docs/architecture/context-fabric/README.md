@@ -43,7 +43,8 @@ aligned-with). Everything source-specific survives losslessly in a namespaced `e
 | [06-queries-and-storage.md](06-queries-and-storage.md) | H, I | Query patterns, hierarchy-storage evaluation, PostgreSQL DDL (ltree), worked SQL |
 | [07-migration-mapping.md](07-migration-mapping.md) | grounding | Exact mapping from today's `Unit`/Text-Fabric/`.corpus` pipeline; phased adoption plan |
 | [08-invariants-and-versioning.md](08-invariants-and-versioning.md) | K | Invariants, failure cases, schema/parser versioning, compatibility guarantees |
-| [../inter-corpus-refs.md](../inter-corpus-refs.md) | draft | Compact positional address (`co0001_bk001_ch001_pa001…`) for cross-corpus pointers; how it relates to canonical References |
+| [../inter-corpus-refs.md](../inter-corpus-refs.md) | accepted-with-amendments | Compact positional address (`cobhsa_bk001_ch001_pa001…`) as a serialization of a resolved reference; how it relates to canonical References |
+| [../reference-forms.md](../reference-forms.md) | accepted | Decision: the tfref short form (`bhsa@2021/Deut:4:2!clause1`) is the UI's citation string; compact token = serialization; canonical Reference = future edition-independent address |
 
 ## Machine-readable schemas
 

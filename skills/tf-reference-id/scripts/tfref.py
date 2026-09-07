@@ -524,6 +524,9 @@ class DirAdapter(Adapter):
             f = line.split("\t")
             if len(f) >= 2 and _SPEC_RE.match(f[0]):
                 nodes, spec = _spans(f[0]), f[1]
+                # TF semantics: an explicit node spec moves the implicit
+                # cursor past it, so the next bare line is node max+1.
+                cursor = max(b for _, b in nodes) + 1
             else:
                 nodes, spec = [(cursor, cursor)], f[0]
                 cursor += 1

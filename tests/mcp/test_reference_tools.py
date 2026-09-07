@@ -88,3 +88,11 @@ def test_reference_shortcode_from_node_and_from_foreign_ref():
     assert (
         foreign["label"] == "Deut 4:2 · clause 1" and foreign["ref"] == "bhsa@2021/Deut:4:2!clause1"
     )
+
+
+def test_reference_tools_round_trip_compact_token():
+    created = _call("reference_create", {"node": 16})
+    assert created["token"] == "comobydick_bk001_ch001_pa002_cl001"
+    resolved = _call("reference_resolve", {"ref": "comobydick_bk001_ch001_pa002_cl001"})
+    assert resolved["node"] == 16 and resolved["ref"] == created["ref"]
+    assert _call("reference_shortcode", {"ref": "comobydick_bk001_pa003"})["label"].endswith("2:1")

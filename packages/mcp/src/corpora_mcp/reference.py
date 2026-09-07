@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from common.utils import refdisplay, tfref
+from common.utils import refcompact, refdisplay, tfref
 from common.utils.tfref import Adapter
 from fastmcp.exceptions import ToolError
 
@@ -67,6 +67,13 @@ def _adapter(corpus: str | None) -> tuple[str, Adapter, dict[str, Any], dict[str
     return name, adapter, manifest, toc
 
 
+def _token(target: int | list[int], adapter: Adapter, corpus_id: str) -> str | None:
+    try:
+        return refcompact.to_compact(target, adapter, corpus_id)
+    except tfref.RefError:
+        return None
+
+
 def _payload(
     name: str,
     adapter: Adapter,
@@ -86,6 +93,7 @@ def _payload(
     return {
         "ref": ref_str,
         "urn": ref.urn(),
+        "token": _token([first, last] if first != last else first, adapter, name),
         "node": first,
         "nodes": nodes if isinstance(nodes, list) else [nodes],
         "is_range": isinstance(nodes, list) and len(nodes) > 1,
@@ -116,6 +124,20 @@ def create_reference(
 def resolve_reference(
     ref_str: str, corpus: str | None = None, lang: str | None = None
 ) -> dict[str, Any]:
+    if refcompact.is_compact(ref_str):
+        slug = refcompact.slug_of(ref_str)
+        target = corpus or next(
+            (n for n in corpus_manager.list_corpora() if refcompact.corpus_slug(n) == slug), None
+        )
+        _, nodes_c = refcompact.from_compact(ref_str, _adapter(target)[1])
+        created = create_reference(
+            nodes_c[0] if isinstance(nodes_c, list) else nodes_c,
+            nodes_c[-1] if isinstance(nodes_c, list) else None,
+            target,
+            lang,
+        )
+        created["input"] = ref_str
+        return created
     ref = tfref.parse(ref_str)
     target = corpus or ref.corpus
     if target is not None and target not in corpus_manager.list_corpora():
@@ -147,17 +169,22 @@ def shortcode(
     corpus: str | None = None,
     url_template: str | None = None,
 ) -> dict[str, Any]:
+    token: str | None = None
     if ref_str is None:
         if node is None:
             raise tfref.ParseError("shortcode needs either a reference or a node")
-        ref_str = create_reference(node, end_node, corpus)["ref"]
+        created = create_reference(node, end_node, corpus)
+        ref_str, token = created["ref"], created["token"]
     else:
         try:
-            ref_str = resolve_reference(ref_str, corpus)["ref"]
+            resolved = resolve_reference(ref_str, corpus)
+            ref_str, token = resolved["ref"], resolved["token"]
         except tfref.SectionNotFound:
             # Foreign or unloaded corpus: present the string as given.
             pass
-    return refdisplay.shortcode_payload(tfref.parse(ref_str), ref_str, url_template=url_template)
+    return refdisplay.shortcode_payload(
+        tfref.parse(ref_str), ref_str, url_template=url_template, token=token
+    )
 
 
 def _guard(fn, *args, **kwargs) -> str:

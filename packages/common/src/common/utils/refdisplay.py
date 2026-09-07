@@ -89,14 +89,22 @@ def sections_dict(adapter: Adapter, sections: tuple[Any, ...]) -> dict[str, Any]
     return {level: value for level, value in zip(adapter.section_types, typed, strict=False)}
 
 
-def shortcode_payload(ref: Ref, ref_str: str, *, url_template: str | None = None) -> dict[str, Any]:
-    """Everything a UI needs to render/copy/share one reference."""
+def shortcode_payload(
+    ref: Ref, ref_str: str, *, url_template: str | None = None, token: str | None = None
+) -> dict[str, Any]:
+    """Everything a UI needs to render/copy/share one reference.
+
+    `token` is the compact positional serialization (`common.utils.refcompact`)
+    when the caller resolved the reference against its corpus; None for a
+    foreign reference that was only formatted.
+    """
     label = label_for(ref)
     url = share_url(ref_str, url_template)
     urn = ref.urn() if ref.corpus else None
     return {
         "ref": ref_str,
         "urn": urn,
+        "token": token,
         "label": label,
         "compact": compact_for(ref),
         "url": url,

@@ -279,9 +279,11 @@ a clause spilling into the next verse is counted once). `@version` is optional o
 - **`corpora_mcp.reference`** (`reference_create` / `reference_resolve` / `reference_shortcode`) — the same over
   `CorpusManager` corpora in a standalone `cf-mcp`; corpus id = the loaded name, metadata from a `manifest.yml` beside
   or above the dataset dir when present.
-- The older positional spec in `docs/architecture/inter-corpus-refs.md` (`co0001_bk001_…`) and the canonical scheme in
-  `docs/architecture/context-fabric/03-references.md` are **not** implemented by this; `refdisplay`'s two-letter level
-  tags reuse its vocabulary so a UI can show both.
+- **`common.utils.refcompact`** — the compact positional token of `docs/architecture/inter-corpus-refs.md`
+  (`cobhsa_bk005_ch004_pa002_cl001`) as a *serialization* of a resolved node: emitted as `token` on every `/refs`
+  payload, accepted by `/refs/resolve`. Not a citation — `docs/architecture/reference-forms.md` records the decision:
+  tfref short form = the UI's canonical citation string; compact token = serialization; the canonical Reference of
+  `context-fabric/03-references.md` = future edition-independent address (no resolver in the repo yet).
 
 Agent skills checked into the repo live under `skills/` (`skills/tf-reference-id` is the first); `skills-lock.json`
 tracks the externally sourced ones only.
