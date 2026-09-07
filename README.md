@@ -1,186 +1,125 @@
-# Corpora Platform — Python Backend
+<div align="center">
 
-> Graph-based biblical and religious text study platform — powered by Context-Fabric, Supabase, and FastMCP.
+# corpora-py
 
----
+[![CI](https://img.shields.io/github/actions/workflow/status/exegia/corpora-py/pr.yml?branch=dev&label=ci)](https://github.com/exegia/corpora-py/actions/workflows/pr.yml)
+[![PyPI](https://img.shields.io/pypi/v/corpora-py)](https://pypi.org/project/corpora-py/)
+[![Python](https://img.shields.io/pypi/pyversions/corpora-py)](https://pypi.org/project/corpora-py/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## What is this?
+**📚 Turn any book into a queryable text graph — then let an AI read it with you.**
 
-A Python backend for studying annotated religious texts (Bible, Quran, Tanakh, commentaries, lexicons). It exposes
-corpus data and conversion tooling through a combined FastAPI app:
+One process serves an MCP server, a document→corpus conversion pipeline, and a
+citation resolver over every [Context-Fabric](https://context-fabric.ai) corpus you own.
 
-| Surface                         | Technology                | Use case                                                                                         |
-|---------------------------------|---------------------------|--------------------------------------------------------------------------------------------------|
-| **MCP server** (`/mcp`)         | FastMCP                   | AI assistants (Claude, GPT, etc.)                                                                |
-| **Conversion API** (`/convert`) | FastAPI + background jobs | Upload EPUB/HTML/PDF/TEI/plain-text documents and convert them to Text-Fabric/`.corpus` archives |
+[Quick start](#-quick-start) · [MCP tools](#-mcp-tools) · [References](#-reference-identifiers) · [Architecture](docs/architecture/context-fabric/README.md) · [Workflow](.github/WORKFLOW.md)
 
-Corpora are loaded from [Context-Fabric](https://context-fabric.ai) — a graph-based annotated text engine. Every word,
-verse, chapter, and book is a typed node in a graph with queryable features (lemma, morphology, gloss, etc.).
-
----
-
-## Workspace packages
-
-This repo is a **uv workspace** of three published packages plus an umbrella:
-
-| PyPI package     | Source                          | Purpose                                                           |
-|------------------|---------------------------------|-------------------------------------------------------------------|
-| `corpora-common` | `packages/common/src/common/`   | Settings, logging, shared utilities                               |
-| `corpora-mcp`    | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI                                     |
-| `corpora-admin`  | `packages/admin/src/admin/`     | EPUB/HTML/PDF/TEI → Text-Fabric converters + conversion HTTP API  |
-| `corpora-py`     | `src/corpora_py/` (umbrella)    | Installs all three + the combined FastAPI app (`corpora-api` CLI) |
-
-| Module               | Purpose                                                               |
-|----------------------|-----------------------------------------------------------------------|
-| `corpora_mcp.server` | FastMCP server — 11 corpus tools for AI clients                       |
-| `corpora_mcp.corpus` | `CorpusManager` — loads/holds Text-Fabric corpora at runtime          |
-| `admin.parsers`      | Format parsers (EPUB/HTML/XML/TEI/PDF/plain) → shared schema          |
-| `admin.converters`   | Parsed documents → Text-Fabric → `.cfm` → `.corpus`                   |
-| `admin.services`     | FastAPI router + job manager for `POST/GET /convert`                  |
-| `common.utils`       | Settings (`pydantic-settings`), logging, SSL/cert helpers             |
-| `corpora_py.app`     | Combines the MCP server and admin conversion API into one FastAPI app |
-
-> **Note:** earlier drafts of this README described `shared.auth`/`shared.models`/`shared.schemas`/`shared.corpus`
-> (git-based dataset fetching, Supabase auth, Pydantic schemas). Those modules do not exist in the current `common`
-> package (it currently only has `common.utils`) — they were either not carried over during the `shared`→`common`
-> consolidation or are still on a roadmap. Don't rely on them until they reappear in `packages/common/src/common/`.
+</div>
 
 ---
 
-## Tech stack
+## Overview
 
-- **Python 3.13+** with [uv](https://docs.astral.sh/uv/) for dependency management
-- **FastMCP 2** — MCP server for AI clients
-- **Context-Fabric** (`cfabric`) — graph corpus engine (fork of Text-Fabric)
+Feed it an EPUB, a PDF, a TEI edition or a Text-Fabric dataset; get back a
+`.corpus` archive whose every word, clause, verse and chapter is a typed node in
+a queryable graph. Then read it, search it, cite it, and hand it to Claude —
+over HTTP or over the Model Context Protocol, from the same process.
+
+```
+EPUB · HTML · XML · TEI · PDF · text · .tf zip
+        │
+        ▼  POST /convert            (background job)
+   Text-Fabric  →  .cfm cache  →  .corpus archive
+        │                              │
+        ▼  /mcp (30 tools)             ▼  /storage (Hugging Face Hub or Supabase)
+   AI clients                     /refs · /convert/{id}/… · /validate
+```
+
+| Surface | Path | What it does |
+|---|---|---|
+| **MCP server** | `/mcp` | 30 tools for AI clients (Claude Desktop, browser agents, …) |
+| **Conversion** | `/convert` | Upload a document → background job → `.corpus`, plus a per-job read/annotate/version layer |
+| **Ingestion** | `/ingest` | Docling → Context Fabric v1 canonical `graph.json` (needs the `docling` extra) |
+| **Validation** | `/validate` | Confirm a dataset round-trips `.tf → .cfm → mmap` before you trust it |
+| **Storage** | `/storage` | Publish/list/read `.corpus` archives on the Hub, with manifest + annotation edits and version history |
+| **References** | `/refs` | `bhsa@2021/Deut:4:2!clause1` ⇄ node, plus label/pill/share-URL bundles |
+| **AI curation** | `/ai` | ⏳ Contract-first stub — every route answers `501` until [#214](https://github.com/exegia/corpora-py/issues/214) lands |
+| **Health** | `/health`, `/capabilities` | Liveness, and what this deployment lets a client actually do |
 
 ---
 
-## Getting started
-
-### Prerequisites
-
-- [uv](https://docs.astral.sh/uv/) ≥ 0.9
-- Python 3.13
-
-### Install (development)
+## 🚀 Quick start
 
 ```bash
-git clone <repo-url>
-cd corpora-py
-uv run scripts/setup.py
+pip install corpora-py     # or: uv add corpora-py
+corpora-api                # MCP + conversion + storage + refs on :8000
 ```
-
-### Install a specific package
 
 ```bash
-# MCP server only (lightweight)
-pip install corpora-mcp
-
-# Admin / conversion tools (includes text-fabric)
-pip install corpora-admin
-
-# Everything, including the combined FastAPI app (`corpora-api` CLI)
-pip install corpora-py
+# Convert a book (auth off for a local trial run)
+AUTH_REQUIRED=false corpora-api &
+curl -F 'file=@commentary.epub' localhost:8000/convert          # → {"job_id": "..."}
+curl localhost:8000/convert/<job_id>                            # → status
+curl -O -J localhost:8000/convert/<job_id>/download             # → commentary.corpus
 ```
 
-### Environment
+Or point an MCP client straight at a Text-Fabric dataset on disk, with no HTTP
+app at all:
 
 ```bash
-cp .env.example .env.development
-# Fill in PROJECT_REF, SUPABASE_SECRET_KEY, etc.
+cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA        # stdio, for Claude Desktop
+cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA --sse 8000   # or --http 8000
+cf-mcp --corpus …/BHSA --name BHSA --corpus …/GNT --name GNT    # several at once
 ```
+
+### Development install
+
+```bash
+git clone https://github.com/exegia/corpora-py && cd corpora-py
+make setup          # uv sync + dotenvx + example deps + embedded Python
+make test           # 719 tests
+make ci             # what a PR runs: sync + lint-check + test
+make help           # every other target
+```
+
+> **Only `corpora-py` is published to PyPI.** Its wheel bundles the source of
+> `corpora-common`, `corpora-mcp` and `corpora-admin`, so `pip install corpora-mcp`
+> (or `-admin`, or `-common`) is intentionally not a thing — install `corpora-py`
+> and import `corpora_mcp` / `admin` / `common` from it. The three stay separate
+> workspace members for local dev and independent builds.
 
 ---
 
-## Combined FastAPI app
+## 🧰 MCP tools
 
-`corpora-api` runs a single FastAPI app that serves both the MCP server and the admin conversion API from one process
-(`src/corpora_py/app.py`):
+The combined app registers **30 tools**; a public read-only deployment
+(`HF_READ_ONLY=true`) registers **26**, because the four write tools are never
+registered rather than left to fail. A standalone `cf-mcp` process registers the
+**15** that need no admin/Hub dependency.
 
-```bash
-uv run corpora-api
-# MCP:        http://127.0.0.1:8000/mcp
-# Conversion: http://127.0.0.1:8000/convert
-# Health:     http://127.0.0.1:8000/health
-```
+| Category | Tools | `cf-mcp` |
+|---|---|:---:|
+| **Discovery** | `list_corpora` · `describe_corpus` · `list_features` · `describe_feature` · `get_text_formats` | ✅ |
+| **Search** | `search` · `search_continue` · `search_csv` · `search_syntax_guide` | ✅ |
+| **Read** | `get_passages` · `get_node_features` | ✅ |
+| **Validate** | `validate_corpus` | ✅ |
+| **References** | `reference_create` · `reference_resolve` · `reference_shortcode` | ✅ |
+| **Hub storage** | `storage_list_corpora` · `storage_corpus_info` · `storage_download_corpus` · `storage_upload_corpus`\* · `storage_delete_corpus`\* | — |
+| **Stored corpus detail** | `corpus_sections` · `corpus_index` · `corpus_content` · `corpus_node_get` · `corpus_manifest_get` · `corpus_manifest_update`\* · `corpus_node_annotate`\* | — |
+| **Stored corpus refs** | `corpus_reference_create` · `corpus_reference_resolve` · `corpus_reference_shortcode` | — |
 
-Uploading a document to `/convert` starts a background conversion job (parse → Text-Fabric → `.cfm` → `.corpus`) and
-returns immediately with a job id; poll `GET /convert/{job_id}` or open `/convert/{job_id}/ws` for status. See
-`packages/admin/src/admin/services/api.py` for the full endpoint list and why conversion is job-based rather than
-synchronous (large documents like a full Bible can take minutes and pin a CPU core).
+\* Write tools — skipped entirely when `HF_READ_ONLY=true`.
 
-**Auth:** every path except `/health`/`/`/docs requires a Supabase JWT —
-`Authorization: Bearer <token>` for HTTP, `?token=<token>` for the WebSocket (browser/webview `WebSocket` clients can't
-set custom headers). Enforced by default (this runs as a locally-reachable sidecar, not just a dev tool); set
-`AUTH_REQUIRED=false` to disable for local development. See
-`src/corpora_py/auth.py` and the root `CLAUDE.md`'s "Auth" section.
-
----
-
-## MCP server
-
-The MCP server lets AI assistants query corpora directly via
-the [Model Context Protocol](https://modelcontextprotocol.io). It can run standalone (`cf-mcp`, below) or mounted inside
-the combined app (`corpora-api`, above) at `/mcp`.
-
-### Start the server
-
-```bash
-# stdio — for Claude Desktop and other MCP clients
-uv run cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA
-
-# SSE on port 8000 — for remote / desktop app connections
-uv run cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA --sse 8000
-
-# Multiple corpora at once
-uv run cf-mcp \
-  --corpus ~/.exegia/datasets/bibles/BHSA --name BHSA \
-  --corpus ~/.exegia/datasets/bibles/GNT  --name GNT
-```
-
-### Docker
-
-```bash
-# Build and run the MCP-only container (no admin/text-fabric weight)
-docker build -f dockerfiles/Dockerfile.client -t corpora-mcp .
-docker run -p 8000:8000 \
-  -v ~/.exegia/datasets:/data/datasets:ro \
-  corpora-mcp \
-  cf-mcp --corpus /data/datasets/BHSA --name BHSA --sse 8000
-
-# Or run the combined app (MCP + conversion API) via the umbrella image
-docker build -f dockerfiles/Dockerfile -t corpora-py .
-docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro corpora-py
-
-# Or with Docker Compose (see dockerfiles/docker-compose.yml)
-docker compose -f dockerfiles/docker-compose.yml up corpora
-```
-
-### Available tools (11)
-
-| Category  | Tool                  | Description                                              |
-|-----------|-----------------------|----------------------------------------------------------|
-| Discovery | `list_corpora`        | List loaded corpora and the active one                   |
-| Discovery | `describe_corpus`     | Node types with counts, section hierarchy                |
-| Discovery | `list_features`       | Browse features, filter by node type                     |
-| Discovery | `describe_feature`    | Metadata + top values by frequency                       |
-| Discovery | `get_text_formats`    | Available text encodings with samples                    |
-| Search    | `search`              | Pattern search — results / count / statistics / passages |
-| Search    | `search_continue`     | Paginate large result sets via cursor                    |
-| Search    | `search_csv`          | Export results to a local CSV file                       |
-| Search    | `search_syntax_guide` | Inline query syntax documentation                        |
-| Data      | `get_passages`        | Retrieve text by section reference                       |
-| Data      | `get_node_features`   | Batch feature lookup for a list of nodes                 |
-
-### Recommended workflow for AI agents
+### Recommended agent workflow
 
 ```
-describe_corpus()           → understand what node types exist
-list_features()             → see what annotations are available
+describe_corpus()           → what node types exist
+list_features()             → what annotations are available
 search_syntax_guide()       → learn the query language
-search(template, "count")   → check scale before fetching results
-search(template, "results") → get paginated result set
+search(template, "count")   → check scale before fetching
+search(template, "results") → paginated result set
 get_passages(references)    → read the matched text
+reference_create(node)      → a citation someone can store and resolve later
 ```
 
 ### Programmatic use
@@ -195,131 +134,201 @@ mcp.run(transport="sse", host="localhost", port=8000)
 
 ---
 
-## Corpus datasets
+## 🔗 Reference identifiers
 
-Datasets are Text-Fabric archives extracted locally under `~/.exegia/datasets/`. There is currently no built-in
-git-fetch helper for datasets in this repo (an earlier draft of this README described one at `shared.corpus`, which no
-longer exists post-refactor) — datasets are expected to already be on disk when passed to `CorpusManager.load()` /
-`cf-mcp --corpus`.
+One schema-agnostic grammar cites any node in any corpus — book/chapter/verse and
+volume/chapter/paragraph alike, because the section path is whatever the corpus
+declares in `T.sectionTypes`:
+
+```
+[corpus[@version]/]Sec1[:Sec2…][!<otype><i>[-<j>]]      bhsa@2021/Deut:4:2!clause1
+urn:tf:<corpus>[@version]:Sec1[:Sec2…][!…]              urn:tf:kjv:Gen:1:1
+                                                         mobydick@1.0/Moby-Dick:3!word12
+```
+
+```bash
+curl 'localhost:8000/refs/resolve?ref=bhsa@2021/Deut:4:2!clause1'
+# → node + section path + corpus metadata + a compact `token` serialization
+```
+
+Two rules make it deterministic: a node is addressed from the section holding
+its **first slot** (so a clause spilling into the next verse is counted once),
+and `@version` is optional on input but always emitted on output — a pinned
+version that isn't loaded gets a `409` rather than a wrong node.
+
+- `common.utils.tfref` — grammar + resolution (byte-identical to
+  [`skills/tf-reference-id/scripts/tfref.py`](skills/tf-reference-id); edit one, copy the other)
+- `common.utils.refdisplay` — label (`Deut 4:2 · clause 1`), pill (`Deut 4:2 cl1`), share URL
+- `common.utils.refcompact` — the compact positional token (`cobhsa_bk005_ch004_pa002_cl001`)
+  as a *serialization*, not a second citation form
+- Decision record: [docs/architecture/reference-forms.md](docs/architecture/reference-forms.md)
 
 ---
 
-## Importing books (EPUB / HTML / PDF / TEI / plain text)
+## 📦 Converting documents
 
-Documents can be converted into Text-Fabric datasets (and packaged as
-`.corpus` archives) either via the HTTP API (`POST /convert`, see "Combined FastAPI app" above — the recommended path
-for large documents) or directly in Python:
+| Format | Parser | Converter | Notes |
+|---|---|---|---|
+| EPUB | `EpubParser` | `convert_epub_to_tf` | one `chapter` per spine document |
+| HTML | `HtmlParser` | `convert_html_to_tf` | one `document` node wrapping top-level elements |
+| XML | `XmlParser` | `convert_xml_to_tf` | generic element tree |
+| TEI | `TeiParser` | `convert_tei_to_tf` | one node per top-level `<div>` |
+| TEI (zip) | `TeiParser` | `convert_tei_zip_to_tf` | multi-file TEI editions |
+| PDF | `PdfParser` | `convert_pdf_to_tf` | one `page` node per page |
+| Plain text | `PlainTextParser` | `convert_text_to_tf` | one `paragraph` per blank-line block |
+| Text-Fabric zip | — | `convert_tf_zip_to_tf` | re-package an existing `.tf` dataset |
 
-```bash
-pip install corpora-admin
-```
+Over HTTP (recommended for anything large — a full Bible pins a core for
+minutes, which is why `/convert` is job-based) or directly in Python:
 
 ```python
-from admin.converters import convert_epub_to_tf
-from admin.converters.convert_to_corpus import convert_to_corpus
+from admin.converters import CONVERTERS, convert_to_corpus
+from admin.parsers import SourceFormat
 
-tf_dir = convert_epub_to_tf("commentary.epub", "~/.exegia/datasets/books/my-commentary/tf")
-convert_to_corpus(tf_dir, "my-commentary.corpus", name="MyCommentary")
+tf_dir = CONVERTERS[SourceFormat.EPUB]("commentary.epub", "out/commentary.tf")
+convert_to_corpus(tf_dir, "commentary.corpus", name="MyCommentary", language_code="en")
 ```
 
-The converter produces this node hierarchy:
-
-```
-book
-  chapter          (EPUB spine item / page)
-    element        (block HTML element)
-      paragraph    (paragraph-like elements)
-        word       (slot — smallest unit)
-```
-
-The output directory is a valid TF dataset, loadable by the MCP server:
-
-```bash
-uv run cf-mcp --corpus ~/.exegia/datasets/books/my-commentary
-```
+Once a job succeeds, its result is readable *before* you publish it —
+`/convert/{id}/sections`, `/index`, `/content`, `/nodes/{n}`, `/manifest` — and
+editable, with `/versions`, `/diff` and `/restore` over the archive's own git
+history. The same surface exists for published archives under
+`/storage/{filename}/…`. See [`packages/admin/README.md`](packages/admin/README.md).
 
 ---
 
-## Development
+## ⚙️ Configuration
 
-### Run tests
+`pydantic-settings` loads `.env.{ENVIRONMENT}` (default `.env.development`),
+resolved at import time by `common/utils/constant.py`. `.env.*` files are
+encrypted with `dotenvx` — use `dotenvx run -- <cmd>` outside `uv run`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AUTH_REQUIRED` | `true` | Require a Supabase JWT on every path but `/health`, `/capabilities`, `/`, docs |
+| `PROJECT_REF` / `SUPABASE_JWKS_URL` | — | Where to fetch the JWKS that verifies those tokens |
+| `HF_READ_ONLY` | `false` | Refuse every Hub write (403 on REST, write MCP tools unregistered) |
+| `HF_STORAGE_REPO` / `HF_TOKEN` | — | Hub repo backing `/storage`, and its token |
+| `STORAGE_BACKEND` | `huggingface` | `supabase` swaps the library backend |
+| `JOB_STORE` | `memory` | `supabase` shares conversion-job state across instances |
+| `REFERENCE_URL_TEMPLATE` | `/refs/resolve?ref={ref}` | Share-link shape for reference pills |
+
+### Auth
+
+Every path except `/health`, `/capabilities`, `/` and the docs requires
+`Authorization: Bearer <supabase-jwt>` — or `?token=` for the
+`/convert/{id}/ws` WebSocket, since browser `WebSocket` clients can't set
+headers. It's a raw ASGI middleware (`corpora_py.auth.AuthMiddleware`), not a
+`Depends`, because `Depends` never sees the mounted `/mcp` sub-app or WebSocket
+scopes. With `AUTH_REQUIRED=true` and no JWKS configured, requests fail
+**closed** (401), not open.
+
+`HF_READ_ONLY` is deliberately decoupled from `AUTH_REQUIRED`: a public demo
+runs `AUTH_REQUIRED=false` **and** `HF_READ_ONLY=true`, so anonymous visitors
+convert, read and query while the Hub stays untouchable. Local dev stays fully
+writable.
+
+---
+
+## 🐳 Docker
 
 ```bash
-uv run pytest
+# Combined app (MCP + conversion + storage + refs)
+docker build -f dockerfiles/Dockerfile -t corpora-py .
+docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro corpora-py
+
+# MCP only — no text-fabric/admin weight
+docker build -f dockerfiles/Dockerfile.client -t corpora-mcp .
+docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro \
+  corpora-mcp cf-mcp --corpus /data/datasets/BHSA --name BHSA --sse 8000
+
+# Or Compose
+docker compose -f dockerfiles/docker-compose.yml up corpora
 ```
 
-### Build wheels
+The app also deploys to Vercel Functions (Python runtime) — see the root
+`CLAUDE.md` for the bundle-size rules, and note that long conversions there hit
+the function timeout, which is what the container image is for.
 
-```bash
-# Individual workspace packages
-uv build --package corpora-common --wheel --out-dir dist/
-uv build --package corpora-mcp    --wheel --out-dir dist/
-uv build --package corpora-admin  --wheel --out-dir dist/
+---
 
-# Bump version + publish to PyPI
-uv run scripts/publish.py          # bump patch, commit, tag, push
-uv run scripts/publish.py minor    # bump minor
-uv run scripts/publish.py 1.2.3    # explicit version
-```
+## 🧱 Workspace
 
-### Project layout
+A **uv workspace** of three packages plus an umbrella:
+
+| Package | Source | Purpose |
+|---|---|---|
+| `corpora-common` | `packages/common/src/common/` | Settings, logging, JWT verification, reference grammar, Context Fabric JSON Schemas |
+| `corpora-mcp` | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI + `CorpusManager` |
+| `corpora-admin` | `packages/admin/src/admin/` | Parsers, converters, ingestion, and every HTTP/MCP admin surface |
+| `corpora-py` | `src/corpora_py/` | Umbrella: combines the above into one FastAPI app (`corpora-api`) |
+
+`corpora_mcp` is *not* importable as `mcp` — that name belongs to the official
+MCP SDK that `fastmcp` itself depends on.
+
+> **Not in `common`, despite older docs:** there is no `common.auth`, no Supabase
+> *client*, no git-based dataset fetcher, and no `common.models` / `common.schemas`
+> module. `common` has `utils/` (settings, logging, `jwt_auth`, `tfref`,
+> `refdisplay`, `refcompact`, request context) and `schemas/` (the Context Fabric
+> v1 JSON Schemas). Supabase appears as a JWT *issuer*, plus two opt-in
+> server-side backends (`STORAGE_BACKEND`, `JOB_STORE`) that talk REST — not via
+> the `supabase` SDK. Don't write code assuming the older modules exist.
 
 ```
 corpora-py/
-├── pyproject.toml          # Workspace root + umbrella package (corpora-py), corpora-api/cf-mcp entry points
-├── uv.lock
+├── pyproject.toml              # workspace root + umbrella; corpora-api / cf-mcp entry points
+├── makefile                    # every CI step is a target (make help)
+├── bin/                        # the shell scripts those targets call
 ├── packages/
-│   ├── common/             # corpora-common
-│   │   └── src/common/     #   utils/ (settings, logging, SSL cert helpers)
-│   ├── mcp/                # corpora-mcp
-│   │   └── src/corpora_mcp/ #  FastMCP server (server.py), CorpusManager (corpus.py), cf-mcp entrypoint
-│   └── admin/              # corpora-admin
-│       └── src/admin/
-│           ├── parsers/     #   source format → shared Document/Unit schema
-│           ├── converters/  #   Document/Unit → Text-Fabric → .cfm → .corpus
-│           └── services/    #   FastAPI router + WebSocket + job manager for /convert
-├── src/
-│   └── corpora_py/         # Umbrella module — combined FastAPI app (app.py) + corpora-api entrypoint
-├── scripts/
-│   ├── setup.py            # Install deps + dotenvx + example runtime
-│   ├── clean.py            # Remove caches and build artifacts
-│   ├── publish.py          # Bump version + build + publish helper
-│   └── build/              # Sidecar/example Python bundling scripts
-├── dockerfiles/
-│   ├── Dockerfile          # Combined app image (MCP + conversion API), corpora-py
-│   ├── Dockerfile.client   # MCP-only image, corpora-mcp
-│   ├── Dockerfile.admin    # Admin/converter-only image, corpora-admin
-│   └── docker-compose.yml
-└── .github/
-    └── workflows/            # test/build/publish/docker CI (see .github/WORKFLOW.md)
+│   ├── common/src/common/      # utils/ + schemas/context_fabric/v1/
+│   ├── mcp/src/corpora_mcp/    # server.py · corpus.py · reference.py · validate.py
+│   └── admin/src/admin/
+│       ├── parsers/            # source format → shared Document/Unit schema
+│       ├── converters/         # Document/Unit → Text-Fabric → .cfm → .corpus
+│       ├── ingest/             # Docling → Context Fabric v1 graph
+│       └── services/           # /convert /ingest /validate /storage /refs + MCP twins
+├── src/corpora_py/             # app.py · auth.py · ai/ (501 stub) · bridge.py
+├── skills/tf-reference-id/     # the reference grammar as an agent skill
+├── docs/architecture/          # Context Fabric v1 spec series + decision records
+├── example/                    # React Router 8 + Electrobun demo app (see example/README.md)
+├── supabase/migrations/        # tables for the optional Supabase job store / storage
+└── dockerfiles/                # combined · MCP-only · admin-only images
 ```
 
-## Branching, CI, and releases
+---
 
-Same model as [corpora-web](https://github.com/exegia/corpora-web): this repo
-is a **package** (PyPI + sidecars hang off the `vX.Y.Z` tag) that also deploys
-to Vercel production from `main` via Git integration. Full details:
-[`.github/WORKFLOW.md`](.github/WORKFLOW.md).
+## 🔀 Branching, CI, and releases
+
+Full details in [`.github/WORKFLOW.md`](.github/WORKFLOW.md).
 
 ```
 feat/add-parser ──PR──> dev ──(daily/manual)──> next ──cut──> release/vX.Y.Z ──PR──> main
-                   (deleted on merge)         (preview)                    (tag + PyPI)
+                  (deleted on merge)          (preview)                      (tag + PyPI)
 ```
 
 | Flow | What happens |
-| --- | --- |
-| `<type>/<slug>` → PR to `dev` | `guard` (branch name + conventional-commit PR title), `check` (lint, typecheck, test), and an AI review once the PR is ready for review |
-| **Promote to next** (22:00 UTC or manual) | Opens `dev` → `next` with a version from line-count churn (`< 100` patch, `100–999` minor, `≥ 1000` major) and auto-merges after CI |
-| Push to `next` | Vercel preview (Git integration); cuts or refreshes `release/vX.Y.Z`; the draft PR into `main` is opened or updated |
-| `release/vX.Y.Z` → PR to `main` | `guard` also asserts `pyproject.toml` matches the branch version; `package` uploads the publishable wheel as an artifact |
-| Release PR merged | Tags `vX.Y.Z`, publishes a GitHub Release (PyPI + sidecars hang off the tag), syncs `main` back into `next` and `dev`, deletes leftover branches |
+|---|---|
+| `<type>/<slug>` → PR to `dev` | `guard` (branch name + conventional-commit PR title), `check` (`make ci`), AI review once ready |
+| **Promote to next** (22:00 UTC or manual) | Opens `dev` → `next`, version classified from churn (`<100` patch, `100–999` minor, `≥1000` major), auto-merges on green |
+| Push to `next` | Vercel preview; cuts/refreshes `release/vX.Y.Z`; opens or updates the draft PR into `main` |
+| `release/vX.Y.Z` → PR to `main` | `guard` also asserts `pyproject.toml` matches the branch version; `package` uploads the wheel |
+| Release PR merged | Tags `vX.Y.Z` → PyPI (OIDC trusted publishing) + sidecar bundles; syncs `main` back into `next` and `dev` |
 
-Exactly one release branch is in flight at a time. `main` takes PRs only from
-`release/vX.Y.Z`; the ruleset requires the `guard`, `check` and `package`
-checks. `dev` and `next` require `guard` and `check`. Branches into `dev` (or
-an in-flight `release/v*`) are `<type>/<slug>`; `next` only accepts `dev`;
-`main` only accepts `release/vX.Y.Z` matching the root `pyproject.toml`
-version.
+Exactly one release branch is in flight at a time. Retitling a red PR does **not**
+re-run the guard (`pr.yml` doesn't fire on `edited`) — close and reopen it.
 
-Every CI step is a `make` target, so anything CI does can be reproduced
-locally — `make ci` is what runs on a PR. `make help` lists the rest.
+---
+
+## Related
+
+- **[exegia/corpora-cli](https://github.com/exegia/corpora-cli)** — the `corpora`
+  terminal CLI + TUI (convert/validate/library), installed from Homebrew:
+  `brew tap exegia/corpora-cli https://github.com/exegia/corpora-cli && brew install corpora`
+- **[`example/`](example/README.md)** — the React Router 8 + Electrobun app that
+  drives this API, deployed at [corpora-py-example.vercel.app](https://corpora-py-example.vercel.app)
+- **[Context Fabric v1 spec](docs/architecture/context-fabric/README.md)** — the
+  canonical content graph these converters are migrating toward
+
+## License
+
+[MIT](LICENSE)
