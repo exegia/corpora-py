@@ -24,7 +24,7 @@ a native desktop app via Electrobun, and a static SPA on the web
 
 ### Prerequisites
 
-- Bun 1.x (or Node.js 18+)
+- Bun 1.x — `bun test`, `bun scripts/clean.ts` and Electrobun all require it
 - A running `corpora-py` backend — from the monorepo root: `uv sync && AUTH_REQUIRED=false uv run corpora-api`
 
 ### Installation

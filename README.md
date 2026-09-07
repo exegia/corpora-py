@@ -51,13 +51,15 @@ EPUB · HTML · XML · TEI · PDF · text · .tf zip
 ## 🚀 Quick start
 
 ```bash
-pip install corpora-py     # or: uv add corpora-py
-corpora-api                # MCP + conversion + storage + refs on :8000
+pip install corpora-py                      # or: uv add corpora-py
+AUTH_REQUIRED=false corpora-api             # MCP + conversion + storage + refs on :8000
 ```
 
+`AUTH_REQUIRED` defaults to **true** and fails *closed* — without a Supabase JWKS
+configured, every path but `/health` answers 401. Turn it off for a local trial
+run (see [Auth](#auth) before exposing the port).
+
 ```bash
-# Convert a book (auth off for a local trial run)
-AUTH_REQUIRED=false corpora-api &
 curl -F 'file=@commentary.epub' localhost:8000/convert          # → {"job_id": "..."}
 curl localhost:8000/convert/<job_id>                            # → status
 curl -O -J localhost:8000/convert/<job_id>/download             # → commentary.corpus
