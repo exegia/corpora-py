@@ -16,7 +16,8 @@ depth, no tradition's vocabulary hard-coded as universal columns.
 
 **Status:** v1.0.0 — adopted as the documentation contract (Phase 1 of
 [07-migration-mapping.md](07-migration-mapping.md)). The machine-readable JSON Schemas are the
-source of truth; these docs explain and motivate them.
+source of truth; these docs explain and motivate them. See
+[Implementation status](#implementation-status) for what the code emits today.
 
 ## The contract in one paragraph
 
@@ -58,7 +59,7 @@ packages/common/src/common/schemas/context_fabric/v1/
   content-node.schema.json      text-fragment.schema.json physical-locator.schema.json
   reference.schema.json         source-asset.schema.json  annotation.schema.json
   relationship.schema.json      api-payloads.schema.json
-  examples/                    # six CI-validated payload fixtures + index.json
+  examples/                    # seven CI-validated payload fixtures + index.json
 ```
 
 - `$id` convention: `https://schemas.exegia.co/context-fabric/v1/<file>` — a stable URI
@@ -66,8 +67,28 @@ packages/common/src/common/schemas/context_fabric/v1/
 - Every entity schema is strict (`unevaluatedProperties: false`) with exactly one extension
   point: the namespaced `ext` object.
 - CI: [tests/common/test_context_fabric_schemas.py](../../../tests/common/test_context_fabric_schemas.py)
-  checks every schema against the 2020-12 metaschema and validates every example fixture
-  against its envelope. Run with `uv run pytest tests/common/test_context_fabric_schemas.py`.
+  checks every schema against the 2020-12 metaschema, validates every example fixture against
+  the envelope `examples/index.json` pins it to, and rejects any fixture not listed there. Run
+  with `uv run pytest tests/common/test_context_fabric_schemas.py`.
+
+## Implementation status
+
+What the repo ships against this spec today, so no reader has to infer it from the docs alone:
+
+| Area | State | Where |
+|---|---|---|
+| JSON Schemas (12 + fixtures) | ✅ shipped, validated in CI | `packages/common/src/common/schemas/context_fabric/v1/` |
+| Graph emission | ✅ Docling → canonical `graph.json`, schema-validated on the way out | `admin.ingest` (`docling_graph.py`, `validation.py`), `POST /ingest` — needs the `docling` extra, 503s without it |
+| Text-Fabric pipeline | ⏳ still `Unit`/Text-Fabric → `.corpus`; migration mapping is Phase 1 documentation only | `admin.parsers` → `admin.converters`, [07-migration-mapping.md](07-migration-mapping.md) |
+| Citation strings | ✅ the tfref short form resolves against every corpus the pipeline produces | `common.utils.tfref` / `refdisplay` / `refcompact`, `/refs`, `reference_*` and `corpus_reference_*` MCP tools |
+| Canonical **Reference** ([03](03-references.md)) | ⏳ specified, **no resolver in this repo** — needs `structureProfile`, `code`/`refOrdinal` and alias registries the converters don't emit yet | — |
+| Storage (ltree DDL of [06](06-queries-and-storage.md)) | ⏳ not provisioned; corpora live as `.corpus` archives | `admin.services.storage` |
+
+The gap between the last two rows is the subject of
+[../reference-forms.md](../reference-forms.md): until the canonical resolver exists, the tfref
+short form is the citation string the UI shows and stores, and the compact positional token is
+its serialization — neither competes with the canonical Reference, which stays the long-term
+edition-independent address.
 
 ## Glossary
 
