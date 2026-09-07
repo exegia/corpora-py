@@ -30,6 +30,11 @@ Layout:
                    delete, backed by `HF_STORAGE_REPO`. Shares its implementation
                    with the `storage_*` MCP tools (`admin.services.storage_mcp`),
                    registered onto the MCP server below.
+    /refs/*     -- reference identifiers (`admin.services.reference_api`):
+                   node -> `corpus@version/Sec:...!otypeN` string, string ->
+                   node(s) + corpus metadata, and the label/pill/share-URL
+                   bundle for UI. Same implementation as the
+                   `corpus_reference_*` MCP tools (`admin.services.reference_mcp`).
     /ai/*       -- AI curation surface (`corpora_py.ai`): scoped chat,
                    Context-Fabric validation, suggested fixes, apply/undo with
                    version-history tracking. Currently a contract-first stub
@@ -83,6 +88,8 @@ from admin.services.corpus_detail_api import router as corpus_detail_router
 from admin.services.corpus_detail_mcp import register_corpus_detail_tools
 from admin.services.ingest_api import router as ingest_router
 from admin.services.jobs import job_manager
+from admin.services.reference_api import router as reference_router
+from admin.services.reference_mcp import register_reference_tools
 from admin.services.storage_api import router as storage_router
 from admin.services.storage_mcp import register_storage_tools
 from admin.services.validation_api import router as validation_router
@@ -106,6 +113,10 @@ register_storage_tools(mcp, read_only=settings.hf_read_only)
 # for the same reason as the storage tools -- to keep the slim MCP package free
 # of the admin/text-fabric dependency.
 register_corpus_detail_tools(mcp, read_only=settings.hf_read_only)
+# The `corpus_reference_*` tools (`admin.services.reference_mcp`) mirror the
+# `/refs` router: node <-> `corpus@version/Sec:...!otypeN` reference strings
+# over library archives. Reads only, so `hf_read_only` does not apply.
+register_reference_tools(mcp)
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).
@@ -161,6 +172,7 @@ app.include_router(ingest_router)
 app.include_router(validation_router)
 app.include_router(storage_router)
 app.include_router(corpus_detail_router)
+app.include_router(reference_router)
 # Contract-first stub for the reader's AI curation panel (all write/chat
 # routes answer 501 until exegia/corpora-py#214 lands) -- mounted now so the
 # OpenAPI document freezes the /ai shapes corpora-web builds mocks against.

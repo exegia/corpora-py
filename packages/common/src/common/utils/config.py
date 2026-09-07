@@ -118,6 +118,16 @@ class Settings(BaseSettings):
     # so they never appear in a library listing of `{sub}/{filename}`.
     supabase_jobs_bucket: str | None = os.getenv("SUPABASE_JOBS_BUCKET")
 
+    # Share-link template for reference identifiers (`common.utils.tfref`),
+    # used by the `/refs/shortcode` endpoint and the `reference_shortcode` MCP
+    # tools. `{ref}` is replaced with the URL-encoded reference; the default
+    # points back at this API's own resolver, so a link works even before the
+    # web UI has a route for it. Point it at the SPA (e.g.
+    # `https://app.example.com/r/{ref}`) once one exists.
+    reference_url_template: str = os.getenv(
+        "REFERENCE_URL_TEMPLATE", "/refs/resolve?ref={ref}"
+    )
+
     PROJECT_NAME: ClassVar[str] = "Corpora API"
     PROJECT_DESC: ClassVar[str] = "FastAPI project to be loaded as a wheel, docker and/or server."
     API_V1_STR: str = "/api/v1"
