@@ -117,6 +117,8 @@ Every scheme's level sequence implicitly ends with three optional trailing level
 
 The compact `co0001_bk001_ch001_pa001_st001_cl001_wo001` token is a lossless encoding of such an edition-kind Reference; see [Inter-corpus references](../inter-corpus-refs.md).
 
+**What is implemented today.** The Text-Fabric pipeline does not yet emit `code`/`refOrdinal` or a `structureProfile`, so no resolver for this canonical form exists in the repo. The citation string the UI uses over Text-Fabric corpora is the tfref short form (`bhsa@2021/Deut:4:2!clause1`, `common.utils.tfref`, `/refs`), which is the `kind: "edition"` case of this model expressed over section headings; the compact token is its serialization. See [reference-forms.md](../reference-forms.md) for the mapping and the migration path (headings → codes, no grammar change).
+
 ## 4. Alias resolution
 
 Resolving `Bible/KJV/John/3/16`:

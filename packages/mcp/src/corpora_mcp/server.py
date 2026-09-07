@@ -12,6 +12,7 @@ from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 
 from .corpus import corpus_manager
+from .reference import register_reference_tools
 
 mcp = FastMCP(
     "Context-Fabric",
@@ -699,6 +700,14 @@ def get_node_features(
         rows.append(f"{node:>8}  {section:<20}{vals}")
 
     return "\n".join(rows)
+
+
+# ── Reference identifiers ─────────────────────────────────────────────────────
+
+# `reference_create` / `reference_resolve` / `reference_shortcode` live in
+# `corpora_mcp.reference` (they need `common.utils.tfref`); registered here so
+# a standalone `cf-mcp` process exposes them over its loaded corpora.
+register_reference_tools(mcp)
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
