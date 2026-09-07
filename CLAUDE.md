@@ -409,7 +409,7 @@ a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun 
 needed).
 
 Testing runs in two places. The `check` job in `pr.yml` runs `make ci` (`uv sync` + `make lint-check` +
-`make test` — 364 tests as of this writing) on one runner, single-job on purpose: it is a *required status check* on
+`make test` — 719 tests as of 2026-09-06) on one runner, single-job on purpose: it is a *required status check* on
 `main`, `dev`, `next` and `release/v*`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
 `check` the ruleset names, which would leave every PR unmergeable. The breadth that used to live in
 `test.yml` (ubuntu + macOS × 3.13/3.14) moved to `matrix.yml`, which runs on every push to `next` or a release branch, and weekly.
