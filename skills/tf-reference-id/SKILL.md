@@ -40,8 +40,9 @@ The section path is whatever `T.sectionTypes` says — `book:chapter:verse`,
 `volume:chapter:para`, `act:scene:line`. Nothing is hardcoded. The `!` selector
 picks any node type by 1-based position *within that section*.
 
-Everything below is implemented in `scripts/tfref.py` (in the corpora-py repo the same
-file is `common.utils.tfref`, behind `/refs` and the `reference_*` MCP tools). Use the script rather
+Everything below is implemented in `scripts/tfref.py` (in the corpora-py repo the
+same file is `common.utils.tfref`, behind `/refs` and the `reference_*` MCP
+tools). Use the script rather
 than re-deriving the logic: the two design decisions that make references
 deterministic (anchoring and versioning) are easy to get subtly wrong by hand.
 
