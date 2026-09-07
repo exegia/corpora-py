@@ -1,259 +1,260 @@
 # Corpora Example App
 
-A desktop application for converting, browsing, and querying Text-Fabric corpora. Built with React Router 8, Electrobun,
-and TypeScript.
+The reference client for the `corpora-py` API: convert documents into
+Text-Fabric corpora, browse and read what you've published, and chat with an
+AI that queries the corpus through MCP tools. One codebase ships two ways —
+a native desktop app via Electrobun, and a static SPA on the web
+([corpora-py-example.vercel.app](https://corpora-py-example.vercel.app)).
 
 ## Features
 
-- **Convert corpora** — Transform EPUB, HTML, PDF, and TEI documents into Text-Fabric datasets
-- **Browse datasets** — View Text-Fabric corpora with full API access via the MCP server
-- **Corpus detail & reader** — Open any stored `.corpus` archive to edit its manifest metadata, browse its section
-  index, and read passages (see the flow below)
-- **Query support** — Use Claude or other AI models to query your corpus data
-- **Dark mode** — Light and dark theme support with persistent storage
-- **Desktop-native** — Runs as a native macOS/Windows/Linux application via Electrobun
+- **Convert** — EPUB, HTML, XML, TEI, PDF and plain text → Text-Fabric `.corpus`
+  archives, with live job status over WebSocket (and polling fallback)
+- **Explore & publish** — browse the `.corpus` archives on the Hugging Face Hub
+- **Corpus detail & reader** — edit manifest metadata, browse the section index,
+  read paginated passages (see [the flow](#corpus-detail-flow))
+- **Chat** — an in-browser agent that loads a published corpus and queries it
+  through the backend's MCP tools; bring your own Anthropic key, or use the
+  free demo model with none
+- **Capability-aware UI** — write affordances are *hidden*, not left to 403,
+  when the backend reports a read-only Hub
+- **Dark mode** and **desktop-native** packaging (macOS/Windows/Linux)
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ (or Bun 1.x)
-- `corpora-py` package (parent workspace)
+- Bun 1.x (or Node.js 18+)
+- A running `corpora-py` backend — from the monorepo root: `uv sync && AUTH_REQUIRED=false uv run corpora-api`
 
 ### Installation
 
 ```bash
-# From the monorepo root
-uv sync
-
-# Or manually:
 cd example
-bun install  # or npm install
+bun install
 ```
 
 ### Development
 
 ```bash
-# Start the Vite dev server (web-based)
-bun run vite:dev
-
-# Start the Electrobun desktop app (watch mode)
-bun run desktop:dev
-
-# Type-check and generate routes
-bun run typecheck
-
-# Format code
-bun run format
+bun run vite:dev      # web dev server (proxies /api/gateway to the real AI Gateway)
+bun run desktop:dev   # Electrobun desktop app, watch mode
+bun run typecheck     # react-router typegen + tsc
+bun run format        # prettier
 ```
 
 ### Build
 
 ```bash
-# Build for web (Vite)
-bun run vite:build
-
-# Build desktop app (canary environment)
-bun run build:canary
+bun run vite:build    # static SPA → dist/client
+bun run build:canary  # desktop bundle (canary env)
 ```
+
+## Environment
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `VITE_API_URL` | build time | Backend base URL. Vite **inlines** it, so it must be set before the build or the bundle falls back to `http://127.0.0.1:8000` (`app/lib/types/socket.ts`). |
+| `AI_GATEWAY_API_KEY` | server | Optional explicit credential for the free-model proxy; otherwise the deployment's OIDC token is used. |
+
+The Supabase token on the Settings page is **optional** — `apiFetch` attaches a
+Bearer header only when one is stored, so the demo works with none. An Anthropic
+key there is likewise optional; without it the chat uses the free demo model.
 
 ## Deploy the web example to Vercel
 
-The same React Router app that ships inside Electrobun can be served on the web
-as a static SPA (`react-router.config.ts` sets `ssr: false`). It is deployed to
-**`corpora-py-example.vercel.app`** as a **second Vercel project on this same
-repo**, distinct from the Python API project (`corpora-py`, deployed from the
-repo root).
+The same React Router app that ships inside Electrobun serves on the web as a
+static SPA (`react-router.config.ts` sets `ssr: false`), deployed as a **second
+Vercel project on this same repo**, distinct from the Python API project
+(`corpora-py`, deployed from the repo root). Both are wired to the repo's Git
+integration, so **a push that redeploys the API also redeploys the web example**
+— no GitHub Actions, no deploy chaining.
 
-Both projects are wired to the repo's Git integration, so **a push that
-redeploys the API also redeploys the web example** — no GitHub Actions, no
-deploy chaining. `example/vercel.json` pins the static-SPA build so the project
-works the moment it is linked:
+`example/vercel.json` pins the build so the project works the moment it's linked:
 
-- `framework: null`, `buildCommand: react-router build`,
-  `outputDirectory: dist/client` — plain static output, **not** the
-  `@vercel/react-router` SSR preset (the build also emits `dist/server/`; it is
-  intentionally ignored so Vercel never deploys a server function).
-- A catch-all rewrite (`/(.*) → /index.html`) hands unknown paths to the client
-  router; real assets under `/assets/*` still serve directly (the filesystem is
+- `framework: null`, `installCommand: bun install`,
+  `buildCommand: react-router build`, `outputDirectory: dist/client` — plain
+  static output, **not** the `@vercel/react-router` SSR preset (the build also
+  emits `dist/server/`; it's intentionally ignored so no React Router server
+  function is deployed).
+- The SPA rewrite is `/((?!api/).*) → /index.html`, not a bare catch-all: the
+  negative lookahead keeps `api/gateway/[path].ts` reachable as a real Node
+  function. Assets under `/assets/*` still serve directly (the filesystem is
   checked before rewrites).
 
 ### One-time setup (Vercel dashboard or CLI)
 
 1. **Create the project** from this GitHub repo → set **Root Directory** to
    `example`. Vercel reads `example/vercel.json` from there.
-2. **Production Branch** → `main` (match the API project so both promote
-   production on the same push).
-3. **Environment variable** — add `VITE_API_URL = https://corpora-py.vercel.app`
-   (Production + Preview). This is **build-time**: Vite inlines it, so it must
-   exist *before* the build runs, or the bundle falls back to
-   `http://127.0.0.1:8000` (see `app/lib/types/socket.ts`).
+2. **Production Branch** → `main` (match the API project so both promote on the
+   same push).
+3. **Environment variable** — `VITE_API_URL = https://corpora-py.vercel.app`
+   (Production + Preview). Build-time; see the table above.
 4. **Domain** — assign `corpora-py-example.vercel.app` to the project's
    production deployment.
-5. Trigger the first deploy (push, or **Redeploy**). On that first build,
-   confirm it serves the SPA statically (an `index.html` at the root, assets
-   under `/assets/`) and does **not** spin up a React Router server function.
+5. Trigger the first deploy (push, or **Redeploy**) and confirm the app is
+   served statically (an `index.html` at the root, assets under `/assets/`) with
+   exactly **one** function — `api/gateway/[path]` — and no React Router server
+   function.
+
+### Free-model chat proxy (`api/gateway/[path].ts`)
+
+The chat agent runs in the visitor's browser. With no Anthropic key of its own
+it calls this deployment's proxy, which forwards to the Vercel AI Gateway using
+the **deployment's** credential — which must never reach the browser. Two rules
+keep that safe to expose publicly:
+
+- only models in `ALLOWED_MODELS` (free, $0/token) pass through — checked from
+  the `ai-language-model-id` header, before any upstream call;
+- only the two endpoints the browser provider actually uses (`language-model`,
+  `config`) are reachable. It is not a general gateway proxy.
+
+`bun run vite:dev` doesn't run the function at all — `vite.config.ts` proxies
+`/api/gateway` to the real gateway with the same env fallback.
 
 ### Backend (API) configuration for the public demo
 
-For the public web example to load corpora without a signed-in Supabase
-session, set these environment variables on the **API** project (`corpora-py`)
-in Vercel — not on this example project:
+For the public web example to load corpora without a signed-in Supabase session,
+set these on the **API** project (`corpora-py`) in Vercel — not on this one:
 
-| Env var           | Value                          | Why                                                                                             |
-|-------------------|--------------------------------|-------------------------------------------------------------------------------------------------|
-| `AUTH_REQUIRED`   | `false`                        | Opens reads/queries/conversions to the anonymous public demo (the default `true` fail-closes to 401). |
-| `HF_READ_ONLY`    | `true`                         | **Locks the Hub.** With auth off, this is what keeps the public from mutating your Hub repo — see below. |
-| `HF_STORAGE_REPO` | your Hub repo/bucket           | Where the `.corpus` archives live; without it `/storage` 503s.                                   |
-| `HF_TOKEN`        | a Hub token, **read-only scope** | Auth for reading the (private) storage repo. **Use a fine-grained read-only token** — see below. |
+| Env var | Value | Why |
+|---|---|---|
+| `AUTH_REQUIRED` | `false` | Opens reads/queries/conversions to anonymous visitors (the default `true` fail-closes to 401). |
+| `HF_READ_ONLY` | `true` | **Locks the Hub.** With auth off, this is what keeps the public from mutating your Hub repo. |
+| `HF_STORAGE_REPO` | your Hub repo/bucket | Where the `.corpus` archives live; without it `/storage` 503s. |
+| `HF_TOKEN` | a Hub token, **read-only scope** | Auth for reading the (private) storage repo. |
+| `HF_HOME` | `/tmp/huggingface` | The default cache path is read-only on Vercel Functions — without this every stored-corpus read 500s. |
 
-> **The hardest guarantee is the token, not the code.** `AUTH_REQUIRED=false`
-> and `HF_READ_ONLY=true` must *both* be set — set only the first and forget the
-> second, and a write-capable token leaves your Hub wide open. A **fine-grained
-> read-only `HF_TOKEN`** removes that footgun entirely: Hugging Face itself
-> refuses every write regardless of what the app code does, so it backstops the
-> whole read-only gate. Mint one at
-> huggingface.co → Settings → Access Tokens (fine-grained, read only on the
-> storage repo) and use it here. Publish from your own machine with a separate
-> write token that never ships to the deployment.
+> **The hardest guarantee is the token, not the code.** `AUTH_REQUIRED=false` and
+> `HF_READ_ONLY=true` must *both* be set — set only the first and a
+> write-capable token leaves your Hub wide open. A **fine-grained read-only
+> `HF_TOKEN`** removes that footgun entirely: Hugging Face itself refuses every
+> write regardless of app code. Mint one at Settings → Access Tokens
+> (fine-grained, read-only on the storage repo). Publish from your own machine
+> with a separate write token that never ships to the deployment.
 
-**Read-only guarantee (`HF_READ_ONLY=true`).** Turning auth off would otherwise
-open *writes* to everyone. With `HF_READ_ONLY=true` every Hub write is refused
-across both API surfaces: HTTP write routes (`POST /storage`,
-`DELETE /storage/{f}`, `PATCH /storage/{f}/manifest`, `PATCH …/nodes/{n}`)
-return **403**, and the `storage_*` / `corpus_*` **write** MCP tools
-(`storage_upload_corpus`, `storage_delete_corpus`, `corpus_manifest_update`,
-`corpus_node_annotate`) are not even registered — so nothing on the public API
-can push to, delete from, or re-upload the repo. Reads, downloads, conversions,
-and corpus queries are unaffected. You keep publishing from your own machine
-(run locally with `HF_READ_ONLY` unset / `false`) to the **same** Hub repo; the
-demo reads what you publish.
+**Read-only guarantee (`HF_READ_ONLY=true`).** Every Hub write is refused across
+both API surfaces: the write routes (`POST /storage`, `DELETE /storage/{f}`,
+`PATCH /storage/{f}/manifest`, `PATCH …/nodes/{n}`) return **403**, and the four
+write MCP tools (`storage_upload_corpus`, `storage_delete_corpus`,
+`corpus_manifest_update`, `corpus_node_annotate`) are never registered — so
+nothing on the public API can push to, delete from, or re-upload the repo. Reads,
+downloads, conversions and corpus queries are unaffected. You keep publishing
+from your own machine (`HF_READ_ONLY` unset) to the **same** repo the demo reads.
 
-Consequence for the demo UI: write affordances are **hidden**, not left to fail.
-The app asks `GET /capabilities` (unauthenticated — reports `auth_required` and
-`hub_writable`) and, when the Hub is read-only, omits the **Publish to Hugging
-Face** button and the corpus **Edit** metadata button entirely. The chat
-**"Fix"** chips still get a missing-tool response, since those write MCP tools
-aren't registered. Everything else — converting, downloading the `.corpus`,
-browsing, reading, querying — works anonymously.
-
-Note the Supabase token in Settings is **optional**: `apiFetch` attaches a
-Bearer header only if one is stored, so the demo works with none. That page
-probes the backend and says so when a token isn't needed.
+Consequence for the UI: the app asks `GET /capabilities` (unauthenticated;
+reports `auth_required` and `hub_writable`) and, when the Hub is read-only, omits
+the **Publish to Hugging Face** button and the corpus **Edit** metadata button
+entirely (`app/lib/capabilities.ts`). Chat **"Fix"** chips still get a
+missing-tool response, since those write tools aren't registered.
 
 Exposures to accept (or address) before going live — read-only mode covers Hub
 writes, **not** these:
 
 - **Anonymous compute.** With auth off, `POST /convert` is reachable by anyone
-  and pins a CPU for up to the 300s function limit — visitors can run up your
-  Vercel Active-CPU bill (convert → `GET /convert/{id}/download` works without
-  ever publishing). This is a cost/abuse *decision*: it may be a legitimate demo
-  path, or you may want to disable public conversion / put the API behind
-  Vercel's firewall or rate limiting. (`/ingest` already 503s on Vercel.)
-- **Job scoping off.** Conversion-job polling/downloads (`GET /convert/{id}`) no
-  longer scope to their submitter, so any job id is visible to anyone.
+  and pins a CPU for up to the 300s function limit. Consider disabling public
+  conversion, or putting the API behind Vercel's firewall / rate limiting.
+  (`/ingest` already 503s on Vercel.)
+- **Job scoping off.** Conversion-job polling/downloads no longer scope to their
+  submitter, so any job id is visible to anyone.
 - **Private repo, public reads.** The server reads the (private) Hub repo with
   its own token and serves its contents to every visitor.
 
 ## Project Structure
 
 ```
+api/
+└── gateway/[path].ts     # Node function: free-model AI Gateway proxy (web deploy only)
+
 app/
-├── routes/              # React Router pages (see app/routes.ts for the tree)
-│   ├── home.tsx        # Dashboard with quick actions
-│   ├── explore.tsx     # Browse/search .corpus archives on the Hub
-│   ├── corpus/
-│   │   ├── upload.tsx  # Upload dialog for new corpora
-│   │   ├── convert.tsx # Conversion pipeline UI
-│   │   ├── layout.tsx  # Corpus detail layout (breadcrumb + Detail/View tabs)
-│   │   ├── detail.tsx  # Corpus metadata (editable) & section index
-│   │   └── view.tsx    # Corpus reader view (paginated, section picker)
-│   └── +types/         # Auto-generated type definitions
-├── components/         # Reusable UI components
-├── lib/               # Utilities (routing, theme, sounds)
-│   └── corpus-detail.ts # Typed client + pure helpers for the detail endpoints
-└── app.css            # Global styles (Tailwind + custom)
+├── routes/               # React Router pages (tree in app/routes.ts)
+│   ├── home.tsx          #   dashboard
+│   ├── explore.tsx       #   browse/search .corpus archives on the Hub
+│   ├── chat.tsx          #   in-browser agent over the backend's MCP tools
+│   ├── settings.tsx      #   Anthropic / Supabase keys, backend probe
+│   └── corpus/
+│       ├── upload.tsx    #   upload dialog
+│       ├── convert.tsx   #   conversion pipeline UI
+│       ├── layout.tsx    #   corpus detail layout (breadcrumb + Detail/View tabs)
+│       ├── detail.tsx    #   manifest metadata (editable) + section index
+│       └── view.tsx      #   paginated reader with section picker
+├── components/
+│   ├── ai-elements/      #   conversation, message, prompt-input, tool call UI
+│   ├── chat/             #   ChatView, corpus picker, corpus loading
+│   ├── convert/          #   upload + job status
+│   ├── ui/  reui/  beste/ #  shadcn (base-vega) + ReUI registry components
+│   └── workspace/        #   corpus workspace shell
+└── lib/
+    ├── agent-model.ts    #   own-key vs free-demo model selection
+    ├── capabilities.ts   #   GET /capabilities → hide dead write actions
+    ├── corpus-detail.ts  #   typed client + pure helpers for the detail endpoints
+    ├── atoms/  hooks/  types/  uploads/
+    └── settings.ts       #   stored keys, bound fetch
 
-bun/                    # Backend integration
-├── index.ts           # Electrobun entry point
-├── python-bridge.ts   # Python subprocess management
-├── websocket.ts       # Real-time updates
-└── storage.ts         # Local data persistence
-
-public/                # Static assets
-dist/                  # Built app & web output
+bun/                      # Electrobun main process: entry, python bridge, websocket, storage
+public/                   # static assets
+dist/                     # built app & web output
 ```
 
 ## Corpus detail flow
 
 Browsing a stored archive runs `explore → detail → view`:
 
-1. **`/explore`** (`routes/explore.tsx`) lists the `.corpus` archives published to the Hub. Each row has a **Details**
-   action that navigates to `/corpus/:id`, where `:id` is the archive filename minus the trailing `.corpus`,
-   URL-encoded.
-2. **`/corpus/:id`** (`routes/corpus/layout.tsx`) is a shared layout: an `Explore → <name>`
-   breadcrumb plus **Detail** / **View** tabs. Its index route is the detail tab.
-3. **`/corpus/:id`** → **`routes/corpus/detail.tsx`** — an editable manifest metadata card (PATCHes the archive on the
-   Hub) and a section-index card whose entries link into the reader.
-4. **`/corpus/:id/view`** (`routes/corpus/view.tsx`) — a paginated passage reader with a section picker; the current
-   section is kept in the URL as `?ref=`.
+1. **`/explore`** lists the `.corpus` archives published to the Hub. Each row's
+   **Details** action navigates to `/corpus/:id`, where `:id` is the archive
+   filename minus the trailing `.corpus`, URL-encoded.
+2. **`/corpus/:id`** (`routes/corpus/layout.tsx`) is a shared layout: an
+   `Explore → <name>` breadcrumb plus **Detail** / **View** tabs.
+3. **`/corpus/:id`** → `routes/corpus/detail.tsx` — an editable manifest metadata
+   card (PATCHes the archive on the Hub) and a section-index card linking into
+   the reader.
+4. **`/corpus/:id/view`** — a paginated passage reader with a section picker; the
+   current section lives in the URL as `?ref=`.
 
 All four screens talk to the backend through the typed client and pure helpers in
-`app/lib/corpus-detail.ts`, which target the `/storage/{filename}/{manifest,index,content}`
-endpoints (`{filename}` = `:id` with `.corpus` re-appended). See `packages/admin/CLAUDE.md` for the server side.
+`app/lib/corpus-detail.ts`, which target `/storage/{filename}/{manifest,index,content}`
+(`{filename}` = `:id` with `.corpus` re-appended). Server side:
+[`packages/admin/README.md`](../packages/admin/README.md).
 
 ## Tech Stack
 
-- **Framework** — React 19 with React Router 8 (framework mode)
-- **Desktop** — Electrobun 1.18.4-beta
-- **UI Components** — [shadcn/ui](https://ui.shadcn.com) (copy-paste Radix UI + Tailwind CSS)
-- **Styling** — Tailwind CSS 4
-- **State** — Jotai with Immer for immutable updates
-- **Animation** — Framer Motion
-- **Build** — Vite with React Router preset
-- **Language** — TypeScript 6
-- **Backend** — Python via subprocess bridge (corpora-mcp/corpora-admin)
+| Layer | Choice |
+|---|---|
+| Framework | React 19 + React Router 8 (framework mode, `ssr: false`) |
+| Desktop | Electrobun 1.18.4-beta |
+| AI | AI SDK v7 (`ai`, `@ai-sdk/react`, `@ai-sdk/mcp`, `@ai-sdk/anthropic`) — a browser-side `ToolLoopAgent` over the backend's MCP server |
+| UI | shadcn (`base-vega` style) on Base UI, plus the ReUI registry; Lucide icons |
+| Styling | Tailwind CSS 4 |
+| State | Jotai (+ Immer) |
+| Animation | Motion (Framer Motion) |
+| Markdown | Streamdown (code, math, mermaid, CJK) with Shiki |
+| Build | Vite 8 + React Router preset |
+| Language | TypeScript 6 |
 
-## UI Components (shadcn)
-
-This project uses [shadcn/ui](https://ui.shadcn.com) for all React components. Components are copy-pasted into
-`app/components/ui/` and styled with Tailwind CSS.
-
-### Adding new components
+### Adding UI components
 
 ```bash
-npx shadcn-ui@latest add <component-name>
+bunx shadcn@latest add <component-name>     # config in components.json
 ```
-
-Common components: `button`, `card`, `dialog`, `input`, `select`, `table`, `toast`, etc.
-See [shadcn/ui docs](https://ui.shadcn.com/docs/components/button) for usage.
-
-## Environment
-
-The app connects to the Python backend (`corpora-py` workspace) to:
-
-- Load Text-Fabric corpora
-- Handle EPUB/HTML/PDF conversions
-- Provide MCP server access
-
-Set `VITE_PYTHON_PORT` to override the backend connection (default: `8000`).
 
 ## Scripts
 
-| Command        | Purpose                            |
-|----------------|------------------------------------|
-| `vite:dev`     | Start web dev server               |
-| `desktop:dev`  | Start Electrobun app (watch)       |
-| `vite:build`   | Build web bundle                   |
-| `build:canary` | Build desktop canary release       |
-| `typecheck`    | Check TypeScript & generate routes |
-| `format`       | Format code with Prettier          |
-| `clean`        | Remove build artifacts             |
+| Command | Purpose |
+|---|---|
+| `vite:dev` | Web dev server |
+| `desktop:dev` | Electrobun app (watch) |
+| `vite:build` | Build static SPA → `dist/client` |
+| `build:canary` | Build desktop canary release |
+| `typecheck` | `react-router typegen` + `tsc` |
+| `test` | `bun test` |
+| `format` | Prettier |
+| `clean` | Remove build artifacts |
 
 ## Contributing
 
-This is part of the `corpora-py` monorepo. See the root `CLAUDE.md` for workspace commands and contribution guidelines.
+Part of the `corpora-py` monorepo — see the root [`README.md`](../README.md) and
+`CLAUDE.md` for workspace commands and the branching model.
 
 ## License
 
-See the parent repository LICENSE.
+See the parent repository [LICENSE](../LICENSE).
