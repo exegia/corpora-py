@@ -150,6 +150,16 @@ can't resolve them and only the string match guarantees the index → content ro
 similarly special-cases the single-level case (paginate the finest slot-bearing type, not the lone root section). Keep
 this in sync with `corpora_mcp.server`'s ref parsing, which it was adapted from.
 
+## Reference identifiers (`reference*.py`)
+
+Node ↔ `corpus@version/Sec:...!otypeN` strings over stored archives, same one-implementation/two-surfaces shape:
+`reference.py` (logic; caches one `tfref.Adapter` per loaded api in `_adapters`), `reference_api.py` (`/refs` router:
+`POST /refs`, `GET /refs/resolve`, `GET|POST /refs/shortcode`), `reference_mcp.py` (`corpus_reference_create` /
+`_resolve` / `_shortcode`; imports `fastmcp`, so excluded from `__init__` like the other `*_mcp` modules). Grammar and
+rules are `common.utils.tfref` — see the root CLAUDE.md "Reference identifiers" section. All three routes are reads, so
+`HF_READ_ONLY` does not gate them. Corpus id = archive stem, version = `manifest.yml` `version`; a reference pinning a
+different version is refused (**409**), not silently re-resolved, because positional indices shift between builds.
+
 ## Docling ingestion (`ingest_api.py`)
 
 `POST /ingest` is the fire-and-poll sibling of `POST /convert` for the **canonical-graph pipeline**

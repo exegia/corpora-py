@@ -200,8 +200,8 @@ Code is organized into decoupled workspace packages under `packages/`:
 
 ### Module layers
 
-**`corpora_mcp.server`** — The primary user-facing surface. A FastMCP server exposing 11 tools to AI clients (Claude
-Desktop, etc.). The `cf-mcp` CLI entry point (`corpora_mcp.server:main`)
+**`corpora_mcp.server`** — The primary user-facing surface. A FastMCP server exposing 14 tools to AI clients (Claude
+Desktop, etc.) — 11 query tools plus the `reference_*` trio from `corpora_mcp.reference`. The `cf-mcp` CLI entry point (`corpora_mcp.server:main`)
 lives here. **`corpora_mcp.corpus`** holds the singleton `CorpusManager` that loads/manages
 `context-fabric` (`cfabric.Fabric`) corpora at runtime.
 
@@ -253,9 +253,38 @@ integration — see "Dropped/missing functionality" above.)
 1. Datasets live locally under `~/.exegia/datasets/` as Text-Fabric directories.
 2. `CorpusManager.load(path)` (in `corpora_mcp.corpus`) wraps `cfabric.Fabric` and holds
    `(Fabric, api)` pairs keyed by name.
-3. All 11 MCP tools call `corpus_manager.get_api(corpus_name)` to get the TF API and then use `api.S`, `api.F`, `api.T`,
+3. All the query MCP tools call `corpus_manager.get_api(corpus_name)` to get the TF API and then use `api.S`, `api.F`, `api.T`,
    etc.
 4. Pagination state for `search()` / `search_continue()` is held in a module-level dict with 5-minute cursor TTL.
+
+### Reference identifiers (`common.utils.tfref`, `/refs`, `reference_*` / `corpus_reference_*` tools)
+
+One schema-agnostic grammar for citing any node in any corpus:
+`[corpus[@version]/]Sec1[:Sec2...][!<otype><i>[-<j>]]` (e.g. `bhsa@2021/Deut:4:2!clause1`,
+`mobydick@1.0/Moby-Dick:3!word12`) plus a `urn:tf:` twin. The section path is whatever `T.sectionTypes` declares; the
+selector is the node's 1-based position among nodes of its type that **start** in that section (anchor-to-first-slot, so
+a clause spilling into the next verse is counted once). `@version` is optional on input and always emitted on output.
+
+- **`common.utils.tfref`** — grammar + resolution, byte-identical to `skills/tf-reference-id/scripts/tfref.py`
+  (`tests/common/test_tfref.py` pins this; edit one, copy over the other). Works on a live `tf`/`cfabric` api or straight
+  from a `.tf` directory (stdlib loader). It also papers over two cfabric gaps on one-level corpora (`T.nodeFromSection`
+  / `T.sectionFromNode` raise there) by falling back to the section features.
+- **`common.utils.refdisplay`** — label (`Deut 4:2 · clause 1`), compact pill token (`Deut 4:2 cl1`), share URL from
+  `REFERENCE_URL_TEMPLATE` (`{ref}` placeholder; default `/refs/resolve?ref={ref}`), and the `corpus` metadata block
+  (title/authors/year/corpusId/version from `manifest.yml` + `toc.yml`).
+- **`admin.services.reference`** (+ `reference_api` at `/refs`, `reference_mcp` → `corpus_reference_*`) — over stored
+  archives; the corpus id in a reference is the library filename stem (`bhsa.corpus` → `bhsa`), the version is the
+  manifest's. `POST /refs` (node → ref), `GET /refs/resolve?ref=` (ref → node + metadata; 400 bad grammar, 404 unknown,
+  409 version mismatch), `GET|POST /refs/shortcode` (presentation bundle).
+- **`corpora_mcp.reference`** (`reference_create` / `reference_resolve` / `reference_shortcode`) — the same over
+  `CorpusManager` corpora in a standalone `cf-mcp`; corpus id = the loaded name, metadata from a `manifest.yml` beside
+  or above the dataset dir when present.
+- The older positional spec in `docs/architecture/inter-corpus-refs.md` (`co0001_bk001_…`) and the canonical scheme in
+  `docs/architecture/context-fabric/03-references.md` are **not** implemented by this; `refdisplay`'s two-letter level
+  tags reuse its vocabulary so a UI can show both.
+
+Agent skills checked into the repo live under `skills/` (`skills/tf-reference-id` is the first); `skills-lock.json`
+tracks the externally sourced ones only.
 
 ### Conversion job flow (admin, exposed at `/convert`)
 
