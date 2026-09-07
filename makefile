@@ -590,11 +590,11 @@ rulesets-apply: ## Push .github/rulesets/*.json to GitHub (matched by name).
 .PHONY: dev
 
 # Run dev servers, but only after ensuring dist/ exists
-dev: dist
+dev: dist ## Run the example app: Vite dev server + Electrobun window, together.
 	@bun --cwd=example concurrently -n vite,electron -c cyan,magenta -k "vite dev" "electrobun dev"
 
 # Build dist/ only if it's missing (real target = file-existence check)
-dist:
+dist: ## Build the example app's web bundle into example/dist (skipped if present).
 	@bun --cwd=example run vite:build
 
 .PHONY: dev-web

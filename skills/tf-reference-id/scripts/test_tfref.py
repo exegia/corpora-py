@@ -22,7 +22,7 @@ BOOK = "Moby-Dick: Or, The Whale"
 BOOK_ENC = "Moby-Dick%3A Or, The Whale"
 PREFIX = f"mobydick@0.1/{BOOK_ENC}"
 
-FAILS = []
+FAILS: list[str] = []
 
 
 def check(name, got, want):

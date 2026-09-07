@@ -59,17 +59,14 @@ preflight against `WebSocket`), so it doesn't need to know about `/convert/{id}/
 
 Mounting a FastMCP ASGI app requires forwarding its lifespan into the parent
 FastAPI app, or its session manager never starts and every request to /mcp
-FastAPI app, or its session manager never starts, and every request to /mcp
 fails at runtime despite importing fine -- see
-https://gofastmcp.com/integrations/fastapi (Lifespan Management). This is
-the one part of wiring this up that fails silently at import time and only
-breaks when a request actually comes in, so it's covered by
-`tests/test_app.py` (spins up the app with a real ASGI transport and hits
-both surfaces) rather than left to be caught by hand.
-breaks when a request actually comes in -- verify it by actually sending a
-request through (e.g., a `TestClient`/ASGI-transport `initialize` call to
-`/mcp`), not just by importing this module. There is no automated test
-covering this yet (see the root CLAUDE.md's CI/CD notes).
+https://gofastmcp.com/integrations/fastapi (Lifespan Management). This is the
+one part of wiring this up that fails silently at import time and only breaks
+when a request actually comes in, so verify it by sending a request through
+(e.g., a `TestClient`/ASGI-transport `initialize` call to `/mcp`), not just by
+importing this module. **There is no automated test covering this yet** -- the
+suite builds bare `FastAPI()` apps and includes the routers directly (see
+`tests/corpora_py/`), so nothing exercises this module's mount + lifespan.
 
 The admin conversion service's `JobManager` (`admin.services.jobs`) also
 needs its `ThreadPoolExecutor` shut down on app exit, so its lifespan is
