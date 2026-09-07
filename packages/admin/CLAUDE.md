@@ -33,7 +33,7 @@ python -m zipfile -l /tmp/wheelcheck/*.whl   # should list admin/parsers/*.py, a
 
 ## Layout
 
-```
+```shell
 packages/admin/
   pyproject.toml           # packages = ["src/admin"] — must match this path exactly
   src/admin/

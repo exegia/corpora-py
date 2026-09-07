@@ -18,7 +18,7 @@ and both loading paths agree. The logic lives in
 [validate.py](../../packages/mcp/src/corpora_mcp/validate.py) and is exposed two
 ways: the `validate_corpus` MCP tool in
 [server.py](../../packages/mcp/src/corpora_mcp/server.py) and the `POST /validate`
-endpoint in [validation_api.py](../../src/corpora_py/validation_api.py) (wired
+endpoint in [validation_api.py](../../packages/admin/src/admin/services/validation_api.py) (wired
 into the combined app in [app.py](../../src/corpora_py/app.py)).
 
 The cycle is: load the `.tf` source with text-fabric; load with cfabric (which

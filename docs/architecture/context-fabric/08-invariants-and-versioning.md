@@ -110,7 +110,7 @@ queries silently return wrong subtrees.
 ### Enforcement matrix
 
 | Invariant | Schema | Service | DB (Phase 4) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | I1 one root, same-edition parents | shape only | ✔ ingest | ✔ partial unique index + trigger |
 | I2 acyclic | — | ✔ ingest | ✔ path rebuild fails |
 | I3 ordinal unique per parent | `minimum: 0` | ✔ ingest | ✔ `UNIQUE (parent_id, ordinal)` |
@@ -132,7 +132,7 @@ Defined behavior for every anticipated failure. "Envelope" refers to
 [api-payloads.schema.json](../../../packages/common/src/common/schemas/context_fabric/v1/api-payloads.schema.json).
 
 | # | Failure | Required behavior |
-|---|---|---|
+| --- | --- | --- |
 | F1 | **Malformed reference string** (unparseable per the grammar of [03-references.md](03-references.md)) | HTTP 400 / `ResolveResponse` with `status: "not_found"`, `reference: null`, empty `matches`, and the raw `input` echoed. Never guess. |
 | F2 | **Well-formed but unresolvable reference** (verse 200 of a 36-verse chapter) | `ResolveResponse.status: "not_found"` (nothing matched) or `"partial"` (a prefix of the segments resolved — return the deepest resolved node in `matches`). Multiple I6-violating candidates → `"ambiguous"` with all candidates listed. |
 | F3 | **Unknown `category`** | **Reject** (schema validation error at ingest; 422 at the API). The enum is closed and frozen per major — an unknown category means the payload is from a different major. |
@@ -156,7 +156,7 @@ Defined behavior for every anticipated failure. "Envelope" refers to
   3. *Removed:* only at the **next major** (`/v2/`).
 - **Data migrations are new edition revisions.** Reshaping already-ingested content (re-running an
   improved parser, re-chunking fragments, fixing a wrong hierarchy) is expressed as a new Edition
-  + `Relationship(supersedes)` per I8 — never as in-place rewriting of an existing edition's
+  - `Relationship(supersedes)` per I8 — never as in-place rewriting of an existing edition's
   nodes. Bulk backfills that add *optional* fields (e.g. computing missing `charStart`) are the
   one exception: they may update rows in place because they change no identity and no existing
   value, and each touched entity records a `corrections[]` entry.
@@ -172,6 +172,7 @@ Payloads carry `schemaVersion` (semver) and the schemas carry the major in their
 (`https://schemas.exegia.co/context-fabric/v1/…`). The two MUST agree on the major.
 
 A **MINOR** version MAY:
+
 - add optional properties to any entity;
 - add new `$defs` (including new response envelopes in `api-payloads.schema.json`);
 - add enum values **only to open sets** — e.g. `SourceAsset.sourceFormat`, well-known
@@ -181,6 +182,7 @@ A **MINOR** version MAY:
   invalid.
 
 A MINOR (or PATCH) MUST NOT:
+
 - add `required` fields or remove/rename any field;
 - add, remove, or re-mean `NodeCategory` values (closed, frozen per major — F3);
 - change `ValidationState`, `Reference.kind`, `ResolveResponse.status`, or any other closed enum;
