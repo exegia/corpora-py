@@ -37,9 +37,9 @@ Auth is **on** by default and fails closed (401 without a Supabase JWT).
 
 ```mermaid
 flowchart LR
-    S["📄 EPUB · PDF · HTML<br/>XML · TEI · text"] -->|"POST /convert"| C["⚙️ conversion job"]
+    S["📄 EPUB · PDF · HTML<br/>XML · TEI · text"] -->|POST /convert| C["⚙️ conversion job"]
     C --> A["📦 .corpus archive<br/>every word a graph node"]
-    A --> M["🤖 /mcp<br/>AI reads &amp; searches it"]
+    A --> M["🤖 /mcp<br/>AI reads and searches it"]
     A --> R["🔗 /refs<br/>citable passages"]
     A --> H["☁️ /storage<br/>publish to the Hub"]
 ```
