@@ -36,6 +36,8 @@ import subprocess
 import tempfile
 import threading
 import zipfile
+from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -109,6 +111,39 @@ _lock = threading.Lock()
 # `_lock` alongside `_cache`.
 _local_archives: dict[str, Path] = {}
 
+# Private per-call snapshots bypass all shared archive registrations and caches.
+_snapshot: ContextVar[tuple[str, _Cached] | None] = ContextVar("corpus_detail_snapshot", default=None)
+
+
+def read_archive(archive: Path, view: str, **kwargs: Any) -> dict[str, Any]:
+    """Read a caller-authorized immutable archive without shared cache state.
+
+    Authorization and digest verification belong to the caller. Only the listed
+    read operations are accepted; no mutation path is exposed through this API.
+    """
+    readers: dict[str, Callable[..., dict[str, Any]]] = {
+        "manifest": get_manifest,
+        "index": get_index,
+        "sections": get_sections,
+        "content": get_content,
+        "node": get_node,
+        # Uploaded snapshots are data, not repositories whose Git configuration
+        # may be executed. Prefer history.yml, otherwise the manifest version.
+        "versions": lambda name: get_versions(name, allow_git=False),
+    }
+    if view not in readers:
+        raise ValueError("Unknown archive view")
+    with tempfile.TemporaryDirectory(prefix="corpora-private-reader-") as temporary:
+        root = Path(temporary)
+        with zipfile.ZipFile(archive) as packed:
+            _safe_extract(packed, root)
+        name = "snapshot.corpus"
+        token = _snapshot.set((name, _Cached(root)))
+        try:
+            return readers[view](name, **kwargs)
+        finally:
+            _snapshot.reset(token)
+
 
 def register_local_archive(name: str, archive_path: Path) -> str:
     """Serve detail reads from a local ``.corpus`` instead of the Hub.
@@ -180,6 +215,9 @@ def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
 
 def _ensure_extracted(filename: str) -> _Cached:
     """Return the cache entry for `filename`, downloading + extracting if absent."""
+    snapshot = _snapshot.get()
+    if snapshot is not None and snapshot[0] == filename:
+        return snapshot[1]
     name = _safe_name(filename)
     key = _cache_key(name)
     with _lock:
@@ -1081,7 +1119,7 @@ def _build_sections(api: Any) -> dict[str, Any] | None:
     return {"levels": levels, "items": items}
 
 
-def get_versions(filename: str) -> dict[str, Any]:
+def get_versions(filename: str, *, allow_git: bool = True) -> dict[str, Any]:
     """Version timeline for the Activity tab.
 
     Prefers a ``history.yml`` sidecar (pass-through, including ``files`` /
@@ -1103,7 +1141,7 @@ def get_versions(filename: str) -> dict[str, Any]:
 
     versions: list[dict[str, Any]] = []
     git_dir = cached.extract_dir / ".git"
-    if git_dir.is_dir() and shutil.which("git"):
+    if allow_git and git_dir.is_dir() and shutil.which("git"):
         try:
             proc = subprocess.run(
                 ["git", "log", "--format=%H%x09%cI%x09%s"],

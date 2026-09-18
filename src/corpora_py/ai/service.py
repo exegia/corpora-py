@@ -44,6 +44,16 @@ def _archive(corpus: str, destination: Path) -> Path:
         raise CurationError(
             403, ErrorInfo(code="forbidden", reason="Verified identity required", retryable=False)
         )
+    if corpus.startswith("draft:"):
+        from .drafts import download_to
+        from .wal_sqlite import JournalUnavailableError
+
+        path = destination / "snapshot.corpus"
+        try:
+            download_to(corpus[6:], path)
+        except JournalUnavailableError as exc:
+            raise CurationError(503, "Registered draft unavailable") from exc
+        return path
     if settings.ai_mutations_enabled and owner:
         from .mutations import get_storage
         from .wal_sqlite import JournalUnavailableError

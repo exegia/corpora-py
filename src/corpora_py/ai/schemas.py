@@ -246,6 +246,30 @@ class ChangeLogResponse(BaseModel):
     next_offset: int | None = None
 
 
+class DraftCreateRequest(BaseModel):
+    job_id: str = Field(description="UUID of the caller's completed conversion job")
+
+
+class DraftInfo(BaseModel):
+    id: str
+    corpus: str = Field(description="Use this draft:<UUID> identifier in every AI scope")
+    revision: str
+    digest: str
+    version: str
+    state: Literal["draft", "locked", "published"]
+    archive_url: str
+
+
+class DraftListResponse(BaseModel):
+    drafts: list[DraftInfo]
+    next_offset: int | None = None
+
+
+class DraftReadResponse(BaseModel):
+    draft: DraftInfo
+    data: dict
+
+
 # ---------------------------------------------------------------------------
 # Threads
 # ---------------------------------------------------------------------------
