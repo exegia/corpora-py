@@ -15,7 +15,9 @@ The implementation order agreed on 2026-09-18 is AI curation, then
    rejection are implemented in #235; authoritative boundary/label comparisons and
    suggestion generation remain.
 3. [#234: Apply, undo, and recovery](https://github.com/exegia/corpora-py/issues/234).
-   Record intent in `corpus_changes` before editing; reconcile interrupted writes.
+   Recovery core and explicit SQLite journal implemented in `ai.wal` / `ai.wal_sqlite`.
+   Production document resolution, conditional archive publication, hosted journal
+   mapping, and HTTP/MCP wiring remain before this issue can close.
 4. [#235: Durable threads and suggestions](https://github.com/exegia/corpora-py/issues/235).
    Implemented with owned pinned scopes, explicit forks, messages, suggestion states,
    and durable Supabase/SQLite storage. Hosted rollout requires the migration below.
@@ -170,3 +172,77 @@ Run `uv run pytest tests/corpora_py/test_ai_threads.py` for persistence, ownersh
 retry, pagination, lifecycle, HTTP and concurrent-write coverage. For isolated
 PostgreSQL, initialize the Supabase roles and `auth.users`, apply the migration,
 then run `packages/admin/sql/tests/ai_thread_persistence.sql` with `psql`.
+
+
+## Write-ahead recovery core (#234, first slice)
+
+`MutationEngine` implements apply, retry, recovery and undo against explicit
+`Journal` and `Drafts` protocols. `SQLiteJournal` persists the complete intent
+before publication and preserves the first successful publication timestamp.
+This is an explicit single-host implementation, never a hosted outage fallback.
+No public endpoint uses this engine yet.
+
+The draft adapter stages a complete multi-field change and supplies immutable
+before/after evidence: unique revision, full-draft digest, version, scope text
+hash and target feature values. The engine checks all displaced values and the
+entire resulting feature map. Missing fields, no-op rows, duplicate fields,
+stale scope/version/hash and mismatched staged output cannot be journaled.
+
+Publication must atomically compare the entire before state, recheck current
+permissions/locks, replace the draft, and retain a receipt bound to the exact
+intent. Every archive writer must participate in that same protocol. Receipt
+lookup must be strongly consistent with HEAD reads. A mutex around the existing
+unconditional upload is insufficient across API instances and other writers.
+
+Recovery classifies a pending intent as follows:
+
+| Evidence | Result |
+| --- | --- |
+| Matching durable publication receipt | Finalize applied, using the original publication time |
+| Exact before evidence, no receipt | Not applied; safe to retry through conditional publication |
+| Anything else, including exact after data without a receipt | Conflict; retain pending intent for explicit recovery |
+
+Receipts survive later changes, so a crash after publication but before journal
+finalization remains recoverable after HEAD advances. A changed hash alone is
+never proof of success. Recovery does not silently mark ambiguous rows failed.
+
+Undo creates another intent with the inverse complete diff and stable links to
+all original field entries. It requires the original after evidence to still be
+HEAD; even an intervening revision with identical values blocks undo. Repeated
+undo returns the same result. The original entry remains immutable. Each field
+entry retains both `#corpora-ai` and the verified applying user in `resp`.
+
+### Hosted integration still required
+
+The deployed `public.corpus_changes` schema was inspected on 2026-09-18. It
+requires `document_id` referencing `corpus_documents` and `applied_by` referencing
+`public.users`. Its suggestion index is **not unique**; `reverts_change_id` is
+unique. Archive IDs and `job:<UUID>` references currently do not resolve that
+document relationship. Do not infer it from an archive filename or recreate the
+existing table.
+
+The next slice must resolve caller-owned documents, add conditional draft
+publication with retained receipts, and map a whole operation into field rows in
+one database transaction. Persist operation grouping plus both evidence snapshots
+and the receipt binding. Stable field UUIDs from `Intent.entries()` can be used as
+`corpus_changes.id`; each undo entry links its corresponding original field row.
+The existing singular `ApplyResponse.change` must not hide additional field rows:
+coordinate an additive response containing the full group before enabling writes.
+
+Archive `history.yml` remains the version/snapshot timeline. The staged archive
+must carry the operation provenance and version bump; `corpus_changes` supplies
+field-level displaced readings and responsibility. `commit_id` is linked when the
+working version is committed. Readers/exporters must retain that provenance.
+Provider credentials belong in neither store.
+
+Production wiring must resolve suggestions through owned threads, validate target
+membership and field types, validate corpus confirmation tokens bound to caller,
+suggestion and version, enforce locks, synchronize suggestion state, expose scoped
+history, and wire HTTP/MCP plus pending-operation reconciliation. Until these are
+implemented, apply/undo/history endpoints remain 501 and #234 stays open.
+
+`tests/corpora_py/test_ai_wal.py` uses a transactional SQLite draft fixture to test
+the adapter contract, not the production archive writer. It exercises journal
+failure, crashes before/after publication and during finalization, restart,
+concurrent writers, multi-field edits, stale/locked/foreign operations, bound
+confirmation, ambiguous recovery, receipt integrity and undo.
