@@ -166,7 +166,8 @@ def edit_archive(archive: Path, output: Path, head: DraftHead, suggestion: Sugge
                     raise CurationError(422, "Feature has no supported value type")
                 values = dict(api.Fs(name).items())
                 if row.new is None:
-                    if name in api.T.sectionFeats:
+                    required = dict(zip(api.T.sectionTypes, api.T.sectionFeats, strict=True))
+                    if name == required.get(api.F.otype.v(suggestion.target_node)):
                         raise CurationError(422, "A required section label cannot be removed")
                     values.pop(suggestion.target_node, None)
                 elif kind[1] == "int":

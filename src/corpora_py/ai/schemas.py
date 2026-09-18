@@ -207,6 +207,7 @@ class VersionHistoryEntry(BaseModel):
     """
 
     change_id: str
+    operation_id: str | None = None
     corpus: str
     version: str = Field(description="Working version the change is part of")
     node_id: int
@@ -228,16 +229,21 @@ class ApplyResponse(BaseModel):
     suggestion_id: str
     status: SuggestionStatus
     change: VersionHistoryEntry
+    operation_id: str | None = None
+    changes: list[VersionHistoryEntry] = Field(default_factory=list)
 
 
 class UndoResponse(BaseModel):
     reverted_change_id: str
     revert: VersionHistoryEntry
+    operation_id: str | None = None
+    reverts: list[VersionHistoryEntry] = Field(default_factory=list)
 
 
 class ChangeLogResponse(BaseModel):
     corpus: str
     entries: list[VersionHistoryEntry]
+    next_offset: int | None = None
 
 
 # ---------------------------------------------------------------------------

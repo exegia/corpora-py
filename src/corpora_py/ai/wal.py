@@ -1,7 +1,7 @@
 """Write-ahead apply/undo protocol for a conditional, receipt-bearing draft store.
 
-This core is intentionally not mounted on HTTP/MCP until the production draft
-adapter can atomically compare revisions and retain a publication receipt. A
+The hosted HTTP/MCP service uses a draft adapter that atomically compares
+revisions and retains a publication receipt. A
 process lock or an unconditional archive upload cannot satisfy that contract.
 """
 
@@ -60,6 +60,7 @@ class Intent(BaseModel):
         return [
             VersionHistoryEntry(
                 change_id=str(uuid5(NAMESPACE_URL, self.id + ":" + row.field)),
+                operation_id=self.id,
                 corpus=self.suggestion.scope.corpus,
                 version=self.plan.after.version,
                 node_id=self.suggestion.target_node,

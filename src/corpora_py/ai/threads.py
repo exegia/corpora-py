@@ -296,7 +296,7 @@ def save_suggestion(thread_id: str, section_id: str, suggestion: Suggestion) -> 
 
 
 def transition_suggestion(suggestion_id: str, status: SuggestionStatus) -> Suggestion:
-    """Internal lifecycle hook. 'applied' is only for the future WAL service.
+    """Internal lifecycle hook. Hosted publication sets 'applied' transactionally.
 
     HTTP only exposes rejection. Repeating a terminal transition is idempotent;
     changing one terminal state to another is a conflict.

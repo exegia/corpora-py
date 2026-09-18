@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # explicit single-host alternative; never fall back to it on a DB outage.
     ai_store: Literal["supabase", "sqlite"] = "supabase"
     ai_sqlite_path: str | None = None
+    # Enable only after the hosted journal + mutation migrations and trusted
+    # draft provisioning. There is no automatic legacy-archive write fallback.
+    ai_mutations_enabled: bool = False
 
     # Auth (JWT verification for the combined FastAPI app -- see corpora_py.auth)
     # Defaults to enforced: this ships as a sidecar to a Tauri+Supabase desktop
