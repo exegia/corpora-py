@@ -37,8 +37,8 @@ Layout:
                    `corpus_reference_*` MCP tools (`admin.services.reference_mcp`).
     /ai/*       -- AI curation surface (`corpora_py.ai`): scoped chat,
                    Context-Fabric validation, suggested fixes, apply/undo with
-                   version-history tracking. Currently a contract-first stub
-                   (501s) -- see `corpora_py/ai/router.py` and issue #214.
+                   version-history tracking. Providers and validation are live;
+                   chat/write/thread routes remain 501 stubs under issue #214.
     /health     -- liveness check for the combined app.
 
 This ships as a sidecar spawned by a Tauri+Supabase desktop app, not a public
@@ -98,6 +98,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastmcp.utilities.lifespan import combine_lifespans
 
 from .ai import router as ai_router
+from .ai.mcp import register_curation_tools
 from .auth import AuthMiddleware
 
 # The `storage_*` MCP tools live in `admin.services.storage_mcp` (admin owns
@@ -114,6 +115,7 @@ register_corpus_detail_tools(mcp, read_only=settings.hf_read_only)
 # `/refs` router: node <-> `corpus@version/Sec:...!otypeN` reference strings
 # over library archives. Reads only, so `hf_read_only` does not apply.
 register_reference_tools(mcp)
+register_curation_tools(mcp)
 
 # `path="/"` because we mount the whole sub-app under `/mcp` below; giving
 # http_app() its own `/mcp` prefix too would double it up (`/mcp/mcp`).
@@ -170,9 +172,8 @@ app.include_router(validation_router)
 app.include_router(storage_router)
 app.include_router(corpus_detail_router)
 app.include_router(reference_router)
-# Contract-first stub for the reader's AI curation panel (all write/chat
-# routes answer 501 until exegia/corpora-py#214 lands) -- mounted now so the
-# OpenAPI document freezes the /ai shapes corpora-web builds mocks against.
+# AI curation: providers + authorized validation are live; chat/write/thread
+# routes keep their frozen contract and answer 501 while #214 is implemented.
 app.include_router(ai_router)
 
 

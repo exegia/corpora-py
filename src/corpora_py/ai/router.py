@@ -1,12 +1,11 @@
-"""FastAPI router for the `/ai` curation surface — contract stub.
+"""FastAPI router for the `/ai` curation surface.
 
 Every endpoint here is part of the frozen contract for the reader's AI
 curation panel (exegia/corpora-web spec `005-ai-assistant-panel`;
 implementation issue exegia/corpora-py#214). The write/chat handlers return
-**501 Not Implemented** on purpose: the point of this router, right now, is
-the OpenAPI document — request/response models, status codes, and SSE event
-shapes — so exegia/corpora-web#108 can build and unit-test against mocks
-while the real handlers land behind the same signatures.
+**501 Not Implemented** while those slices are pending. Providers and scoped
+validation are live. The OpenAPI document preserves the request/response
+models, status codes, and SSE event shapes used by corpora-web#108.
 
 Contract rules the implementation must keep (spec FR-008/FR-009):
 
@@ -33,7 +32,10 @@ SSE contract for `POST /ai/chat` (``text/event-stream``): each frame is
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import JSONResponse
 
 from .schemas import (
     ApplyRequest,
@@ -76,7 +78,7 @@ def _not_implemented() -> HTTPException:
 async def providers() -> ProvidersResponse:
     """Providers accepted by the chat endpoint's `X-AI-Provider` header.
 
-    The only endpoint of this router implemented ahead of #214: the web app
+    Implemented ahead of the chat portion of #214: the web app
     needs the list (and the header contract documented on the response
     model) to build the Profile AI settings hand-off before the agent loop
     exists. Static by design — the gateway routes whatever provider/model
@@ -90,9 +92,7 @@ async def providers() -> ProvidersResponse:
                 models=["claude-sonnet-4-5", "claude-haiku-4-5"],
             ),
             ProviderInfo(id="openai", label="OpenAI", models=["gpt-5.2", "gpt-5.2-mini"]),
-            ProviderInfo(
-                id="google", label="Google", models=["gemini-3-pro", "gemini-3-flash"]
-            ),
+            ProviderInfo(id="google", label="Google", models=["gemini-3-pro", "gemini-3-flash"]),
         ]
     )
 
@@ -125,10 +125,31 @@ async def chat(
     raise _not_implemented()
 
 
-@router.post("/validate", response_model=ValidateResponse, responses=_ERROR_RESPONSES)
-async def validate_scope(request: ValidateRequest) -> ValidateResponse:
+@router.post(
+    "/validate",
+    response_model=ValidateResponse,
+    responses={
+        **_ERROR_RESPONSES,
+        404: {
+            "model": dict[str, str],
+            "description": "Corpus not found or not owned by the caller",
+        },
+        409: {
+            "model": ErrorInfo | dict[str, str],
+            "description": "Stale scope, or conversion not ready",
+        },
+        422: {"description": "Invalid scope or unreadable corpus"},
+        503: {"model": dict[str, str], "description": "Corpus storage is unavailable"},
+    },
+)
+async def validate_scope(request: ValidateRequest) -> ValidateResponse | JSONResponse:
     """Run Context-Fabric validation for a scope; findings carry node ids + consequences."""
-    raise _not_implemented()
+    from . import service
+
+    try:
+        return await asyncio.to_thread(service.validate_scope, request.scope)
+    except service.CurationError as exc:
+        return JSONResponse(status_code=exc.status, content=exc.body)
 
 
 @router.post(
@@ -154,9 +175,7 @@ async def reject_suggestion(suggestion_id: str) -> None:
     raise _not_implemented()
 
 
-@router.post(
-    "/changes/{change_id}/undo", response_model=UndoResponse, responses=_ERROR_RESPONSES
-)
+@router.post("/changes/{change_id}/undo", response_model=UndoResponse, responses=_ERROR_RESPONSES)
 async def undo_change(change_id: str) -> UndoResponse:
     """Revert an applied change; the revert is itself a version-history entry."""
     raise _not_implemented()

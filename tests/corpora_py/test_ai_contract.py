@@ -121,7 +121,6 @@ def test_stub_endpoints_return_501(client):
     headers = {"X-AI-Provider": "anthropic", "X-AI-Api-Key": "k"}
     calls = [
         ("post", "/ai/chat", {"json": {"scope": _scope(), "message": "hi"}, "headers": headers}),
-        ("post", "/ai/validate", {"json": {"scope": _scope()}}),
         ("post", "/ai/suggestions/s1/apply", {"json": {}}),
         ("post", "/ai/suggestions/s1/reject", {}),
         ("post", "/ai/changes/c1/undo", {}),
