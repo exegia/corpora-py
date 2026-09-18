@@ -16,8 +16,8 @@ The implementation order agreed on 2026-09-18 is AI curation, then
    suggestion generation remain.
 3. [#234: Apply, undo, and recovery](https://github.com/exegia/corpora-py/issues/234).
    Recovery core and explicit SQLite journal implemented in `ai.wal` / `ai.wal_sqlite`.
-   Production document resolution, conditional archive publication, hosted journal
-   mapping, and HTTP/MCP wiring remain before this issue can close.
+   Hosted journal mapping and atomic draft pointers are implemented in `ai.wal_supabase`.
+   Archive editing/provisioning and HTTP/MCP wiring remain before this issue can close.
 4. [#235: Durable threads and suggestions](https://github.com/exegia/corpora-py/issues/235).
    Implemented with owned pinned scopes, explicit forks, messages, suggestion states,
    and durable Supabase/SQLite storage. Hosted rollout requires the migration below.
@@ -246,3 +246,85 @@ the adapter contract, not the production archive writer. It exercises journal
 failure, crashes before/after publication and during finalization, restart,
 concurrent writers, multi-field edits, stale/locked/foreign operations, bound
 confirmation, ambiguous recovery, receipt integrity and undo.
+
+
+## Hosted journal and immutable draft heads (#234, second slice)
+
+`SupabaseJournal` implements the recovery engine's durable journal protocol using
+`HostedStorage` and the server-only `corpora_ai_storage` Postgres function. The
+migration is `packages/admin/sql/migrations/20260918154935_ai_hosted_journal.sql`.
+It has been verified on isolated PostgreSQL 17, **not applied to the live project**.
+The earlier thread-persistence migration also remains a separate rollout prerequisite.
+
+`corpus_ai_drafts` explicitly binds a verified owner and corpus reference to an
+existing `corpus_documents.id`. Provisioning is trusted server work: the existing
+document table has no ownership field and its path/job metadata cannot establish
+ownership. `HostedStorage.register()` is not an HTTP/MCP endpoint and must only be
+called after the source object's ownership has been established. Registration
+checks the initial object bytes and cannot silently rebind an existing document.
+There is no fallback from an unknown reference to a guessed filename or document.
+
+Draft archive bytes use the dedicated private `corpus-ai-drafts` bucket with keys
+`{owner}/ai/{document_id}/{revision_uuid}.corpus`. Uploads disable upsert; duplicate
+uploads succeed only when downloaded bytes match the expected SHA-256 digest.
+Publication verifies the staged object again. A database transaction checks the
+old revision, full-archive digest and version, updates HEAD, and stores the exact
+intent receipt and publication time. Locks are checked under the same row lock.
+Competing publications cannot both win. Existing flat archive uploads cannot
+address these immutable revision objects.
+
+`corpus_ai_operations` stores the full intent and receipt. Inserting an operation
+also inserts **all** of its field rows into the existing `corpus_changes` table in
+one transaction. Any invalid field rolls back the complete group. Finalization
+requires the publication receipt and marks the whole group applied using its
+original timestamp; it is idempotent and works after HEAD advances or is locked.
+Undo rows retain the existing per-field `reverts_change_id` links and uniqueness.
+The pending-batch method is bounded to 100 rows; a background recovery worker is
+not enabled yet.
+
+### Access and retention
+
+The two new tables have RLS and no browser-role grants. The RPC uses security
+invoker, an empty search path, and service-role-only execution. Its owner argument
+must come from verified server identity, never an HTTP request body. Invalid or
+unavailable upstream responses become generic storage errors; credentials remain
+only in server headers. See the official [database function permissions guidance](https://supabase.com/docs/guides/database/functions).
+
+A restrictive policy makes new AI `corpus_changes` rows visible only to their
+applying owner; legacy rows keep their prior visibility. Browser roles lose
+TRUNCATE permission on this log because TRUNCATE bypasses RLS. Another restrictive
+policy denies browser access to the dedicated bucket even if another permissive
+storage policy exists. Registration and operation foreign keys restrict deletion
+of documents with retained history. Garbage collection and account/document
+removal need an explicit retention workflow; do not delete receipt-bearing objects
+or operation rows as temporary upload cleanup.
+
+The live security advisor was read before preparing the migration. It reports
+pre-existing policy/exposure and mutable-search-path findings outside these new
+objects; this migration does not claim to remediate the whole project. Relevant
+[Supabase advisor checks](https://supabase.com/docs/guides/database/database-linter)
+are additionally asserted against the isolated schema: RLS, private bucket,
+function privileges and invoker mode.
+
+### Verification and remaining wiring
+
+The PR `check` job starts PostgreSQL and includes the database integration tests in
+`make ci`. Locally, start an isolated `postgres:17-alpine` container, initialize the
+`anon`, `authenticated` and `service_role BYPASSRLS` roles, then run:
+
+```sh
+CORPORA_AI_TEST_POSTGRES=<container-name> uv run pytest tests/corpora_py/test_ai_hosted_storage.py
+```
+
+Tests create and drop a temporary database in that container. The bootstrap SQL
+under `packages/admin/sql/tests` is test-only and must never run on a live project.
+The tests exercise the real migration/RPC transactions and the recovery engine
+through those transactions. Object HTTP upload/read-back is tested with mocked
+transport; no hosted bucket was changed during verification.
+
+The next integration must stage actual edited `.corpus` archives with version,
+feature and provenance updates, load registered HEAD for authorized reads, and
+provision owned working drafts. All draft readers/writers must use this registry;
+legacy storage paths remain separate. Public apply/undo/history stay 501 until
+that adapter, confirmation-token validation, suggestion-state synchronization,
+and full-group response/history handling are wired. #234 remains open.
