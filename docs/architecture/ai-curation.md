@@ -11,13 +11,14 @@ The implementation order agreed on 2026-09-18 is AI curation, then
    Implemented in `corpora_py.ai.validation` and merged via #238.
 2. [#233: Authorized validation and suggestions](https://github.com/exegia/corpora-py/issues/233).
    Validation is implemented through HTTP and MCP with caller access, scope membership,
-   version/hash checks, and section-feature requirements. Persisted suggestions and
-   rejection remain pending #235; authoritative boundary/label comparisons also remain.
+   version/hash checks, and section-feature requirements. Suggestion persistence and
+   rejection are implemented in #235; authoritative boundary/label comparisons and
+   suggestion generation remain.
 3. [#234: Apply, undo, and recovery](https://github.com/exegia/corpora-py/issues/234).
    Record intent in `corpus_changes` before editing; reconcile interrupted writes.
 4. [#235: Durable threads and suggestions](https://github.com/exegia/corpora-py/issues/235).
-   Supplies owned, pinned conversation state for suggestions and chat. This dependency
-   must be available before the corresponding public handlers are enabled.
+   Implemented with owned pinned scopes, explicit forks, messages, suggestion states,
+   and durable Supabase/SQLite storage. Hosted rollout requires the migration below.
 5. [#236: Streaming chat](https://github.com/exegia/corpora-py/issues/236).
    Integrate provider configuration, cancellation, and authorized curation tools.
 
