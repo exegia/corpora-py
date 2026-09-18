@@ -27,7 +27,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ---------------------------------------------------------------------------
 # Scope
@@ -65,7 +65,9 @@ class NodeScope(BaseModel):
     the client before it gets here (spec FR-002).
     """
 
-    corpus: str = Field(description="Loaded corpus name (see /mcp list_corpora)")
+    corpus: str = Field(
+        description="Flat archive ID in the configured store, or job:<UUID> for an owned conversion"
+    )
     level: ScopeLevel
     node_id: int | None = Field(
         default=None,
@@ -81,12 +83,13 @@ class NodeScope(BaseModel):
     unit_range: UnitRange | None = Field(
         default=None, description="Present only for passage-level (multi-¶) scopes"
     )
-    version: str = Field(
-        description="Corpus working-version identifier the scope was captured at"
-    )
+    version: str = Field(description="Corpus working-version identifier the scope was captured at")
     content_hash: str | None = Field(
         default=None,
-        description="Hash of the scoped text at capture time; guards staleness on apply",
+        description=(
+            "sha256:<hex> of default-format text over unique selected slots in slot order, "
+            "without trimming or extra separators; checked by validation and used on apply"
+        ),
     )
 
     @model_validator(mode="after")
@@ -204,6 +207,7 @@ class VersionHistoryEntry(BaseModel):
     """
 
     change_id: str
+    operation_id: str | None = None
     corpus: str
     version: str = Field(description="Working version the change is part of")
     node_id: int
@@ -225,16 +229,21 @@ class ApplyResponse(BaseModel):
     suggestion_id: str
     status: SuggestionStatus
     change: VersionHistoryEntry
+    operation_id: str | None = None
+    changes: list[VersionHistoryEntry] = Field(default_factory=list)
 
 
 class UndoResponse(BaseModel):
     reverted_change_id: str
     revert: VersionHistoryEntry
+    operation_id: str | None = None
+    reverts: list[VersionHistoryEntry] = Field(default_factory=list)
 
 
 class ChangeLogResponse(BaseModel):
     corpus: str
     entries: list[VersionHistoryEntry]
+    next_offset: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +275,41 @@ class ThreadCreateRequest(BaseModel):
 
 class ThreadListResponse(BaseModel):
     threads: list[Thread]
+    next_cursor: str | None = None
+
+
+class MessageCreateRequest(BaseModel):
+    """Only user messages can be posted by clients; model/tool roles are internal."""
+
+    model_config = ConfigDict(extra="forbid")
+    section_id: str
+    content: str = Field(min_length=1, max_length=32768)
+
+
+class ThreadMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    section_id: str
+    role: Literal["user", "assistant", "tool"]
+    content: str = Field(min_length=1, max_length=32768)
+    created_at: datetime
+
+
+class MessageListResponse(BaseModel):
+    messages: list[ThreadMessage]
+    next_offset: int | None = None
+
+
+class ThreadSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    section_id: str
+    suggestion: Suggestion
+    created_at: datetime
+
+
+class SuggestionListResponse(BaseModel):
+    suggestions: list[ThreadSuggestion]
+    next_offset: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -326,9 +370,7 @@ class ErrorInfo(BaseModel):
     model_unavailable → 503, forbidden → 403.
     """
 
-    code: Literal[
-        "locked", "stale", "confirmation_required", "model_unavailable", "forbidden"
-    ]
+    code: Literal["locked", "stale", "confirmation_required", "model_unavailable", "forbidden"]
     reason: str = Field(description="Human-readable reason, shown verbatim in the panel")
     retryable: bool
     current_version: str | None = Field(
