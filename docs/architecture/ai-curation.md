@@ -17,8 +17,8 @@ The implementation order agreed on 2026-09-18 is AI curation, then
 3. [#234: Apply, undo, and recovery](https://github.com/exegia/corpora-py/issues/234).
    Recovery core and explicit SQLite journal implemented in `ai.wal` / `ai.wal_sqlite`.
    Hosted journal mapping and atomic draft pointers are implemented in `ai.wal_supabase`.
-   Typed archive editing is implemented in `ai.archive_editor`; trusted provisioning
-   and public HTTP/MCP wiring remain before this issue can close.
+   Typed archive editing and gated HTTP/MCP apply, undo, and history are implemented.
+   Trusted draft provisioning and corpus-wide confirmation remain before this issue can close.
 4. [#235: Durable threads and suggestions](https://github.com/exegia/corpora-py/issues/235).
    Implemented with owned pinned scopes, explicit forks, messages, suggestion states,
    and durable Supabase/SQLite storage. Hosted rollout requires the migration below.
@@ -323,12 +323,8 @@ The tests exercise the real migration/RPC transactions and the recovery engine
 through those transactions. Object HTTP upload/read-back is tested with mocked
 transport; no hosted bucket was changed during verification.
 
-The next integration must stage actual edited `.corpus` archives with version,
-feature and provenance updates, load registered HEAD for authorized reads, and
-provision owned working drafts. All draft readers/writers must use this registry;
-legacy storage paths remain separate. Public apply/undo/history stay 501 until
-that adapter, confirmation-token validation, suggestion-state synchronization,
-and full-group response/history handling are wired. #234 remains open.
+The archive editor and public mutation integration below build on these transactions.
+#234 remains open for trusted working-draft provisioning and bound confirmation.
 
 
 ## Typed archive editing (#234, third slice)
@@ -369,12 +365,55 @@ a durable SQLite journal with a local conditional-publisher fixture. Hosted
 publication transactions remain covered by the PostgreSQL tests from the previous
 slice. No live archives or migrations were changed.
 
-### Public wiring still pending
+## HTTP/MCP mutations (#234, fourth slice)
 
-Apply/undo/history endpoints remain disabled. Before enabling them, serialize
-suggestion rejection with publication: checking pending state only before staging
-allows a rejection to race an apply. Add the database guard in a new migration,
-then wire owned suggestion resolution, registered-head reads, working-draft
-provisioning, full-group responses/history, and HTTP/MCP handlers. The editor is
-limited to typed node-feature changes; source-text/boundary workflows and corpus
-confirmation are not silently enabled. #234 remains open.
+`AI_MUTATIONS_ENABLED=true` enables apply, undo, and history for **already provisioned,
+owned hosted drafts**, using `AI_STORE=supabase`. The default remains false (501).
+A verified caller identity is required even if general authentication is disabled.
+A database capability check refuses writes if the guard migration is missing.
+This setting requires all three versioned migrations, in order:
+
+1. `20260918141622_ai_thread_persistence.sql`
+2. `20260918154935_ai_hosted_journal.sql`
+3. `20260918165018_ai_mutation_api.sql`
+
+These migrations have only been exercised in disposable PostgreSQL databases;
+no production schema or corpus has been changed by this work. Registration remains
+a trusted server operation after source ownership is verified. Knowing a global
+`corpus_documents.id` does not establish ownership and never provisions a draft.
+
+`POST /ai/suggestions/{id}/apply` resolves the suggestion from the caller's thread.
+The publication transaction locks the draft, operation, and thread; compares the
+entire stored suggestion payload and pending status; then changes HEAD, records
+its receipt, marks the suggestion applied (incrementing the thread revision), and
+finalizes every field's history entry together. A rejection that wins the thread
+lock first prevents publication. A rejection with a stale revision reloads the
+applied status and returns 409. Failed transactions roll back all these changes.
+
+Apply responses retain the original `change` field and add `changes` plus
+`operation_id`. Every history entry also carries its operation ID.
+`POST /ai/changes/{change_id}/undo` accepts any field change from an owned operation
+and reverses the **whole group**. It retains `revert` for the selected field and
+adds `reverts` for all affected fields. Retries use the durable operation ID and
+do not create duplicate versions. Intervening edits prevent undo (409); published
+or locked drafts reject writes (423). History remains readable while locked.
+
+`GET /ai/changes?corpus=...&node_id=...&limit=50&offset=0` returns only the caller's
+applied AI entries, newest first, with `next_offset`. Limits are 1–100; node filtering
+is optional. Offset pages describe the current history; refresh from offset zero
+after new edits. MCP tools `apply_node_fix`, `undo_change`, and `get_change_log`
+use the same service and ownership rules.
+
+With mutations enabled, AI validation and thread access resolve the owned draft
+registry before the legacy archive/job source. Registered corpora load verified
+HEAD bytes, so old pinned versions correctly become stale. Registry errors fail
+closed; only an absent registration can use the legacy read path. Legacy storage,
+corpus-detail caches, and non-AI readers are not redirected by this slice. Keep the
+setting enabled for registered AI sessions; disabling it also disables HEAD lookup.
+
+Real-archive tests drive the new SQL function through HTTP and MCP, including
+multi-field apply/undo, retry identity, pagination, ownership, locked drafts,
+registered-HEAD validation, and both orderings of the rejection/publication race.
+Corpus-wide confirmation still returns 428, including for arbitrary nonempty
+strings. Source-text and boundary repairs remain unsupported. Next: trusted draft
+provisioning and reader integration, then the bound corpus confirmation protocol.

@@ -2,8 +2,8 @@
 
 Every endpoint here is part of the frozen contract for the reader's AI
 curation panel (exegia/corpora-web spec `005-ai-assistant-panel`;
-implementation issue exegia/corpora-py#214). The write/chat handlers return
-**501 Not Implemented** while those slices are pending. Providers and scoped
+implementation issue exegia/corpora-py#214). Chat remains **501 Not Implemented**. Apply/undo/history require the hosted
+mutation deployment flag and a provisioned owned draft. Providers and scoped
 validation, owned conversations, and suggestion rejection are live. The OpenAPI document preserves the request/response
 models, status codes, and SSE event shapes used by corpora-web#108.
 
@@ -169,9 +169,13 @@ async def validate_scope(request: ValidateRequest) -> ValidateResponse | JSONRes
         **_ERROR_RESPONSES,
     },
 )
-async def apply_suggestion(suggestion_id: str, request: ApplyRequest) -> ApplyResponse:
+async def apply_suggestion(
+    suggestion_id: str, request: ApplyRequest
+) -> ApplyResponse | JSONResponse:
     """Apply a suggested fix to the working version — transactional with its history entry."""
-    raise _not_implemented()
+    from .mutations import apply
+
+    return await _mutation_call(apply, suggestion_id, request.confirmation_token)
 
 
 @router.post("/suggestions/{suggestion_id}/reject", status_code=204, response_model=None)
@@ -186,15 +190,40 @@ async def reject_suggestion(suggestion_id: str) -> JSONResponse | None:
 
 
 @router.post("/changes/{change_id}/undo", response_model=UndoResponse, responses=_ERROR_RESPONSES)
-async def undo_change(change_id: str) -> UndoResponse:
-    """Revert an applied change; the revert is itself a version-history entry."""
-    raise _not_implemented()
+async def undo_change(change_id: str) -> UndoResponse | JSONResponse:
+    """Revert the whole operation containing this field change, adding new history."""
+    from .mutations import undo
+
+    return await _mutation_call(undo, change_id)
 
 
 @router.get("/changes", response_model=ChangeLogResponse)
-async def change_log(corpus: str, node_id: int | None = None) -> ChangeLogResponse:
+async def change_log(
+    corpus: str,
+    node_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> ChangeLogResponse | JSONResponse:
     """Version-history entries for a corpus (optionally one node) — feeds reader marks."""
-    raise _not_implemented()
+    from .mutations import history
+
+    return await _mutation_call(history, corpus, node_id, limit, offset)
+
+
+async def _mutation_call(fn, *args):
+    from .mutations import error_body
+    from .service import CurationError
+    from .thread_store import ThreadStoreError
+    from .wal_sqlite import JournalUnavailableError
+
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except CurationError as exc:
+        return JSONResponse(status_code=exc.status, content=error_body(exc))
+    except (ThreadStoreError, JournalUnavailableError):
+        return JSONResponse(
+            status_code=503, content=error_body(CurationError(503, "Change storage unavailable"))
+        )
 
 
 @router.post("/threads", response_model=Thread)
@@ -230,6 +259,7 @@ async def get_thread(thread_id: str) -> Thread | JSONResponse:
 async def _thread_call(fn, *args):
     from .service import CurationError
     from .thread_store import ThreadStoreError
+    from .wal_sqlite import JournalUnavailableError
 
     try:
         return await asyncio.to_thread(fn, *args)
@@ -237,6 +267,8 @@ async def _thread_call(fn, *args):
         return JSONResponse(status_code=exc.status, content=exc.body)
     except ThreadStoreError:
         return JSONResponse(status_code=503, content={"detail": "Conversation storage unavailable"})
+    except JournalUnavailableError:
+        return JSONResponse(status_code=503, content={"detail": "Change storage unavailable"})
 
 
 @router.post("/threads/{thread_id}/sections", response_model=Thread)
