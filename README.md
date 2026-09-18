@@ -131,19 +131,19 @@ Needs `HF_STORAGE_REPO` + `HF_TOKEN`.
 
 | Path | What it does |
 |---|---|
-| `/mcp` | MCP server — **30 tools** (26 read-only, 15 in a standalone `cf-mcp`) |
+| `/mcp` | MCP server — **31 tools** (27 read-only, 15 in a standalone `cf-mcp`) |
 | `/convert` | Upload → job → `.corpus`; read, annotate and version the result |
 | `/storage` | Publish, list, read and edit archives on the Hub |
 | `/refs` | Reference ⇄ node, plus labels, pills and share URLs |
 | `/validate` | Confirm a dataset round-trips `.tf → .cfm → mmap` |
 | `/ingest` | Docling → Context Fabric v1 `graph.json` (extra: `corpora-py[docling]`) |
-| `/ai` | ⏳ stub — every route answers `501` ([#214](https://github.com/exegia/corpora-py/issues/214)) |
+| `/ai` | Providers + authorized node validation; chat, suggestions, and threads remain `501` ([#214](https://github.com/exegia/corpora-py/issues/214)) |
 | `/health` · `/capabilities` | Liveness, and what this deployment permits |
 
 Interactive docs while the server runs: **http://127.0.0.1:8000/docs**
 
 <details>
-<summary><b>All 30 MCP tools</b></summary>
+<summary><b>All 31 MCP tools</b></summary>
 
 | Group | Tools | In `cf-mcp` |
 |---|---|:---:|
@@ -151,6 +151,7 @@ Interactive docs while the server runs: **http://127.0.0.1:8000/docs**
 | Search | `search` `search_continue` `search_csv` `search_syntax_guide` | ✅ |
 | Read | `get_passages` `get_node_features` | ✅ |
 | Validate | `validate_corpus` | ✅ |
+| AI curation | `validate_node` | — |
 | References | `reference_create` `reference_resolve` `reference_shortcode` | ✅ |
 | Hub storage | `storage_list_corpora` `storage_corpus_info` `storage_download_corpus` `storage_upload_corpus`\* `storage_delete_corpus`\* | — |
 | Corpus detail | `corpus_sections` `corpus_index` `corpus_content` `corpus_node_get` `corpus_manifest_get` `corpus_manifest_update`\* `corpus_node_annotate`\* | — |

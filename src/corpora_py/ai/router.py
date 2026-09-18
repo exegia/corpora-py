@@ -1,12 +1,11 @@
-"""FastAPI router for the `/ai` curation surface — contract stub.
+"""FastAPI router for the `/ai` curation surface.
 
 Every endpoint here is part of the frozen contract for the reader's AI
 curation panel (exegia/corpora-web spec `005-ai-assistant-panel`;
-implementation issue exegia/corpora-py#214). The write/chat handlers return
-**501 Not Implemented** on purpose: the point of this router, right now, is
-the OpenAPI document — request/response models, status codes, and SSE event
-shapes — so exegia/corpora-web#108 can build and unit-test against mocks
-while the real handlers land behind the same signatures.
+implementation issue exegia/corpora-py#214). Chat remains **501 Not Implemented**. Apply/undo/history require the hosted
+mutation deployment flag and a provisioned owned draft. Providers and scoped
+validation, owned conversations, and suggestion rejection are live. The OpenAPI document preserves the request/response
+models, status codes, and SSE event shapes used by corpora-web#108.
 
 Contract rules the implementation must keep (spec FR-008/FR-009):
 
@@ -33,7 +32,10 @@ SSE contract for `POST /ai/chat` (``text/event-stream``): each frame is
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException
+import asyncio
+
+from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from .schemas import (
     ApplyRequest,
@@ -42,11 +44,16 @@ from .schemas import (
     ChatEvent,
     ChatRequest,
     ErrorInfo,
+    MessageCreateRequest,
+    MessageListResponse,
     ProviderInfo,
     ProvidersResponse,
+    SuggestionListResponse,
+    SuggestionStatus,
     Thread,
     ThreadCreateRequest,
     ThreadListResponse,
+    ThreadMessage,
     UndoResponse,
     ValidateRequest,
     ValidateResponse,
@@ -76,7 +83,7 @@ def _not_implemented() -> HTTPException:
 async def providers() -> ProvidersResponse:
     """Providers accepted by the chat endpoint's `X-AI-Provider` header.
 
-    The only endpoint of this router implemented ahead of #214: the web app
+    Implemented ahead of the chat portion of #214: the web app
     needs the list (and the header contract documented on the response
     model) to build the Profile AI settings hand-off before the agent loop
     exists. Static by design — the gateway routes whatever provider/model
@@ -90,9 +97,7 @@ async def providers() -> ProvidersResponse:
                 models=["claude-sonnet-4-5", "claude-haiku-4-5"],
             ),
             ProviderInfo(id="openai", label="OpenAI", models=["gpt-5.2", "gpt-5.2-mini"]),
-            ProviderInfo(
-                id="google", label="Google", models=["gemini-3-pro", "gemini-3-flash"]
-            ),
+            ProviderInfo(id="google", label="Google", models=["gemini-3-pro", "gemini-3-flash"]),
         ]
     )
 
@@ -125,10 +130,31 @@ async def chat(
     raise _not_implemented()
 
 
-@router.post("/validate", response_model=ValidateResponse, responses=_ERROR_RESPONSES)
-async def validate_scope(request: ValidateRequest) -> ValidateResponse:
+@router.post(
+    "/validate",
+    response_model=ValidateResponse,
+    responses={
+        **_ERROR_RESPONSES,
+        404: {
+            "model": dict[str, str],
+            "description": "Corpus not found or not owned by the caller",
+        },
+        409: {
+            "model": ErrorInfo | dict[str, str],
+            "description": "Stale scope, or conversion not ready",
+        },
+        422: {"description": "Invalid scope or unreadable corpus"},
+        503: {"model": dict[str, str], "description": "Corpus storage is unavailable"},
+    },
+)
+async def validate_scope(request: ValidateRequest) -> ValidateResponse | JSONResponse:
     """Run Context-Fabric validation for a scope; findings carry node ids + consequences."""
-    raise _not_implemented()
+    from . import service
+
+    try:
+        return await asyncio.to_thread(service.validate_scope, request.scope)
+    except service.CurationError as exc:
+        return JSONResponse(status_code=exc.status, content=exc.body)
 
 
 @router.post(
@@ -143,44 +169,148 @@ async def validate_scope(request: ValidateRequest) -> ValidateResponse:
         **_ERROR_RESPONSES,
     },
 )
-async def apply_suggestion(suggestion_id: str, request: ApplyRequest) -> ApplyResponse:
+async def apply_suggestion(
+    suggestion_id: str, request: ApplyRequest
+) -> ApplyResponse | JSONResponse:
     """Apply a suggested fix to the working version — transactional with its history entry."""
-    raise _not_implemented()
+    from .mutations import apply
+
+    return await _mutation_call(apply, suggestion_id, request.confirmation_token)
 
 
-@router.post("/suggestions/{suggestion_id}/reject", status_code=204)
-async def reject_suggestion(suggestion_id: str) -> None:
+@router.post("/suggestions/{suggestion_id}/reject", status_code=204, response_model=None)
+async def reject_suggestion(suggestion_id: str) -> JSONResponse | None:
     """Discard a suggestion; nothing is written, the thread records the rejection."""
-    raise _not_implemented()
+    from .threads import transition_suggestion
+
+    result = await _thread_call(transition_suggestion, suggestion_id, SuggestionStatus.rejected)
+    if isinstance(result, JSONResponse):
+        return result
+    return None
 
 
-@router.post(
-    "/changes/{change_id}/undo", response_model=UndoResponse, responses=_ERROR_RESPONSES
-)
-async def undo_change(change_id: str) -> UndoResponse:
-    """Revert an applied change; the revert is itself a version-history entry."""
-    raise _not_implemented()
+@router.post("/changes/{change_id}/undo", response_model=UndoResponse, responses=_ERROR_RESPONSES)
+async def undo_change(change_id: str) -> UndoResponse | JSONResponse:
+    """Revert the whole operation containing this field change, adding new history."""
+    from .mutations import undo
+
+    return await _mutation_call(undo, change_id)
 
 
 @router.get("/changes", response_model=ChangeLogResponse)
-async def change_log(corpus: str, node_id: int | None = None) -> ChangeLogResponse:
+async def change_log(
+    corpus: str,
+    node_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> ChangeLogResponse | JSONResponse:
     """Version-history entries for a corpus (optionally one node) — feeds reader marks."""
-    raise _not_implemented()
+    from .mutations import history
+
+    return await _mutation_call(history, corpus, node_id, limit, offset)
+
+
+async def _mutation_call(fn, *args):
+    from .mutations import error_body
+    from .service import CurationError
+    from .thread_store import ThreadStoreError
+    from .wal_sqlite import JournalUnavailableError
+
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except CurationError as exc:
+        return JSONResponse(status_code=exc.status, content=error_body(exc))
+    except (ThreadStoreError, JournalUnavailableError):
+        return JSONResponse(
+            status_code=503, content=error_body(CurationError(503, "Change storage unavailable"))
+        )
 
 
 @router.post("/threads", response_model=Thread)
-async def create_thread(request: ThreadCreateRequest) -> Thread:
+async def create_thread(
+    request: ThreadCreateRequest, idempotency_key: str | None = Header(default=None)
+) -> Thread | JSONResponse:
     """Create a thread pinned to a scope. Navigation never re-scopes it (spec FR-012)."""
-    raise _not_implemented()
+    from .threads import create_thread as create
+
+    return await _thread_call(create, request.scope, idempotency_key)
 
 
 @router.get("/threads", response_model=ThreadListResponse)
-async def list_threads(corpus: str) -> ThreadListResponse:
+async def list_threads(
+    corpus: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, max_length=512),
+) -> ThreadListResponse | JSONResponse:
     """Threads for a corpus, newest first."""
-    raise _not_implemented()
+    from .threads import list_threads as list_owned
+
+    return await _thread_call(list_owned, corpus, limit, cursor)
 
 
 @router.get("/threads/{thread_id}", response_model=Thread)
-async def get_thread(thread_id: str) -> Thread:
+async def get_thread(thread_id: str) -> Thread | JSONResponse:
     """One thread with its sections (explicit re-scope forks)."""
-    raise _not_implemented()
+    from .threads import get_thread as get_owned
+
+    return await _thread_call(get_owned, thread_id)
+
+
+async def _thread_call(fn, *args):
+    from .service import CurationError
+    from .thread_store import ThreadStoreError
+    from .wal_sqlite import JournalUnavailableError
+
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except CurationError as exc:
+        return JSONResponse(status_code=exc.status, content=exc.body)
+    except ThreadStoreError:
+        return JSONResponse(status_code=503, content={"detail": "Conversation storage unavailable"})
+    except JournalUnavailableError:
+        return JSONResponse(status_code=503, content={"detail": "Change storage unavailable"})
+
+
+@router.post("/threads/{thread_id}/sections", response_model=Thread)
+async def fork_thread_section(
+    thread_id: str, request: ThreadCreateRequest, idempotency_key: str | None = Header(default=None)
+) -> Thread | JSONResponse:
+    """Explicitly re-scope into a new section without changing the original pin."""
+    from .threads import fork_section
+
+    return await _thread_call(fork_section, thread_id, request.scope, idempotency_key)
+
+
+@router.post("/threads/{thread_id}/messages", response_model=ThreadMessage)
+async def create_thread_message(
+    thread_id: str,
+    request: MessageCreateRequest,
+    idempotency_key: str | None = Header(default=None),
+) -> ThreadMessage | JSONResponse:
+    from .threads import append_message
+
+    return await _thread_call(
+        append_message, thread_id, request.section_id, request.content, idempotency_key
+    )
+
+
+@router.get("/threads/{thread_id}/messages", response_model=MessageListResponse)
+async def list_thread_messages(
+    thread_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> MessageListResponse | JSONResponse:
+    from .threads import list_messages
+
+    return await _thread_call(list_messages, thread_id, limit, offset)
+
+
+@router.get("/threads/{thread_id}/suggestions", response_model=SuggestionListResponse)
+async def list_thread_suggestions(
+    thread_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> SuggestionListResponse | JSONResponse:
+    from .threads import list_suggestions
+
+    return await _thread_call(list_suggestions, thread_id, limit, offset)
