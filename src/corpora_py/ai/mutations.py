@@ -59,7 +59,7 @@ def _context() -> tuple[str, HostedStorage, MutationEngine]:
         capability = storage.rpc("capabilities", owner, {})
     except CurationError as exc:
         raise JournalUnavailableError("Mutation database migration is unavailable") from exc
-    if capability != {"mutation_api": 1}:
+    if not isinstance(capability, dict) or capability.get("mutation_api") != 1:
         raise JournalUnavailableError("Mutation database migration is unavailable")
     return owner, storage, MutationEngine(SupabaseJournal(storage), ArchiveDrafts(storage))
 
