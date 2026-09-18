@@ -65,7 +65,9 @@ class NodeScope(BaseModel):
     the client before it gets here (spec FR-002).
     """
 
-    corpus: str = Field(description="Loaded corpus name (see /mcp list_corpora)")
+    corpus: str = Field(
+        description="Flat archive ID in the configured store, or job:<UUID> for an owned conversion"
+    )
     level: ScopeLevel
     node_id: int | None = Field(
         default=None,
@@ -81,12 +83,13 @@ class NodeScope(BaseModel):
     unit_range: UnitRange | None = Field(
         default=None, description="Present only for passage-level (multi-¶) scopes"
     )
-    version: str = Field(
-        description="Corpus working-version identifier the scope was captured at"
-    )
+    version: str = Field(description="Corpus working-version identifier the scope was captured at")
     content_hash: str | None = Field(
         default=None,
-        description="Hash of the scoped text at capture time; guards staleness on apply",
+        description=(
+            "sha256:<hex> of default-format text over unique selected slots in slot order, "
+            "without trimming or extra separators; checked by validation and used on apply"
+        ),
     )
 
     @model_validator(mode="after")
@@ -326,9 +329,7 @@ class ErrorInfo(BaseModel):
     model_unavailable → 503, forbidden → 403.
     """
 
-    code: Literal[
-        "locked", "stale", "confirmation_required", "model_unavailable", "forbidden"
-    ]
+    code: Literal["locked", "stale", "confirmation_required", "model_unavailable", "forbidden"]
     reason: str = Field(description="Human-readable reason, shown verbatim in the panel")
     retryable: bool
     current_version: str | None = Field(
