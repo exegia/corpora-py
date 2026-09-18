@@ -17,7 +17,8 @@ The implementation order agreed on 2026-09-18 is AI curation, then
 3. [#234: Apply, undo, and recovery](https://github.com/exegia/corpora-py/issues/234).
    Recovery core and explicit SQLite journal implemented in `ai.wal` / `ai.wal_sqlite`.
    Hosted journal mapping and atomic draft pointers are implemented in `ai.wal_supabase`.
-   Archive editing/provisioning and HTTP/MCP wiring remain before this issue can close.
+   Typed archive editing is implemented in `ai.archive_editor`; trusted provisioning
+   and public HTTP/MCP wiring remain before this issue can close.
 4. [#235: Durable threads and suggestions](https://github.com/exegia/corpora-py/issues/235).
    Implemented with owned pinned scopes, explicit forks, messages, suggestion states,
    and durable Supabase/SQLite storage. Hosted rollout requires the migration below.
@@ -328,3 +329,52 @@ provision owned working drafts. All draft readers/writers must use this registry
 legacy storage paths remain separate. Public apply/undo/history stay 501 until
 that adapter, confirmation-token validation, suggestion-state synchronization,
 and full-group response/history handling are wired. #234 remains open.
+
+
+## Typed archive editing (#234, third slice)
+
+`ArchiveDrafts` now connects the mutation engine to the hosted draft storage port
+with real archive inspection and staging. `edit_archive()` creates a private copy,
+checks the registered digest/version, resolves the pinned scope, and checks the
+complete displaced-value diff before touching even that copy. The input archive
+is never overwritten. Staged archives are uploaded under the new revision key;
+the journal/conditional publication protocol still controls when they become HEAD.
+
+This adapter supports existing string and signed 64-bit integer **node features**
+in archives retaining all Text-Fabric source files. It rejects unknown features,
+paths, graph/topology features, boundary suggestions, source-text suggestions, and
+all features referenced by declared text rendering formats. Unsupported repairs
+must use the source/walker workflow. Corpus-wide edits return 428 until the panel's
+bound confirmation protocol is wired; a nonempty token is never accepted as proof.
+
+For a valid feature edit, the adapter serializes complete changed feature maps,
+rebuilds the `.cfm` cache, refreshes computed TOC data, and increments the archive's
+major.minor version. It then reloads the result and verifies the exact target diff,
+scoped text, and every untouched node/edge value. Source/cache disagreement that
+would alter other content fails before an output archive can be published. TOC
+identity/publisher metadata and unrelated assets are preserved.
+
+`history.yml` retains earlier entries and snapshot pointers. Its new entry and
+`ai-changes.json` carry the stable operation ID, suggestion, pinned scope, target,
+complete old/new diff, base revision, and AI plus verified-user attribution. Undo
+adds another version and records the original operation link; it does not erase
+the displaced readings. These archive timestamps describe staging; the durable
+publication receipt remains authoritative for the database's `applied_at`.
+
+Real archive tests cover rebuilding and reloading CF caches, typed labels,
+multi-field edits, string escaping, unchanged assets, inverse edits, operation
+provenance, stale/out-of-scope requests, source-text protection, and cache drift
+outside the selection. An engine/adapter round trip uses actual archive files and
+a durable SQLite journal with a local conditional-publisher fixture. Hosted
+publication transactions remain covered by the PostgreSQL tests from the previous
+slice. No live archives or migrations were changed.
+
+### Public wiring still pending
+
+Apply/undo/history endpoints remain disabled. Before enabling them, serialize
+suggestion rejection with publication: checking pending state only before staging
+allows a rejection to race an apply. Add the database guard in a new migration,
+then wire owned suggestion resolution, registered-head reads, working-draft
+provisioning, full-group responses/history, and HTTP/MCP handlers. The editor is
+limited to typed node-feature changes; source-text/boundary workflows and corpus
+confirmation are not silently enabled. #234 remains open.
