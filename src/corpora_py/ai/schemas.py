@@ -27,7 +27,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ---------------------------------------------------------------------------
 # Scope
@@ -269,6 +269,41 @@ class ThreadCreateRequest(BaseModel):
 
 class ThreadListResponse(BaseModel):
     threads: list[Thread]
+    next_cursor: str | None = None
+
+
+class MessageCreateRequest(BaseModel):
+    """Only user messages can be posted by clients; model/tool roles are internal."""
+
+    model_config = ConfigDict(extra="forbid")
+    section_id: str
+    content: str = Field(min_length=1, max_length=32768)
+
+
+class ThreadMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    section_id: str
+    role: Literal["user", "assistant", "tool"]
+    content: str = Field(min_length=1, max_length=32768)
+    created_at: datetime
+
+
+class MessageListResponse(BaseModel):
+    messages: list[ThreadMessage]
+    next_offset: int | None = None
+
+
+class ThreadSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    section_id: str
+    suggestion: Suggestion
+    created_at: datetime
+
+
+class SuggestionListResponse(BaseModel):
+    suggestions: list[ThreadSuggestion]
+    next_offset: int | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -412,3 +412,38 @@ def test_zip_path_escape_is_rejected(client, archive):
     response = post(client)
     assert response.status_code == 422
     assert not (archive.parent / "escape.txt").exists()
+
+
+def test_threads_use_real_authorization_and_preserve_published_archive(
+    client, archive, monkeypatch, tmp_path
+):
+    from corpora_py.ai import threads
+
+    monkeypatch.setattr(service.settings, "ai_store", "sqlite")
+    monkeypatch.setattr(service.settings, "ai_sqlite_path", str(tmp_path / "conversations.sqlite3"))
+    before = archive.read_bytes()
+    body = {"scope": scope().model_dump(mode="json")}
+    headers = {"Authorization": "Bearer alice"}
+    response = client.post("/ai/threads", json=body, headers=headers)
+    assert response.status_code == 200
+    thread = response.json()
+    url = f"/ai/threads/{thread['id']}"
+    assert client.get(url, headers={"Authorization": "Bearer bob"}).status_code == 404
+    assert (
+        client.post(
+            url + "/sections",
+            json={"scope": scope(version="old").model_dump(mode="json")},
+            headers=headers,
+        ).status_code
+        == 409
+    )
+    threads._sqlite_store.cache_clear()
+    assert client.get(url, headers=headers).json() == thread
+    assert archive.read_bytes() == before
+
+    def revoked(*args, **kwargs):
+        raise service.storage.CorpusNotFoundError("revoked")
+
+    monkeypatch.setattr(service.storage.corpus_storage, "download", revoked)
+    assert client.get(url, headers=headers).status_code == 404
+    threads._sqlite_store.cache_clear()

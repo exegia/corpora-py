@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     cors_origins: str | None = os.getenv("CORS_ORIGINS")
     # AI
     open_ai_key: str = os.getenv("OPENAI_KEY", "")
+    # Hosted conversation state must survive instance recycle. SQLite is an
+    # explicit single-host alternative; never fall back to it on a DB outage.
+    ai_store: Literal["supabase", "sqlite"] = "supabase"
+    ai_sqlite_path: str | None = None
 
     # Auth (JWT verification for the combined FastAPI app -- see corpora_py.auth)
     # Defaults to enforced: this ships as a sidecar to a Tauri+Supabase desktop

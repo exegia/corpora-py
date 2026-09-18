@@ -122,12 +122,8 @@ def test_stub_endpoints_return_501(client):
     calls = [
         ("post", "/ai/chat", {"json": {"scope": _scope(), "message": "hi"}, "headers": headers}),
         ("post", "/ai/suggestions/s1/apply", {"json": {}}),
-        ("post", "/ai/suggestions/s1/reject", {}),
         ("post", "/ai/changes/c1/undo", {}),
         ("get", "/ai/changes", {"params": {"corpus": "PrimaPars"}}),
-        ("post", "/ai/threads", {"json": {"scope": _scope()}}),
-        ("get", "/ai/threads", {"params": {"corpus": "PrimaPars"}}),
-        ("get", "/ai/threads/t1", {}),
     ]
     for method, path, kwargs in calls:
         resp = getattr(client, method)(path, **kwargs)

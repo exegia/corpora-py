@@ -108,7 +108,64 @@ Required section features and their types come from the loaded `otext` schema. O
 linguistic requirements and source-based boundary/label comparisons are not inferred.
 Infrastructure errors return a generic 503; unreadable archives return 422; absent
 identity at the service boundary returns 403 (the HTTP middleware normally returns
-401 earlier). Suggestions, rejection, apply/undo, and thread endpoints remain stubs.
+401 earlier). Suggestion generation, apply/undo, and chat remain stubs. Durable threads and rejection are implemented below.
 
 Run `uv run pytest tests/corpora_py/test_ai_service.py` for HTTP, MCP (including real
 ASGI transport), ownership, scope, and stale-selection coverage.
+
+
+## Durable conversations (#235)
+
+Hosted deployments default to `AI_STORE=supabase`, using `SUPABASE_API_URL`
+and `SUPABASE_SERVICE_ROLE_KEY`. Apply
+`packages/admin/sql/migrations/20260918141622_ai_thread_persistence.sql`
+to the target database before enabling these endpoints. This migration has only
+been tested locally; merging the code does not deploy it. The new table has RLS
+and no browser-role grants or policies. All access goes through the API, which
+filters by verified owner and rechecks current corpus access on every request.
+No outage fallback creates ephemeral or divergent local state.
+
+For a persistent single-host installation, explicitly set `AI_STORE=sqlite`
+and optionally `AI_SQLITE_PATH` (default: platform user-data directory,
+`corpora/ai-threads.sqlite3`). The local owner is available only when auth is
+explicitly disabled. Mount this file's directory on durable storage; SQLite is
+not a multi-instance hosted backend.
+
+The following additive contract is for corpora-web#108:
+
+| Operation | Endpoint | Body / pagination |
+| --- | --- | --- |
+| Create thread | `POST /ai/threads` | `{scope: NodeScope}` |
+| List threads | `GET /ai/threads?corpus=...` | `limit` 1–100, opaque `cursor`; response `next_cursor` |
+| Read thread | `GET /ai/threads/{id}` | Original pin and ordered sections |
+| Explicit scope fork | `POST /ai/threads/{id}/sections` | `{scope: NodeScope}`; returns thread |
+| Append user message | `POST /ai/threads/{id}/messages` | `{section_id, content}`; returns message |
+| Read messages | `GET /ai/threads/{id}/messages` | `limit` 1–100, `offset`; response `next_offset` |
+| Read suggestions | `GET /ai/threads/{id}/suggestions` | Same offset pagination |
+| Reject suggestion | `POST /ai/suggestions/{id}/reject` | No body; 204 |
+
+Create, fork, and append accept an optional UUID `Idempotency-Key` header.
+Retry the same operation with the same key and payload. Reusing a key with a
+changed payload returns 409. Navigation does not update the original pin;
+explicit forks validate the new scope and retain earlier messages and snapshots.
+Historical reads remain available after a corpus version changes, provided the
+caller still has access. Published corpora permit conversations without edits.
+
+Only trusted server producers can append assistant/tool messages or save
+suggestions. `save_suggestion` returns a thread-qualified opaque ID; use that
+returned ID in events and subsequent operations. Suggestions must match their
+section's scope, base version, and supplied content hash. Pending suggestions can
+become applied, rejected, or stale; terminal transitions are idempotent and cannot
+be changed to another terminal state. Applying remains reserved for #234's WAL
+transaction; this storage service itself never edits corpus content.
+
+Updates use revision compare-and-swap, retrying contention up to five times.
+Threads are bounded to 256 sections, 2,048 messages, 512 suggestions and 2 MB of
+serialized state; exceeding a bound returns 413. Start another thread when full.
+Backend failures return generic 503 responses. Provider keys are never accepted
+by persisted message models or copied from headers into storage.
+
+Run `uv run pytest tests/corpora_py/test_ai_threads.py` for persistence, ownership,
+retry, pagination, lifecycle, HTTP and concurrent-write coverage. For isolated
+PostgreSQL, initialize the Supabase roles and `auth.users`, apply the migration,
+then run `packages/admin/sql/tests/ai_thread_persistence.sql` with `psql`.
