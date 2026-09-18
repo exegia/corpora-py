@@ -155,6 +155,29 @@ class HostedStorage:
             + quote(object_key, safe="/")
         )
 
+    def download(self, head: DraftHead, destination: Path) -> None:
+        """Download only a resolved immutable head and verify its complete bytes."""
+        try:
+            with self._session.get(
+                self._object_url(head, head.object_key),
+                headers=self.headers(),
+                timeout=60,
+                stream=True,
+            ) as response:
+                if response.status_code != 200:
+                    raise JournalUnavailableError("Registered draft is unavailable")
+                hasher = hashlib.sha256()
+                with destination.open("wb") as output:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        output.write(chunk)
+                        hasher.update(chunk)
+            if "sha256:" + hasher.hexdigest() != head.digest:
+                destination.unlink(missing_ok=True)
+                raise CurationError(409, "Registered draft digest mismatch")
+        except (requests.RequestException, OSError) as exc:
+            destination.unlink(missing_ok=True)
+            raise JournalUnavailableError("Registered draft is unavailable") from exc
+
     def verify_object(self, head: DraftHead, object_key: str, expected_digest: str) -> None:
         """Read back bytes: a successful upload alone is not publication proof."""
         try:

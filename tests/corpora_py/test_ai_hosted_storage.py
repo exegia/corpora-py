@@ -547,3 +547,22 @@ def test_postgres_cannot_reuse_historical_revision(hosted, intent):
         journal.insert(reused)
     assert error.value.status == 409
     assert journal.get(intent.owner, reused.id) is None
+
+
+def test_registered_download_checks_digest_and_removes_bad_output(intent, tmp_path):
+    session = Mock()
+    session.get.return_value = MagicMock()
+    response = session.get.return_value.__enter__.return_value
+    response.status_code = 200
+    response.iter_content.return_value = [b"archive"]
+    head = head_for(intent).model_copy(
+        update={"digest": "sha256:" + hashlib.sha256(b"archive").hexdigest()}
+    )
+    storage = HostedStorage("https://example.invalid", "secret", session)
+    target = tmp_path / "download.corpus"
+    storage.download(head, target)
+    assert target.read_bytes() == b"archive"
+    response.iter_content.return_value = [b"tampered"]
+    with pytest.raises(CurationError):
+        storage.download(head, target)
+    assert not target.exists()
