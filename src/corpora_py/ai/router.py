@@ -130,9 +130,16 @@ async def chat(
     response_model=ValidateResponse,
     responses={
         **_ERROR_RESPONSES,
-        404: {"description": "Corpus not found or not owned by the caller"},
-        409: {"model": ErrorInfo, "description": "Stale scope, or conversion not ready"},
+        404: {
+            "model": dict[str, str],
+            "description": "Corpus not found or not owned by the caller",
+        },
+        409: {
+            "model": ErrorInfo | dict[str, str],
+            "description": "Stale scope, or conversion not ready",
+        },
         422: {"description": "Invalid scope or unreadable corpus"},
+        503: {"model": dict[str, str], "description": "Corpus storage is unavailable"},
     },
 )
 async def validate_scope(request: ValidateRequest) -> ValidateResponse | JSONResponse:
