@@ -1,0 +1,135 @@
+{
+  "specVersion": "0.4.0",
+  "id": "urn:example:bundle",
+  "requiredCapabilities": [
+    "core:text"
+  ],
+  "works": [
+    {
+      "id": "urn:example:work",
+      "title": "Discontinuous linguistic sample"
+    }
+  ],
+  "editions": [
+    {
+      "id": "urn:example:edition",
+      "workId": "urn:example:work",
+      "title": "Discontinuous linguistic sample sample",
+      "language": "en",
+      "kind": "edition"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "urn:example:rev",
+      "editionId": "urn:example:edition",
+      "sequence": 1,
+      "profileIds": [
+        "urn:example:ling-profile"
+      ],
+      "importId": "urn:example:import"
+    }
+  ],
+  "streams": [
+    {
+      "id": "urn:example:text",
+      "revisionId": "urn:example:rev",
+      "order": 0,
+      "text": "She has really spoken."
+    }
+  ],
+  "anchors": [
+    {
+      "id": "urn:example:a-clause",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 4,
+          "end": 7
+        },
+        {
+          "streamId": "urn:example:text",
+          "start": 6,
+          "end": 21
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "urn:example:clause",
+      "revisionId": "urn:example:rev",
+      "type": "ling:clause",
+      "anchorId": "urn:example:a-clause",
+      "features": {
+        "ling:tense": "perfect"
+      },
+      "sourceIds": [
+        {
+          "assetId": "urn:example:tf-source",
+          "value": "42"
+        }
+      ],
+      "extensions": {
+        "tf:slots": [
+          2,
+          4
+        ]
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "id": "urn:example:ling-profile",
+      "version": "1.0.0",
+      "nodeTypes": [
+        "ling:clause"
+      ],
+      "featureKeys": [
+        "ling:tense"
+      ],
+      "requiredCapabilities": [
+        "core:anchors"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "urn:example:importer",
+      "name": "Fixture adapter",
+      "kind": "software"
+    }
+  ],
+  "assets": [
+    {
+      "id": "urn:example:tf-source",
+      "mediaType": "text/plain",
+      "uri": "fixture:tf-slots",
+      "sha256": "192c9e52424ab384591714f729104b6058dadf4146d757c158af98b37d91e7ef"
+    }
+  ],
+  "imports": [
+    {
+      "id": "urn:example:import",
+      "assetIds": [
+        "urn:example:tf-source"
+      ],
+      "adapter": "tf-slot-map",
+      "adapterVersion": "example-1",
+      "agentId": "urn:example:importer",
+      "report": [
+        {
+          "aspect": "slot joins",
+          "status": "transformed",
+          "detail": "Explicit spaces; source slot offsets retained in extension."
+        },
+        {
+          "aspect": "source feature inventory",
+          "status": "omitted",
+          "detail": "Synthetic example includes tense only."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "specVersion": "0.4.0",
+  "id": "urn:example:bundle",
+  "requiredCapabilities": [
+    "core:text"
+  ],
+  "works": [
+    {
+      "id": "urn:example:work",
+      "title": "Single page"
+    }
+  ],
+  "editions": [
+    {
+      "id": "urn:example:edition",
+      "workId": "urn:example:work",
+      "title": "Single page sample",
+      "language": "en",
+      "kind": "edition"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "urn:example:rev",
+      "editionId": "urn:example:edition",
+      "sequence": 1,
+      "profileIds": []
+    }
+  ],
+  "streams": [
+    {
+      "id": "urn:example:text",
+      "revisionId": "urn:example:rev",
+      "order": 0,
+      "text": "A😀é\n"
+    }
+  ],
+  "extensions": {
+    "vendor:opaque": {
+      "unknown": [
+        1,
+        {
+          "x": "retain"
+        }
+      ]
+    }
+  }
+}
