@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[4]
 MODULE = importlib.util.spec_from_file_location(
     "experiments", ROOT / "scripts/run_corpus_document_experiments.py"
 )
+if MODULE is None or MODULE.loader is None:
+    raise ImportError("Cannot load corpus document extraction experiments")
 experiment = importlib.util.module_from_spec(MODULE)
 # dataclass resolves this module by name during import.
 sys.modules[MODULE.name] = experiment

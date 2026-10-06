@@ -30,9 +30,13 @@ SPEC_ROOT = REPO / "specs/corpus-document/v0.4.0"
 CHECKER_SPEC = importlib.util.spec_from_file_location(
     "checker", REPO / "scripts/check_corpus_document.py"
 )
+if CHECKER_SPEC is None or CHECKER_SPEC.loader is None:
+    raise ImportError("Cannot load corpus document checker")
 checker = importlib.util.module_from_spec(CHECKER_SPEC)
 CHECKER_SPEC.loader.exec_module(checker)
 GATE_SPEC = importlib.util.spec_from_file_location("pdf_gate", SPEC_ROOT / "pdf_acceptance.py")
+if GATE_SPEC is None or GATE_SPEC.loader is None:
+    raise ImportError("Cannot load PDF acceptance policy")
 pdf_gate = importlib.util.module_from_spec(GATE_SPEC)
 GATE_SPEC.loader.exec_module(pdf_gate)
 
