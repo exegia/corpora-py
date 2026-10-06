@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:corpora:corpus-document:0.4.0:position.schema.json",
+  "$ref": "urn:corpora:corpus-document:0.4.0:document.schema.json#/$defs/position"
+}

@@ -1,0 +1,430 @@
+{
+  "specVersion": "0.4.0",
+  "id": "urn:usx-example:usx-peripheral",
+  "requiredCapabilities": [
+    "core:text",
+    "core:anchors",
+    "core:structures",
+    "core:annotations"
+  ],
+  "works": [
+    {
+      "id": "urn:usx-example:work-usx-peripheral",
+      "title": "usx-peripheral"
+    }
+  ],
+  "editions": [
+    {
+      "id": "urn:usx-example:edition-usx-peripheral",
+      "workId": "urn:usx-example:work-usx-peripheral",
+      "title": "Synthetic USX projection",
+      "language": "en",
+      "kind": "edition"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "urn:usx-example:rev-usx-peripheral",
+      "editionId": "urn:usx-example:edition-usx-peripheral",
+      "sequence": 1,
+      "profileIds": [
+        "urn:corpora:profile:usx-projection:0.4.0"
+      ],
+      "importId": "urn:usx-example:import-usx-peripheral"
+    }
+  ],
+  "streams": [
+    {
+      "id": "urn:usx-example:stream-usx-peripheral",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "order": 0,
+      "text": "Contents\nName\tPage\nBackground"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "urn:corpora:profile:usx-projection:0.4.0",
+      "version": "0.4.0",
+      "nodeTypes": [
+        "usx:book",
+        "usx:chapter",
+        "usx:poetryLine",
+        "usx:char",
+        "usx:quotation",
+        "usx:peripheral",
+        "usx:table",
+        "usx:row",
+        "usx:cell",
+        "usx:sidebar"
+      ],
+      "featureKeys": [],
+      "requiredCapabilities": [
+        "core:positions"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "urn:usx-example:mapper",
+      "name": "Synthetic mapping author",
+      "kind": "software"
+    }
+  ],
+  "assets": [
+    {
+      "id": "urn:usx-example:usx-peripheral-source",
+      "mediaType": "application/xml",
+      "uri": "fixture:usx-peripheral.usx",
+      "sha256": "68fcd5c0284b5265818a61fecc9a6f6b703ba9abdebd0df577104b2f9bcf23d9"
+    }
+  ],
+  "imports": [
+    {
+      "id": "urn:usx-example:import-usx-peripheral",
+      "assetIds": [
+        "urn:usx-example:usx-peripheral-source"
+      ],
+      "adapter": "synthetic-usx-projection",
+      "adapterVersion": "draft-0.4.0",
+      "agentId": "urn:usx-example:mapper",
+      "report": [
+        {
+          "aspect": "source",
+          "status": "preserved",
+          "detail": "Original synthetic source asset bytes and checksum retained; not parser output."
+        },
+        {
+          "aspect": "text joins",
+          "status": "transformed",
+          "detail": "Displayed blocks joined with explicit newline or tab separators; note body excluded from main stream."
+        },
+        {
+          "aspect": "USX style inventory",
+          "status": "unsupported",
+          "detail": "Only this hand-authored projection is exercised, not a complete USX implementation."
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "urn:usx-example:front",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "usx:book",
+      "extensions": {
+        "usx:attributes": {
+          "code": "FRT",
+          "style": "id"
+        }
+      },
+      "anchorId": "urn:usx-example:a-front"
+    },
+    {
+      "id": "urn:usx-example:peripheral",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "usx:peripheral",
+      "extensions": {
+        "usx:attributes": {
+          "alt": "Contents",
+          "id": "contents"
+        }
+      },
+      "anchorId": "urn:usx-example:a-peripheral"
+    },
+    {
+      "id": "urn:usx-example:title",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "core:heading",
+      "extensions": {
+        "usx:attributes": {
+          "style": "mt1"
+        }
+      },
+      "anchorId": "urn:usx-example:a-title"
+    },
+    {
+      "id": "urn:usx-example:table",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "usx:table",
+      "extensions": {
+        "usx:attributes": {}
+      },
+      "anchorId": "urn:usx-example:a-table"
+    },
+    {
+      "id": "urn:usx-example:row",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "usx:row",
+      "extensions": {
+        "usx:attributes": {
+          "style": "tr"
+        }
+      },
+      "anchorId": "urn:usx-example:a-row"
+    },
+    {
+      "id": "urn:usx-example:cell1",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "usx:cell",
+      "extensions": {
+        "usx:attributes": {
+          "style": "tc1",
+          "align": "start",
+          "colspan": "2"
+        }
+      },
+      "anchorId": "urn:usx-example:a-cell1"
+    },
+    {
+      "id": "urn:usx-example:cell2",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "usx:cell",
+      "extensions": {
+        "usx:attributes": {
+          "style": "tcr3",
+          "align": "end"
+        }
+      },
+      "anchorId": "urn:usx-example:a-cell2"
+    },
+    {
+      "id": "urn:usx-example:sidebar",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "usx:sidebar",
+      "extensions": {
+        "usx:attributes": {
+          "style": "esb",
+          "category": "History"
+        }
+      },
+      "anchorId": "urn:usx-example:a-sidebar"
+    },
+    {
+      "id": "urn:usx-example:sidebar-p",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "core:paragraph",
+      "extensions": {
+        "usx:attributes": {
+          "style": "p"
+        }
+      },
+      "anchorId": "urn:usx-example:a-sidebar-p"
+    },
+    {
+      "id": "urn:usx-example:xref-point",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "type": "core:milestone",
+      "extensions": {
+        "usx:attributes": {
+          "style": "x",
+          "caller": "-"
+        }
+      },
+      "position": {
+        "streamId": "urn:usx-example:stream-usx-peripheral",
+        "offset": 29
+      }
+    }
+  ],
+  "anchors": [
+    {
+      "id": "urn:usx-example:a-front",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 0,
+          "end": 29
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-peripheral",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 0,
+          "end": 29
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-title",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 0,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-table",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 9,
+          "end": 18
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-row",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 9,
+          "end": 18
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-cell1",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 9,
+          "end": 13
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-cell2",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 14,
+          "end": 18
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-sidebar",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 19,
+          "end": 29
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-sidebar-p",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-peripheral",
+          "start": 19,
+          "end": 29
+        }
+      ]
+    }
+  ],
+  "structures": [
+    {
+      "id": "urn:usx-example:peripheral-layout",
+      "revisionId": "urn:usx-example:rev-usx-peripheral",
+      "name": "usx:peripheral-layout",
+      "members": [
+        {
+          "nodeId": "urn:usx-example:front",
+          "order": 0
+        },
+        {
+          "nodeId": "urn:usx-example:peripheral",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:front"
+        },
+        {
+          "nodeId": "urn:usx-example:title",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:peripheral"
+        },
+        {
+          "nodeId": "urn:usx-example:table",
+          "order": 1,
+          "parentNodeId": "urn:usx-example:peripheral"
+        },
+        {
+          "nodeId": "urn:usx-example:row",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:table"
+        },
+        {
+          "nodeId": "urn:usx-example:cell1",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:row"
+        },
+        {
+          "nodeId": "urn:usx-example:cell2",
+          "order": 1,
+          "parentNodeId": "urn:usx-example:row"
+        },
+        {
+          "nodeId": "urn:usx-example:sidebar",
+          "order": 2,
+          "parentNodeId": "urn:usx-example:peripheral"
+        },
+        {
+          "nodeId": "urn:usx-example:sidebar-p",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:sidebar"
+        },
+        {
+          "nodeId": "urn:usx-example:xref-point",
+          "order": 1,
+          "parentNodeId": "urn:usx-example:sidebar"
+        }
+      ]
+    }
+  ],
+  "extensions": {
+    "usx:sourceVersion": "3.1",
+    "usx:documentationRelease": "3.1.1"
+  },
+  "annotations": [
+    {
+      "id": "urn:usx-example:xref",
+      "type": "usx:crossReference",
+      "agentId": "urn:usx-example:mapper",
+      "targets": [
+        {
+          "id": "urn:usx-example:xref-point"
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "text": "Gen 1:1",
+          "marks": [
+            {
+              "start": 0,
+              "end": 7,
+              "type": "usx:xt"
+            }
+          ]
+        }
+      ],
+      "extensions": {
+        "usx:attributes": {
+          "style": "x",
+          "caller": "-"
+        },
+        "usx:references": [
+          {
+            "loc": "GEN 1:1",
+            "status": "unavailable",
+            "reason": "Scripture target scheme not loaded in this peripheral bundle"
+          }
+        ]
+      }
+    }
+  ]
+}
