@@ -14,9 +14,11 @@ scripture (book/chapter/verse, surah/ayah), monographs (chapter/section/paragrap
 (page/paragraph), academic papers, speeches, and transcripts — one model, no fixed hierarchy
 depth, no tradition's vocabulary hard-coded as universal columns.
 
-**Status:** v1.0.0 — adopted as the documentation contract (Phase 1 of
-[07-migration-mapping.md](07-migration-mapping.md)). The machine-readable JSON Schemas are the
-source of truth; these docs explain and motivate them. See
+**Authority:** the independent [Corpora Corpus Document Specification](../../../specs/corpus-document/README.md)
+is the target contract for Corpora applications. This series and its schemas describe
+the Context Fabric dependency model and current implementation evidence. They are
+not the authority for the new unpublished Corpora contract. No application migration
+is implied by this documentation change. See
 [Implementation status](#implementation-status) for what the code emits today.
 
 ## The contract in one paragraph

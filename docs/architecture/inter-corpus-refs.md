@@ -1,169 +1,266 @@
 ---
-title: Inter-corpus references
-description: Compact, corpus-prefixed positional address for a node in any corpus (co/bk/ch/pa/st/cl/wo), with level-skipping rules and open design questions.
+title: Inter-corpus references — CUSX targets
+description: Revision-pinned links to arbitrary CUSX nodes and ranges, with USX-style canonical addresses for Bible, Quran and Book of Mormon.
 tags:
   - architecture
   - references
-  - context-fabric
-status: accepted-with-amendments
+  - cusx
+status: proposed
 type: spec
 ---
-> **Status (2026-09-07).** This form is implemented in `common.utils.refcompact` as a *serialization* of a resolved node — it is emitted as `token` beside every reference and accepted by `/refs/resolve`, but it is **not** the citation string the UI shows or stores; that is the tfref short form (`bhsa@2021/Deut:4:2!clause1`). The amendments below (corpus slug instead of a hex id, prefixes bound by section depth, `pa` as a block unit on shallow corpora, `ph`, ranges, no version slot) are decided in [reference-forms.md](./reference-forms.md).
 
-A compact, single-token address that names one node in one corpus, so a note, annotation or cross-reference in corpus A can point at a node in corpus B without carrying a URL or a UUID.
+# Inter-corpus references — CUSX targets
 
-This is a **positional** address (ordinal walk down the tree). It complements, and does not replace, the scheme-based **canonical** addressing in [03 — References](./context-fabric/03-references.md) (`bible/JHN/3/16`), which resolves through codes and alias registries. See [Relationship to canonical references](#relationship-to-canonical-references).
+**Design update, 2026-10-05.** This replaces the old compact positional token as
+the proposed durable cross-corpus link contract. The current TF resolver remains
+unchanged. See [reference-forms.md](./reference-forms.md) for compatibility and
+implementation status. This document specifies the format; it does not claim a
+new resolver, registry or exporter has been implemented.
 
-## Example
+A paragraph, clause, word, verse, note or other identified content node can link
+to any identified node in another document or corpus. The target need not have
+the same type or fit the source's hierarchy. A word can link to a paragraph; a
+clause can link to a word; a note can link to a verse range.
 
-```text
-co0001_bk001_ch001_pa001_st001_cl001_wo001
-```
+## 1. Identity, citation and link are distinct
 
-## Grammar
-
-```ebnf
-reference = corpus , { "_" , level } ;
-corpus    = "co" , id ;
-level     = prefix , ordinal ;
-prefix    = "bk" | "ch" | "pa" | "st" | "cl" | "wo" ;
-ordinal   = digit , { digit } ;          (* 1-based, zero-padded to 3, may exceed 3 *)
-id        = 4 * ( hex | digit ) ;
-```
-
-- Levels appear in the fixed order below, coarsest first. Any level may be omitted (see [Skipping levels](#skipping-levels)); the ones present keep their relative order.
-- Ordinals are **1-based** and count siblings under the nearest *present* ancestor, in document order.
-- Zero-padding to three digits is cosmetic. Parsers read the digits as an integer, so `pa1533` is legal.
-
-## Levels
-
-```mermaid
-flowchart TD
-  co["co · corpus"] --> bk["bk · book / top section"]
-  bk --> ch["ch · chapter"]
-  ch --> pa["pa · paragraph (or verse)"]
-  pa --> st["st · sentence"]
-  st --> cl["cl · clause"]
-  cl --> wo["wo · word"]
-  classDef opt stroke-dasharray: 4 3;
-  class ch,st,cl opt;
-```
-
-Dashed nodes are the levels most corpora do not have.
-
-| Prefix | Level | Counts… | Canonical type it maps to | Present in today's converters? |
-| --- | --- | --- | --- | --- |
-| `co` | corpus | — (id, not ordinal) | `Edition` | yes (library filename today; see open issue 1) |
-| `bk` | book / top-level section | sections under the root | `bible:book`, `quran:surah`, `generic:part` (category `division`) | yes |
-| `ch` | chapter | chapters under the book | `bible:chapter`, `generic:chapter` | yes (`epub`, `tei div`) |
-| `pa` | paragraph, or verse in scripture | blocks under the chapter | `generic:paragraph`, `bible:verse`, `quran:ayah` (category `block`) | yes |
-| `st` | sentence | sentences under the paragraph | `ling:sentence` (category `inline`) | no (linguistic corpora such as BHSA only) |
-| `cl` | clause | clauses under the sentence | `ling:clause` | no (BHSA only) |
-| `wo` | word | words under the clause | `ling:word` | no (BHSA only) |
-
-The type column comes from the alias registries in [02 — Node Taxonomy](./context-fabric/02-node-taxonomy.md) §4–5; the converter column from the same doc's §5 tables and the walker's `SectionSpec` in [_walker.py](../../packages/admin/src/admin/converters/_walker.py).
-
-## Skipping levels
-
-Every level after `co` is optional. When a level is omitted, the next present level counts **from the beginning of the nearest present ancestor**, flattening the skipped level(s).
-
-```mermaid
-flowchart LR
-  subgraph full ["co0001_bk001_ch002_pa003"]
-    direction TB
-    B1[bk001] --> C2[ch002] --> P3["pa003 (3rd verse of chapter 2)"]
-  end
-  subgraph skip ["co0001_bk001_pa034"]
-    direction TB
-    B2[bk001] -.chapter omitted.-> P34["pa034 (34th verse of the book)"]
-  end
-```
-
-Both references above can name the same verse (Genesis 1 has 31 verses, so verse 2:3 is the 34th verse of the book). Skipping is therefore a **view**, not a different node: resolution must return the same node id either way.
-
-Rules:
-
-1. A skipped level never changes which node is meant, only how it is counted.
-2. A reference ending early (`co0001_bk001_ch002`) names the container node itself, not its first leaf.
-3. Resolvers MUST accept the padded and unpadded forms (`pa003` = `pa3`).
-4. A reference whose ordinal exceeds the sibling count resolves to `not_found`, never to an error (same rule as [03 — References §8](./context-fabric/03-references.md)).
-
-## Relationship to canonical references
-
-| Aspect | Inter-corpus reference (this doc) | Canonical Reference ([03](./context-fabric/03-references.md)) |
+| Concept | Purpose | Example |
 | --- | --- | --- |
-| Scope | one specific corpus (`co` prefix) | a scheme, optionally pinned to a work/edition |
-| Addressing | positional ordinals only | codes + canonical ordinals (`refOrdinal`), via alias registry |
-| Survives re-conversion? | no: any structural change shifts ordinals | yes, as long as codes/`refOrdinal` are preserved |
-| Survives versification differences? | no | yes, via edition alignment |
-| Intended use | compact machine token in notes, annotations, URL fragments | human-entered and canonical citations |
+| Content identity | Exact target within a document | `word-a7`, `clause-b2`, `paragraph-k4` |
+| Canonical address | Source-declared address under a named numbering/profile | `MAT 3:1-4`, `QUR 2:255`, `1NE 3:7` |
+| Durable link | Exact package revision, document and target | `x-corpora:/greek-nt/1/luke#word-a7` |
+| Display label | Reader-facing text; never a lookup key | “third word”, “Al-Baqarah 255” |
 
-Recommendation: store canonical references where one exists, and treat the compact form as a **serialization for a given corpus snapshot**. A resolver can translate between them once the target node is known, because every node carries `ordinal` (document position) alongside `code`/`refOrdinal`.
+IDs are opaque within their declared scope. Do not derive identity from a
+citation, label, word ordinal, text offset, TF node number or source filename.
+Existing generated `anchor-N` IDs remain usable within their exact package
+revision; their spelling does not promise stability after re-conversion.
 
-## Proposal: extend canonical References to the word
+The scope of a durable endpoint is `(packageId, revision, documentId, anchorId)`.
+`packageId` and `revision` come from `CorporaMetadata`; `documentId` is the CUSX
+`cx:document/@id`. A document-root target omits the anchor. IDs and revisions
+must be bound to an immutable package inventory/checksum by the repository.
+Reusing the same revision for changed content is invalid.
 
-The canonical model already has everything needed to address sub-block nodes; it only lacked registered level types and a rule for where such addresses stop being edition-independent. Four changes, none of which touch `reference.schema.json`. **Applied 2026-09-06**: [02 §4.8](./context-fabric/02-node-taxonomy.md) registers `ling`, [03 §3.1](./context-fabric/03-references.md) appends the levels, and 03 §2 and §8 carry the token and failure rules. This section stays as the rationale.
+## 2. USX linking and the Corpora URI extension
 
-### 1. Register a `ling` namespace in the taxonomy
-
-Add to [02 — Node Taxonomy](./context-fabric/02-node-taxonomy.md) §3/§4 (a docs PR, not a schema change, per its registration rule 2):
-
-| Canonical type | Category | Addressed by | Notes |
-| --- | --- | --- | --- |
-| `ling:sentence` | `inline` | `ordinal` | span inside the parent `block` |
-| `ling:clause` | `inline` | `ordinal` | span inside a sentence |
-| `ling:word` | `inline` | `ordinal` | one token; the finest addressable unit |
-
-`inline` is the right category: the taxonomy defines it as a span inside a parent block's flow, and clients that do not know `ling:*` render it as plain text. Producers set `refOrdinal` to the 1-based position under the parent, as for any ordinal level.
-
-### 2. Append optional sub-block levels to every scheme
-
-Extend the level sequences in [03 — References](./context-fabric/03-references.md) §3 with the same three trailing levels, all optional:
-
-| Scheme | Level sequence (existing → appended) |
-| --- | --- |
-| `bible` | … `bible:verse` → `ling:sentence` → `ling:clause` → `ling:word` |
-| `quran` | … `quran:ayah` → `ling:sentence` → `ling:clause` → `ling:word` |
-| `monograph`, `academic`, … | … `*:paragraph` → `ling:sentence` → `ling:clause` → `ling:word` |
-
-An edition opts in by listing the levels it actually has in `structureProfile.levels`; an edition without them is unchanged, and `StructureLevel` needs no new field.
-
-### 3. Serialize sub-block segments as `level-ordinal` tokens
-
-Because the appended levels are optional and skippable, they always use rule 2 of §2.3 in [03](./context-fabric/03-references.md): `sentence-N`, `clause-N`, `word-N`. The fixed levels above them keep their existing token style, so every current canonical string stays valid.
+The [USX linking specification](https://ubsicap.github.io/usx/usx3.0.3/linking.html)
+provides `link-href`, `link-title` and `link-id` on `char` elements. It supports
+project-qualified scripture references, local anchors and resource URIs. User
+URI schemes must start with `x-`; therefore this proposal uses `x-corpora`.
+These are USX mechanisms; the URI grammar below is a Corpora extension.
 
 ```text
-bible/GEN/1/1/word-3                  third word of the verse
-bible/GEN/1/1/clause-2/word-1         first word of the second clause
-bible/GEN/1/1/sentence-1/clause-2/word-1
-monograph/chapter-4/paragraph-3/sentence-2
+x-corpora:/<packageId>/<revision>/<documentId>#<anchorId>
+x-corpora:/<packageId>/<revision>/<documentId>
 ```
 
-Skipping a level counts under the nearest present ancestor, exactly the [skip rule](#skipping-levels) of the compact form, so `word-3` and `clause-1/word-3` can name the same node and must resolve identically.
+Each path segment and fragment is independently UTF-8 percent-encoded; `/`, `#`,
+`?` and `%` inside an ID must be encoded. Decode once. Empty path segments,
+dot traversal segments, duplicate selector parameters and malformed escapes
+are invalid. The URI has no network authority/host. Case is significant for
+opaque IDs. `revision` is an opaque repository revision, not the CUSX grammar
+version. This is a logical content address, not a filesystem or fetch URL.
 
-### 4. Sub-block references are `kind: edition`
+Relative links such as `#word-a7` and `luke.usx#word-a7` remain valid inside a
+CUSX package. Resolve them against its declared resource inventory, then pin
+the endpoint before storing a durable cross-corpus reference. Source XHTML paths
+and TF mappings stay in external conversion evidence, not publication links.
 
-Sentence, clause and word boundaries are a property of one analysis (the BHSA segmentation, a given translation's word order), not of the work. A Reference containing any `ling:*` segment therefore carries `kind: "edition"` and an `editionSlug`, and the resolver rejects a canonical one at parse time. Cross-edition word alignment, when wanted, uses the existing `aligned-with` edges of §7 rather than pretending word 3 is the same word in every translation.
-
-### What stays the same
-
-- **Ranges** (§6) expand in document order, so `bible/GEN/1/1/word-3` to `bible/GEN/1/2/word-1` works unchanged.
-- **Failure modes** (§8): an edition without `ling:*` levels answers `partial` with the deepest matched ancestor, the verse.
-- **The compact form** becomes a pure encoding of such a Reference: `co` ↔ `editionSlug`, and each prefix ↔ one `levelType` per scheme (`bk` ↔ `bible:book`, `pa` ↔ `bible:verse` or `generic:paragraph`, `st`/`cl`/`wo` ↔ `ling:*`). It needs no resolver of its own.
-
-```mermaid
-flowchart LR
-  compact["co0001_bk001_ch001_pa001_cl002_wo001"] -- decode --> ref["Reference{kind: edition,\neditionSlug, segments[...]}"]
-  ref -- serialize --> canon["bible/GEN/1/1/clause-2/word-1"]
-  ref -- resolve (03 §4) --> node["ContentNode id"]
+```xml
+<char style="jmp"
+      link-href="x-corpora:/greek-nt/1/luke#word-a7"
+      link-title="Target word">linked text</char>
 ```
 
-## Open issues
+A link does not assert translation equivalence, common authorship or alignment.
+Those are separately typed relations with explicit provenance. External HTTP
+links may remain external; resolving CUSX references must not fetch arbitrary
+remote resources or execute embedded instructions.
 
-Items 1, 2, 4 and 5 are decided in [reference-forms.md](./reference-forms.md); the text below is kept as the original rationale.
+## 3. Anchoring words, clauses and paragraphs
 
-1. **Corpus id collision.** *Decided: the library slug (`cobhsa`), `_` folded to `-`.* Four hex characters give 65,536 values; taking them from the tail of a UUID makes two corpora colliding a matter of luck, not policy. Prefer a registry-assigned short id (or the full corpus slug the library already uses as its filename) over a UUID suffix. Nothing in the pipeline assigns a corpus UUID today: the library keys corpora by `.corpus` filename and jobs by `job-<uuid>` (see [api.py](../../packages/admin/src/admin/services/api.py)).
-2. **Prefix clash in the original draft.** `se` was used for both *section* and *sentence*. This draft uses `bk` for the top level and `st` for sentence; adjust if other prefixes read better.
-3. **Three digits is not enough once levels are skipped.** Counting verses from the start of a long book exceeds 999 (TODO: cite a book/verse count source once ingested). Hence the rule that padding is cosmetic and ordinals are unbounded.
-4. **`pa` is overloaded.** *Decided: `pa` is the 3rd section level when the corpus declares one, else the `paragraph`/`para`/`verse` node type under the innermost section.* Paragraph and verse are different node types in the taxonomy (`generic:paragraph` vs `bible:verse`) but share one prefix here. That is fine for a positional address as long as a corpus has exactly one `block`-category level under `ch`; corpora that have both (verse-per-paragraph editions) need a decision.
-5. **Sub-paragraph levels exist only in linguistic corpora.** *Decided: `st`/`cl`/`ph`/`wo` are emitted only for node types the corpus actually has; `to_compact` refuses others and the API returns `token: null`.* None of the current converters emit them. The [proposal above](#proposal-extend-canonical-references-to-the-word) registers `ling:*` types so that editions which do have them (BHSA-style) can be addressed; the compact form must not claim `st`/`cl`/`wo` for an edition whose `structureProfile` lacks them.
+Use existing CUSX mechanisms, not a mandatory book/chapter/paragraph tree:
+
+| Target | Existing CUSX representation | Target extent |
+| --- | --- | --- |
+| Word represented as a span | `char style="w" link-id="..."` | Wrapped text |
+| Paragraph/block | `para cx:id="..."` | Element content |
+| Clause, sentence, word or paragraph across blocks | Paired `cx:boundary` with `unit`, `scheme`, `sid/eid`; anchor on start | Logical paired range |
+| Point | Empty `char style="jmp" link-id="..."` | Zero-width position |
+| Document | `cx:document/@id` | Whole content document |
+
+`cx` is `urn:corpora:usx-extension:0.1`. For a boundary anchor, the proposed
+resolver must return the logical range identified by `(document, unit, scheme,
+sid)`, not just its start position. An empty `jmp` anchor remains a point.
+`sid/eid` alone are range keys, not automatically link anchors: advertise an
+explicit unique `cx:id` on the start when the range is directly linkable.
+
+```xml
+<para xmlns:cx="urn:corpora:usx-extension:0.1"
+      style="p" cx:id="paragraph-k4" cx:node-type="paragraph">
+  <cx:boundary unit="clause" scheme="analysis-v1"
+               sid="clause-b2" label="2" cx:id="clause-b2"/>
+  A <char style="w" link-id="word-a7" cx:node-type="word">word</char> here.
+  <cx:boundary unit="clause" scheme="analysis-v1" eid="clause-b2"/>
+</para>
+```
+
+Anchor IDs must be unique across `cx:id` and `link-id` in the document, including
+its root ID. Producers must reject competing IDs on the same element. Lookup
+never silently chooses a similarly named anchor in a different document.
+
+Word, clause, sentence and paragraph boundaries are edition/analysis-specific.
+Do not invent a segmentation that the target publication does not provide.
+Paragraph and verse are different axes, even when one happens to contain the
+other. A clause may cross paragraph or verse boundaries; do not flatten it to
+fit a single tree. Discontinuous targets and cross-document fragments require
+an explicit logical range index joining declared fragments in reading order.
+Until that index is available, return `unavailable` rather than a partial match.
+CUSX currently forbids overlapping active ranges on the same `(unit, scheme)`
+axis; analyses needing them must declare separate axes/schemes or await a
+supported extension, not emit invalid boundaries.
+
+The same mechanism covers link sources. A `char` can wrap linked text; paired
+boundaries identify a source clause/range when a relationship cannot be wrapped
+without breaking existing markup. The stored relationship has separately scoped
+source and target endpoints; a publication rendering may use a `jmp` link at its
+source. Arbitrary relations do not require new link attributes on every element.
+
+## 4. Canonical scripture profiles
+
+Keep the familiar USX shape `CODE chapter:verse`, with `CODE chapter` and `CODE`
+for containers. A hyphen denotes an inclusive range; comma denotes a selection
+list. Cross-chapter ranges repeat the chapter after the hyphen; cross-book
+ranges/lists use structured start/end or selection objects, not guessed strings.
+Verse labels (including source-declared bridges and suffixes) remain opaque
+strings. Only a registry's declared entry order determines expansion.
+
+| Profile | Canonical address | Interpretation | Required context |
+| --- | --- | --- | --- |
+| `bible` | `MAT 3:1-4` | Matthew, chapter 3, verses 1 through 4 | Bible book-code registry and numbering scheme/version |
+| `quran` | `QUR 2:255` | Surah 2, ayah 255 | Quran profile, reading and ayah-numbering scheme/version |
+| `book-of-mormon` | `1NE 3:7` | 1 Nephi, chapter 3, verse 7 | Corpora book-code registry and source numbering scheme/version |
+
+Bible codes retain the [USX book-code vocabulary](https://ubsicap.github.io/usx/usx3.0.3/vocabularies.html).
+`QUR` and the Book of Mormon codes below are **Corpora profile codes**, not
+additions to upstream USX's vocabulary. The CUSX grammar permits their strings;
+this document proposes their semantic registry. A generic USX processor is not
+required to understand these profiles.
+
+For Quran, `chapter` represents a surah and `verse` an ayah. Preserve the source's
+labels and numbering, including its treatment of the basmala. Do not assume a
+reading alone determines numbering or convert unnumbered text into ayah 0.
+Juz, hizb, rub, manzil and ruku remain independent declared boundary schemes;
+they are not extra levels in `QUR surah:ayah` and must not change the ayah address.
+Example scheme names are illustrative, not published scholarly authorities.
+
+For Book of Mormon, the proposed Corpora code registry is:
+
+| Code | Book | Code | Book |
+| --- | --- | --- | --- |
+| `1NE` | 1 Nephi | `2NE` | 2 Nephi |
+| `JAC` | Jacob | `ENO` | Enos |
+| `JAR` | Jarom | `OMN` | Omni |
+| `WOM` | Words of Mormon | `MOS` | Mosiah |
+| `ALM` | Alma | `HEL` | Helaman |
+| `3NE` | 3 Nephi | `4NE` | 4 Nephi |
+| `MOR` | Mormon | `ETH` | Ether |
+| `MNI` | Moroni | | |
+
+Book names follow the [published Book of Mormon contents](https://www.churchofjesuschrist.org/study/scriptures/bofm?lang=eng);
+the three-character codes are our proposal. In particular, `ENO` also exists
+in the Bible vocabulary with a different meaning, so codes are always scoped by
+profile. Never resolve `ENO` globally. Introductions and witnesses use document
+anchors unless a source explicitly declares a separate canonical scheme.
+
+A canonical reference carries context alongside its string:
+
+```json
+{
+  "profile": "quran",
+  "numbering": {"id": "source-ayah-numbering", "version": "1"},
+  "reading": "source-reading",
+  "loc": "QUR 2:255",
+  "target": {"packageId": "quran-edition", "revision": "1", "documentId": "quran"}
+}
+```
+
+A work-level citation may omit a concrete target, but remains an unresolved
+citation request until an edition is chosen. Paragraph/word/clause selectors
+always require a concrete revision and segmentation scheme. Never resolve them
+using the numbering of a different translation or analysis.
+
+A canonical link may encode the scoped lookup instead of an anchor:
+
+```text
+x-corpora:/quran-edition/1/quran?profile=quran&numbering=source-ayah-numbering&numberingVersion=1&reading=source-reading&loc=QUR%202%3A255
+```
+
+This selector form has no fragment. Allow only `profile`, `numbering`,
+`numberingVersion`, `reading` and `loc`, each at most once. All except `reading`
+are required; `reading` is required for Quran. Percent-encode query values and
+reject unknown keys. The selected document must match the requested profile,
+numbering/version and reading. This is a serialization of the structured
+canonical request, not a resource query.
+For Bible/Book of Mormon, omit `reading` unless the selected profile declares it.
+After resolution, store the exact endpoint(s) with the original canonical request.
+Unqualified `loc` in a CUSX `ref` inherits the current document's profile and
+numbering context; a bare `MAT 3:1-4` in ordinary USX retains its upstream meaning.
+Do not introduce `word-3` suffixes into the upstream scripture-reference grammar.
+Use an anchored word/range in `link-href`, or a structured analysis selector.
+
+## 5. Ranges, segmentation and resolution
+
+Canonical verse ranges expand through the named numbering scheme's ordered
+bindings. For opaque labels such as `2-6a`, first consult an exact source entry;
+if absent, consult only a declared profile range grammar. Never split a registered
+bridge into invented verses. Store an explicit selection list when the source
+notation is ambiguous. Node ranges have distinct start/end endpoint objects,
+an explicit scope and range/segmentation scheme. They cannot run between unrelated
+editions or be formed by lexically sorting opaque IDs.
+
+If a caller asks for the third word or second clause, it must specify the concrete
+package/revision, analysis scheme and anchor scope. Count only declared members
+of that type in that scheme's order. Resolve to an advertised anchor/range, then
+persist the endpoint. Do not skip an absent sentence level and silently flatten
+another view. Views can translate ordinals only through an explicit index that
+proves both selectors identify the same target.
+
+| Result | Meaning | Storage/consumer behavior |
+| --- | --- | --- |
+| `resolved` | Exact loaded scope and complete declared target(s) | Preserve ordered targets, type and extent |
+| `ambiguous` | More than one valid candidate | Preserve candidates; do not choose implicitly |
+| `unresolved` | Scope loaded but address/anchor absent or invalid | Preserve original request and diagnostic |
+| `unavailable` | Required revision, profile, scheme or range index not loaded | Preserve pin; do not fall back to latest |
+
+Malformed syntax is an input error; invalid source range pairing is an import
+validation failure. A deepest matched ancestor is diagnostic information only:
+resolving a missing word must not return its verse as a successful link.
+Cross-edition alignment is an explicit relation with provenance, not a fallback
+for a failed exact reference. Any source or target may live in another corpus;
+each endpoint keeps its own complete scope.
+
+## 6. Compatibility and acceptance checks
+
+`tfref` and `co..._bk..._cl...` remain TF compatibility forms. Decode through the
+existing TF resolver using a pinned build, then use external conversion evidence
+to map to a published CUSX target. A TF node without such a mapping is unavailable
+for CUSX linking. No source TF IDs or source XHTML paths are added to publication
+content. The old positional token is not made durable merely by changing its
+prefix or adding a USX-looking label.
+
+Implementation acceptance must cover a word-to-paragraph cross-corpus link,
+a clause crossing two paragraphs, Quran numbering/reading mismatch, Book of
+Mormon/Bible code collision, a changed revision with the same local anchor,
+missing segmentation, duplicate anchors, unavailable target packages, source
+bridges/ranges and exact XML/JSON link parity. Local links must validate against
+the package inventory. External/cross-package strings are preserved without
+claiming target existence until the target package is independently loaded.
+
+Current CUSX 0.1.0 already validates grammar, document-local anchors and paired
+boundary axes. Its exporter creates anchors for source-identified locations;
+it does **not** yet guarantee anchors for every word/clause/paragraph. Its package
+validator skips certification of links with URI schemes. The new scoped resolver,
+canonical registries, persistent anchor allocation and complete fine-grained
+export are follow-up implementation work, not accomplished by this document edit.

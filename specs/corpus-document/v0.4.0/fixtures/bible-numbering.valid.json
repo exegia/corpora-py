@@ -1,0 +1,402 @@
+{
+  "specVersion": "0.4.0",
+  "id": "urn:example:bundle",
+  "requiredCapabilities": [
+    "core:text"
+  ],
+  "works": [
+    {
+      "id": "urn:example:work",
+      "title": "Psalm numbering sample"
+    }
+  ],
+  "editions": [
+    {
+      "id": "urn:example:edition",
+      "workId": "urn:example:work",
+      "title": "Psalm numbering sample sample",
+      "language": "en",
+      "kind": "edition"
+    },
+    {
+      "id": "urn:example:translation",
+      "workId": "urn:example:work",
+      "title": "Different segmentation illustrative translation",
+      "language": "fr",
+      "kind": "translation"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "urn:example:rev",
+      "editionId": "urn:example:edition",
+      "sequence": 1,
+      "profileIds": []
+    },
+    {
+      "id": "urn:example:translation-rev",
+      "editionId": "urn:example:translation",
+      "sequence": 1,
+      "profileIds": []
+    }
+  ],
+  "streams": [
+    {
+      "id": "urn:example:text",
+      "revisionId": "urn:example:rev",
+      "order": 0,
+      "text": "Heading\nPrayer one.\nPrayer two."
+    },
+    {
+      "id": "urn:example:translation-text",
+      "revisionId": "urn:example:translation-rev",
+      "order": 0,
+      "text": "Première. Deuxième."
+    }
+  ],
+  "anchors": [
+    {
+      "id": "urn:example:a-heading",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 0,
+          "end": 7
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-v1",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 8,
+          "end": 19
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-v2",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 20,
+          "end": 31
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-translated-v1",
+      "revisionId": "urn:example:translation-rev",
+      "segments": [
+        {
+          "streamId": "urn:example:translation-text",
+          "start": 0,
+          "end": 9
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-translated-v2",
+      "revisionId": "urn:example:translation-rev",
+      "segments": [
+        {
+          "streamId": "urn:example:translation-text",
+          "start": 10,
+          "end": 19
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "urn:example:heading",
+      "revisionId": "urn:example:rev",
+      "type": "core:heading",
+      "anchorId": "urn:example:a-heading"
+    },
+    {
+      "id": "urn:example:v1",
+      "revisionId": "urn:example:rev",
+      "type": "core:verse",
+      "anchorId": "urn:example:a-v1"
+    },
+    {
+      "id": "urn:example:v2",
+      "revisionId": "urn:example:rev",
+      "type": "core:verse",
+      "anchorId": "urn:example:a-v2"
+    },
+    {
+      "id": "urn:example:translated-v1",
+      "revisionId": "urn:example:translation-rev",
+      "type": "core:verse",
+      "anchorId": "urn:example:a-translated-v1"
+    },
+    {
+      "id": "urn:example:translated-v2",
+      "revisionId": "urn:example:translation-rev",
+      "type": "core:verse",
+      "anchorId": "urn:example:a-translated-v2"
+    }
+  ],
+  "schemes": [
+    {
+      "id": "urn:example:hebrew-sample",
+      "name": "core:hebrew-sample",
+      "version": "1.0.0",
+      "workId": "urn:example:work",
+      "editionId": "urn:example:edition",
+      "revisionId": "urn:example:rev",
+      "entries": [
+        {
+          "key": "Ps.51:1",
+          "order": 0,
+          "targetIds": [
+            "urn:example:heading"
+          ]
+        },
+        {
+          "key": "Ps.51:3",
+          "order": 1,
+          "targetIds": [
+            "urn:example:v1"
+          ]
+        },
+        {
+          "key": "Ps.51:4",
+          "order": 2,
+          "targetIds": [
+            "urn:example:v2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "urn:example:greek-sample",
+      "name": "core:greek-sample",
+      "version": "1.0.0",
+      "workId": "urn:example:work",
+      "editionId": "urn:example:edition",
+      "revisionId": "urn:example:rev",
+      "entries": [
+        {
+          "key": "Ps.50:title",
+          "order": 0,
+          "targetIds": [
+            "urn:example:heading"
+          ]
+        },
+        {
+          "key": "Ps.50:1",
+          "order": 1,
+          "targetIds": [
+            "urn:example:v1"
+          ]
+        },
+        {
+          "key": "Ps.50:2a",
+          "order": 2,
+          "targetIds": [
+            "urn:example:v2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "urn:example:translation-scheme",
+      "name": "core:translation-sample",
+      "version": "1.0.0",
+      "workId": "urn:example:work",
+      "editionId": "urn:example:translation",
+      "revisionId": "urn:example:translation-rev",
+      "entries": [
+        {
+          "key": "Ps.50:1-2",
+          "order": 0,
+          "targetIds": [
+            "urn:example:translated-v1",
+            "urn:example:translated-v2"
+          ]
+        }
+      ]
+    }
+  ],
+  "collections": [
+    {
+      "id": "urn:example:canon-a",
+      "title": "Collection A",
+      "members": [
+        {
+          "workId": "urn:example:work",
+          "order": 0
+        }
+      ]
+    },
+    {
+      "id": "urn:example:canon-b",
+      "title": "Collection B",
+      "members": [
+        {
+          "workId": "urn:example:work",
+          "order": 8
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "urn:example:editor",
+      "name": "Example editor",
+      "kind": "person"
+    }
+  ],
+  "relations": [
+    {
+      "id": "urn:example:alignment",
+      "type": "core:alignment",
+      "sources": [
+        {
+          "id": "urn:example:v1"
+        },
+        {
+          "id": "urn:example:v2"
+        }
+      ],
+      "targets": [
+        {
+          "id": "urn:example:translated-v1"
+        },
+        {
+          "id": "urn:example:translated-v2"
+        }
+      ],
+      "agentId": "urn:example:editor",
+      "confidence": 0.8
+    },
+    {
+      "id": "urn:example:cross-corpus-citation",
+      "type": "core:cites",
+      "sources": [
+        {
+          "id": "urn:example:v1"
+        }
+      ],
+      "targets": [
+        {
+          "id": "urn:example:remote-node",
+          "bundleId": "urn:example:remote-bundle"
+        }
+      ],
+      "agentId": "urn:example:editor"
+    }
+  ],
+  "contributions": [
+    {
+      "id": "urn:example:authorship",
+      "agentId": "urn:example:editor",
+      "target": {
+        "id": "urn:example:work"
+      },
+      "role": "core:author"
+    },
+    {
+      "id": "urn:example:translation-credit",
+      "agentId": "urn:example:editor",
+      "target": {
+        "id": "urn:example:translation"
+      },
+      "role": "core:translator"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "urn:example:note",
+      "targets": [
+        {
+          "id": "urn:example:v1"
+        }
+      ],
+      "agentId": "urn:example:editor",
+      "type": "core:commentary",
+      "body": [
+        {
+          "type": "paragraph",
+          "text": "Compare the numbering.",
+          "marks": [
+            {
+              "start": 0,
+              "end": 7,
+              "type": "core:emphasis"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "resolutions": [
+    {
+      "reference": {
+        "schemeId": "urn:example:hebrew-sample",
+        "schemeVersion": "1.0.0",
+        "editionId": "urn:example:edition",
+        "revisionId": "urn:example:rev",
+        "startKey": "Ps.51:3"
+      },
+      "status": "resolved",
+      "targetIds": [
+        "urn:example:v1"
+      ],
+      "candidates": []
+    },
+    {
+      "reference": {
+        "schemeId": "urn:example:hebrew-sample",
+        "schemeVersion": "1.0.0",
+        "editionId": "urn:example:edition",
+        "revisionId": "urn:example:rev",
+        "startKey": "Ps.51:2"
+      },
+      "status": "unresolved",
+      "targetIds": [],
+      "candidates": [],
+      "reason": "Key absent in illustrative inventory"
+    },
+    {
+      "reference": {
+        "schemeId": "urn:example:missing",
+        "schemeVersion": "1.0.0",
+        "editionId": "urn:example:edition",
+        "revisionId": "urn:example:rev",
+        "startKey": "Ps.51:3"
+      },
+      "status": "unavailable",
+      "targetIds": [],
+      "candidates": [],
+      "reason": "Scheme not loaded"
+    },
+    {
+      "reference": {
+        "schemeId": "urn:example:hebrew-sample",
+        "schemeVersion": "1.0.0",
+        "editionId": "urn:example:edition",
+        "revisionId": "urn:example:rev",
+        "startKey": "Ps.51:3"
+      },
+      "status": "ambiguous",
+      "targetIds": [],
+      "candidates": [
+        [
+          "urn:example:v1"
+        ],
+        [
+          "urn:example:v2"
+        ]
+      ],
+      "reason": "Caller supplied competing alias interpretations"
+    }
+  ]
+}

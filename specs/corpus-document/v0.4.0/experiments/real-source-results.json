@@ -1,0 +1,631 @@
+{
+  "specVersion": "0.4.0",
+  "scope": "private bounded experiments; not production adapters",
+  "pythonVersion": "3.13.15",
+  "packages": {
+    "pypdf": "6.19.0",
+    "fonttools": "4.66.1",
+    "lxml": "6.1.3",
+    "pydantic": "2.13.5",
+    "text-fabric": "13.1.0",
+    "jsonschema": "4.26.0"
+  },
+  "samples": [
+    {
+      "sample": "plain-single-document",
+      "sourceSelection": "of4.txt",
+      "assets": [
+        {
+          "name": "of4.txt",
+          "mediaType": "text/plain",
+          "sha256": "c74d63098630e1f8f3850ff8b23ebd5e83eafe6af5c4a3103b7d222c3739ecd5",
+          "bytes": 11556
+        }
+      ],
+      "scalars": 11554,
+      "extractedTextSha256": "c74d63098630e1f8f3850ff8b23ebd5e83eafe6af5c4a3103b7d222c3739ecd5",
+      "nodes": 22,
+      "anchors": 22,
+      "positions": 0,
+      "metrics": {
+        "utf8ByteRoundTrip": true,
+        "existingParserReconstructionEqual": false,
+        "existingParserScalarDelta": 169,
+        "existingParserNonWhitespaceEqual": true,
+        "paragraphsAreInferred": true,
+        "sourceEncoding": "UTF-8",
+        "sourceFormatVersion": "not applicable to plain text"
+      },
+      "losses": [
+        "Paragraph boundaries are a blank-line heuristic, not explicit authored structure.",
+        "No chapter, author or language metadata was inferred from document contents."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "status": "not-evaluated",
+        "detail": "Experimental projection, not an adopted import"
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "plain-single-document.json",
+      "projectionSha256": "fbc13528e56ea413095e4c75d3bd93585164f2ef93c5bbec3709784358c1c308"
+    },
+    {
+      "sample": "pdf-paginated-prose",
+      "sourceSelection": "The_Tradition_of_the_Throne_Vision_in_th.pdf",
+      "assets": [
+        {
+          "name": "The_Tradition_of_the_Throne_Vision_in_th.pdf",
+          "mediaType": "application/pdf",
+          "sha256": "6455ee88c830ec1e39d35b6736050d3bd1fd0e88c7f5669dd8a290d4ddded80d",
+          "bytes": 277497
+        }
+      ],
+      "scalars": 8231,
+      "extractedTextSha256": "1b2c07bd1f2b0f467333c4a6be2ca7f0a1f54a5a06484a1e079be8a948aeb95e",
+      "nodes": 8,
+      "anchors": 8,
+      "positions": 0,
+      "metrics": {
+        "sourcePages": 16,
+        "sourceFormatVersion": "%PDF-1.4",
+        "selectedPageIndices": [
+          0,
+          1,
+          2
+        ],
+        "pageScalars": [
+          1743,
+          2903,
+          3583
+        ],
+        "emptyExtractedPages": 0,
+        "textMatchesExtractor": true,
+        "imageObjectsPerSelectedPage": [
+          0,
+          0,
+          0
+        ],
+        "textExtractionOutcome": "text-extracted",
+        "hasExplicitPagination": true,
+        "paragraphsAreInferred": true,
+        "ocrPerformed": false
+      },
+      "losses": [
+        "PDF extraction order is not independently verified against rendered page layout.",
+        "Inserted one newline between selected pages; extraction whitespace is otherwise preserved.",
+        "No OCR, font-position reconstruction, image capture or physical bounding boxes.",
+        "Cross-page window is a labeled hypothesis, not evidence of an authored paragraph.",
+        "Only first three source pages selected; empty text is not proof the page has no content."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "specVersion": "0.4.0",
+        "policyId": "urn:corpora:pdf-acceptance:0.4.0",
+        "format": "pdf",
+        "sourceSha256": "6455ee88c830ec1e39d35b6736050d3bd1fd0e88c7f5669dd8a290d4ddded80d",
+        "candidateSha256": "f308a7cc0f7763ce70baf7305d85120c2b105f5e53e6d38a3e5881c19ee97eea",
+        "sourcePageCount": 16,
+        "scope": "bounded-sample",
+        "ocrUsed": false,
+        "extractionFailed": false,
+        "assessments": [
+          {
+            "pageIndex": 0,
+            "content": "unverified",
+            "readingOrder": "unverified",
+            "evidence": [
+              "Text extractor produced content; source fidelity not visually verified"
+            ]
+          },
+          {
+            "pageIndex": 1,
+            "content": "unverified",
+            "readingOrder": "unverified",
+            "evidence": [
+              "Text extractor produced content; source fidelity not visually verified"
+            ]
+          },
+          {
+            "pageIndex": 2,
+            "content": "unverified",
+            "readingOrder": "unverified",
+            "evidence": [
+              "Text extractor produced content; source fidelity not visually verified"
+            ]
+          }
+        ],
+        "status": "pending-review",
+        "issues": [
+          {
+            "code": "bounded-sample-only",
+            "detail": "A bounded sample cannot certify an entire PDF"
+          },
+          {
+            "code": "quality-unverified",
+            "pageIndex": 0,
+            "detail": "Extraction success is not independently verified quality"
+          },
+          {
+            "code": "quality-unverified",
+            "pageIndex": 1,
+            "detail": "Extraction success is not independently verified quality"
+          },
+          {
+            "code": "quality-unverified",
+            "pageIndex": 2,
+            "detail": "Extraction success is not independently verified quality"
+          }
+        ]
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "pdf-paginated-prose.diagnostic.json",
+      "projectionSha256": "afc9cda19c72ad573c7cbac2407da647d429a2e1fe02077619d0ddb714f144c0"
+    },
+    {
+      "sample": "pdf-image-only-pages",
+      "sourceSelection": "Colwell_rule.pdf",
+      "assets": [
+        {
+          "name": "Colwell_rule.pdf",
+          "mediaType": "application/pdf",
+          "sha256": "a5ae86a8650887c480232b3f18966fe448a0d0b486c9ca10efe0818262baddee",
+          "bytes": 2343812
+        }
+      ],
+      "scalars": 2,
+      "extractedTextSha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070",
+      "nodes": 4,
+      "anchors": 1,
+      "positions": 3,
+      "metrics": {
+        "sourcePages": 66,
+        "sourceFormatVersion": "%PDF-1.5",
+        "selectedPageIndices": [
+          0,
+          1,
+          2
+        ],
+        "pageScalars": [
+          0,
+          0,
+          0
+        ],
+        "emptyExtractedPages": 3,
+        "textMatchesExtractor": true,
+        "imageObjectsPerSelectedPage": [
+          1,
+          1,
+          1
+        ],
+        "textExtractionOutcome": "no-text-extracted; OCR needed or content unavailable",
+        "hasExplicitPagination": true,
+        "paragraphsAreInferred": true,
+        "ocrPerformed": false
+      },
+      "losses": [
+        "PDF extraction order is not independently verified against rendered page layout.",
+        "Inserted one newline between selected pages; extraction whitespace is otherwise preserved.",
+        "No OCR, font-position reconstruction, image capture or physical bounding boxes.",
+        "Cross-page window is a labeled hypothesis, not evidence of an authored paragraph.",
+        "Only first three source pages selected; empty text is not proof the page has no content."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "specVersion": "0.4.0",
+        "policyId": "urn:corpora:pdf-acceptance:0.4.0",
+        "format": "pdf",
+        "sourceSha256": "a5ae86a8650887c480232b3f18966fe448a0d0b486c9ca10efe0818262baddee",
+        "candidateSha256": "db150b54765f589985bbcf217568cea00850a55f933aecc3e82190efe6e96013",
+        "sourcePageCount": 66,
+        "scope": "bounded-sample",
+        "ocrUsed": false,
+        "extractionFailed": false,
+        "assessments": [
+          {
+            "pageIndex": 0,
+            "content": "unreadable",
+            "readingOrder": "unverified",
+            "evidence": [
+              "No extracted text and no confirmed blank-page evidence; OCR not performed"
+            ]
+          },
+          {
+            "pageIndex": 1,
+            "content": "unreadable",
+            "readingOrder": "unverified",
+            "evidence": [
+              "No extracted text and no confirmed blank-page evidence; OCR not performed"
+            ]
+          },
+          {
+            "pageIndex": 2,
+            "content": "unreadable",
+            "readingOrder": "unverified",
+            "evidence": [
+              "No extracted text and no confirmed blank-page evidence; OCR not performed"
+            ]
+          }
+        ],
+        "status": "rejected",
+        "issues": [
+          {
+            "code": "insufficient-content",
+            "pageIndex": 0,
+            "detail": "Content recovery is insufficient; reject the entire import"
+          },
+          {
+            "code": "insufficient-content",
+            "pageIndex": 1,
+            "detail": "Content recovery is insufficient; reject the entire import"
+          },
+          {
+            "code": "insufficient-content",
+            "pageIndex": 2,
+            "detail": "Content recovery is insufficient; reject the entire import"
+          },
+          {
+            "code": "bounded-sample-only",
+            "detail": "A bounded sample cannot certify an entire PDF"
+          },
+          {
+            "code": "quality-unverified",
+            "pageIndex": 0,
+            "detail": "Extraction success is not independently verified quality"
+          },
+          {
+            "code": "quality-unverified",
+            "pageIndex": 1,
+            "detail": "Extraction success is not independently verified quality"
+          },
+          {
+            "code": "quality-unverified",
+            "pageIndex": 2,
+            "detail": "Extraction success is not independently verified quality"
+          }
+        ]
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "pdf-image-only-pages.diagnostic.json",
+      "projectionSha256": "70c42a8d9d830cdaab670e0913944718f3236c55e51b750c254ab8d52fc84ef0"
+    },
+    {
+      "sample": "epub-spine-prose",
+      "sourceSelection": "pg1636-images.epub",
+      "assets": [
+        {
+          "name": "pg1636-images.epub",
+          "mediaType": "application/epub+zip",
+          "sha256": "b5b5fb13063f391e7f1ec81c722b469e53fc33c5f2f6ef3f08199017020e544c",
+          "bytes": 145671
+        }
+      ],
+      "scalars": 208520,
+      "extractedTextSha256": "dcc86092e72d4d6bf00079ae6892d854c77ef047f9810ccf4fcf1b420a12576f",
+      "nodes": 412,
+      "anchors": 412,
+      "positions": 0,
+      "metrics": {
+        "sourceFormatVersion": "2.0",
+        "spineItems": 6,
+        "selectedMembers": [
+          "OEBPS/7382907909753162964_1636-h-0.htm.html",
+          "OEBPS/7382907909753162964_1636-h-1.htm.html",
+          "OEBPS/7382907909753162964_1636-h-2.htm.html"
+        ],
+        "spineOrderUsed": true,
+        "explicitParagraphs": 396,
+        "linksRetained": 3,
+        "originalSpineDiffersFromManifestOrder": true
+      },
+      "losses": [
+        "First three nonempty linear spine documents selected, not entire EPUB.",
+        "XML parser text/tails retained; entity decoding is not source-byte preservation.",
+        "Inserted newline between selected spine documents; CSS/layout/media omitted.",
+        "Source href/IDs retained; links are not automatically resolved or fetched.",
+        "Nested text is stored once; source style rendering and complex note semantics are unverified."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "status": "not-evaluated",
+        "detail": "Experimental projection, not an adopted import"
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "epub-spine-prose.json",
+      "projectionSha256": "29a741e52b294073f7167b30fbaecc9b8b94a127c6d26ee93849bd3efec07da9"
+    },
+    {
+      "sample": "tei-apparatus-block",
+      "sourceSelection": "FINAL_TRANSCRIPTION_version104.xml",
+      "assets": [
+        {
+          "name": "FINAL_TRANSCRIPTION_version104.xml",
+          "mediaType": "application/xml",
+          "sha256": "5f67c70c4c21ba905824fd2ff5ec3c21bf5358d36bb421ad9fda75e23ea9f0d4",
+          "bytes": 30238789
+        }
+      ],
+      "scalars": 138,
+      "extractedTextSha256": "b3b825a20736e0fbdf4314c9f03f91f6532d68889baf63e0b897afbe838e3771",
+      "nodes": 51,
+      "anchors": 36,
+      "positions": 15,
+      "metrics": {
+        "rootName": "TEI",
+        "sourceSchemaHint": "http://www.tei-c.org/ns/1.0 tei_all.xsd ",
+        "sourceFormatVersion": "unverified TEI-like source; filename version is not a schema version",
+        "selector": "ab[@id='V-B1K22V1-01-GEN']",
+        "sourceReadingCount": 2,
+        "selectedReadingPolicy": "first rdg in each app; not a scholarly preference",
+        "outsideSubtreePageContextPresent": true,
+        "selectedWords": 24,
+        "alternativeReadingsStoredSeparately": 1
+      },
+      "losses": [
+        "Source root is unnamespaced TEI despite namespace hints; no upstream TEI conformance claim.",
+        "First-reading selection is an explicit experiment policy, not reconstructed manuscript truth.",
+        "Supplied/highlight text and parser whitespace retained; lb/pb do not invent text newlines.",
+        "Only one ab selected; outer page context detected but full physical page spans not reconstructed.",
+        "Rejected readings stored as annotations; other apparatus metadata remains opaque source attributes."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "status": "not-evaluated",
+        "detail": "Experimental projection, not an adopted import"
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "tei-apparatus-block.json",
+      "projectionSha256": "c93c6434ef2aef21e6365306c120a74a52ea95508c891c37abac2ba028c19eef"
+    },
+    {
+      "sample": "text-fabric-first-verse",
+      "sourceSelection": "ETCBC-pheshitta-tf",
+      "assets": [
+        {
+          "name": "book.tf",
+          "mediaType": "text/plain",
+          "sha256": "8a7cea6bf01329fb6294de7cc687d13ca90fa2c4a0bdcbb3be6e8b479bd1aab8",
+          "bytes": 123279
+        },
+        {
+          "name": "book@en.tf",
+          "mediaType": "text/plain",
+          "sha256": "f2272c48fd96d43018725dcf1102965481583a7b6a3b1b74a6a2c0441aa8f85d",
+          "bytes": 1161
+        },
+        {
+          "name": "chapter.tf",
+          "mediaType": "text/plain",
+          "sha256": "fecc3b3b1b779dc95d90638ad22a50ca234d792c6fcc82bdc098c53b47cb2654",
+          "bytes": 87470
+        },
+        {
+          "name": "oslots.tf",
+          "mediaType": "text/plain",
+          "sha256": "bff1d85448fac4c0179798f0fe9c4018b21c538662f3d6e2c863180e892db7ab",
+          "bytes": 440581
+        },
+        {
+          "name": "otext.tf",
+          "mediaType": "text/plain",
+          "sha256": "920dd6ac2c279646d9880732b0265f7a7e8209b22e47ed2ce406c8ddd1903e1e",
+          "bytes": 534
+        },
+        {
+          "name": "otype.tf",
+          "mediaType": "text/plain",
+          "sha256": "4c5d25ee4ddff36d66c8a190b8e6dbd1f55b7e4cdca7b709bbd647b5b2f217b4",
+          "bytes": 483
+        },
+        {
+          "name": "trailer.tf",
+          "mediaType": "text/plain",
+          "sha256": "50a13706435d570c658571d4ac0a343d926b2cc7865b215199967b0f348e853c",
+          "bytes": 883184
+        },
+        {
+          "name": "trailer_etcbc.tf",
+          "mediaType": "text/plain",
+          "sha256": "709b92a5267ea2524a22260416e21002710e4f609717c886cc41bee27fb9ca69",
+          "bytes": 909000
+        },
+        {
+          "name": "verse.tf",
+          "mediaType": "text/plain",
+          "sha256": "a965ce5eda46e0bf8ed624f794bfe3df07d56be12e80fbe265f71cdd84ab690f",
+          "bytes": 83822
+        },
+        {
+          "name": "witness.tf",
+          "mediaType": "text/plain",
+          "sha256": "16a8a4514c5dc448354f24af61afa5c840f67aae5a2dc6c34db9ca5fb0be15ef",
+          "bytes": 5334
+        },
+        {
+          "name": "word.tf",
+          "mediaType": "text/plain",
+          "sha256": "351821c1b6c2aa18526b56e69b081799ad46e2542eed4aaa9d36cfb2a7d48c07",
+          "bytes": 4357775
+        },
+        {
+          "name": "word_etcbc.tf",
+          "mediaType": "text/plain",
+          "sha256": "e7f85a87da4685e2706fbb5f6f5f0c5c64908cb7dbba7d81073d3daaf356541f",
+          "bytes": 2392693
+        }
+      ],
+      "scalars": 34,
+      "extractedTextSha256": "5a24658ef89bb469f0ebca8ed9c68ddbeecaaa987da4443b90df352208b75c71",
+      "nodes": 9,
+      "anchors": 9,
+      "positions": 0,
+      "metrics": {
+        "selectedVerseNode": 428562,
+        "selectedSlots": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "section": [
+          "Genesis",
+          1,
+          1
+        ],
+        "sourceDisplayTemplate": "{word}{trailer}",
+        "slotTextConcatenationExact": true,
+        "sourceNodesCheckedForDiscontinuity": 32710,
+        "discontinuousNodes": 0,
+        "cachesWrittenToOriginal": false
+      },
+      "losses": [
+        "Only first verse and its word slots selected; no complete book/chapter claimed.",
+        "Display uses explicit word+trailer features; alternate transliteration/features omitted.",
+        "Local dataset has no discontinuous nodes; real discontinuity remains unverified.",
+        "Local data is used privately; redistribution rights have not been established."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "status": "not-evaluated",
+        "detail": "Experimental projection, not an adopted import"
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "text-fabric-first-verse.json",
+      "projectionSha256": "6406e651c9f9985acca3b3e0b36cf200e4e8153bab747ab5c3ce2c39bd4632e8"
+    },
+    {
+      "sample": "usx-supplied-archive-1",
+      "sourceSelection": "supplied-usx/text-3aefb10641485092-252238.zip",
+      "assets": [
+        {
+          "name": "text-3aefb10641485092-252238.zip",
+          "mediaType": "application/zip",
+          "sha256": "bc72ab4e178c5b36d57ff0bc427539881125816a6f094ce4ee1324d3af383ece",
+          "bytes": 577252
+        }
+      ],
+      "scalars": 7495,
+      "extractedTextSha256": "76646a7e04b0b538a58e7a0fc5f7646a3c2a4bb8bd3d0a57bf7a50f41dfc631e",
+      "nodes": 139,
+      "anchors": 133,
+      "positions": 6,
+      "metrics": {
+        "sourceFormatVersion": "3.0",
+        "archiveDeclaredVersions": [
+          "3.0"
+        ],
+        "archiveStructuralInventory": {
+          "ref": 0,
+          "ms": 0,
+          "table": 0,
+          "sidebar": 0,
+          "periph": 0,
+          "crossReferenceNotes": 0
+        },
+        "archiveUsxMembers": 27,
+        "member": "text-3aefb10641485092-252238/release/USX_1/LUK.usx",
+        "memberSha256": "cda8dfeb4c4fbfeca443888ec97e00bca9da31249e69a4194d457e97150880c9",
+        "memberBytes": 341521,
+        "bookCode": "LUK",
+        "selectedChapter": "1",
+        "pairedChapters": 1,
+        "pairedVerses": 80,
+        "explicitParagraphs": 55,
+        "poetryLines": 39,
+        "notes": 2,
+        "crossReferenceNotes": 0,
+        "structuredNoteReferences": 0,
+        "unmappedElementCounts": {},
+        "versesCrossingLayoutBlocks": 20,
+        "upstreamUsxSchemaValidated": false,
+        "wholeDocumentAcceptanceAssessed": false
+      },
+      "losses": [
+        "Only Luke chapter 1 selected from one member of the private archive, not whole-book or whole-archive coverage.",
+        "Inserted newline between paragraphs; root formatting indentation excluded; within-paragraph text/tails retained.",
+        "XML decoding normalizes source line endings and expands ordinary character entities; original source bytes are not reconstructed.",
+        "Note bodies excluded from reading text and stored with styles/attributes; original metadata/authorship not reconciled.",
+        "Milestone pairs checked in selected scope; upstream USX source conformance and general export are not proved.",
+        "No cross-reference targets or additional ms quotation spans occur in this selection; no target resolution is invented."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "status": "not-evaluated",
+        "detail": "Experimental projection, not an adopted import"
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "usx-supplied-archive-1.json",
+      "projectionSha256": "e0ace751dd828a12cb66c714d19b36a3a75122d6c9f16036108553668cb71078"
+    },
+    {
+      "sample": "usx-supplied-archive-2",
+      "sourceSelection": "supplied-usx/text-47f396bad37936f0-269494.zip",
+      "assets": [
+        {
+          "name": "text-47f396bad37936f0-269494.zip",
+          "mediaType": "application/zip",
+          "sha256": "2dd1349979b2c07c60b8c18d9136a8fd2bc7b43af5b0625bb79d125c79fcb9e9",
+          "bytes": 795277
+        }
+      ],
+      "scalars": 7503,
+      "extractedTextSha256": "aefc6e84cc3730631a09e79f8fbbfb80bdcc4d4bf824c5091d61c2e4fcdc1485",
+      "nodes": 137,
+      "anchors": 96,
+      "positions": 41,
+      "metrics": {
+        "sourceFormatVersion": "3.0",
+        "archiveDeclaredVersions": [
+          "3.0"
+        ],
+        "archiveStructuralInventory": {
+          "ref": 0,
+          "ms": 0,
+          "table": 0,
+          "sidebar": 0,
+          "periph": 0,
+          "crossReferenceNotes": 0
+        },
+        "archiveUsxMembers": 27,
+        "member": "text-47f396bad37936f0-269494/release/USX_1/LUK.usx",
+        "memberSha256": "60e8d069611713f69f2b00e74563931e310b431f1a314ba314580a252fb37062",
+        "memberBytes": 765438,
+        "bookCode": "LUK",
+        "selectedChapter": "1",
+        "pairedChapters": 1,
+        "pairedVerses": 80,
+        "explicitParagraphs": 10,
+        "poetryLines": 0,
+        "notes": 41,
+        "crossReferenceNotes": 0,
+        "structuredNoteReferences": 0,
+        "unmappedElementCounts": {},
+        "versesCrossingLayoutBlocks": 0,
+        "upstreamUsxSchemaValidated": false,
+        "wholeDocumentAcceptanceAssessed": false
+      },
+      "losses": [
+        "Only Luke chapter 1 selected from one member of the private archive, not whole-book or whole-archive coverage.",
+        "Inserted newline between paragraphs; root formatting indentation excluded; within-paragraph text/tails retained.",
+        "XML decoding normalizes source line endings and expands ordinary character entities; original source bytes are not reconstructed.",
+        "Note bodies excluded from reading text and stored with styles/attributes; original metadata/authorship not reconciled.",
+        "Milestone pairs checked in selected scope; upstream USX source conformance and general export are not proved.",
+        "No cross-reference targets or additional ms quotation spans occur in this selection; no target resolution is invented."
+      ],
+      "conformance": "pass",
+      "ingestionDecision": {
+        "status": "not-evaluated",
+        "detail": "Experimental projection, not an adopted import"
+      },
+      "originalChecksumsAndMtimesUnchanged": true,
+      "projectionFile": "usx-supplied-archive-2.json",
+      "projectionSha256": "3f76c8b0a050301f33ce2504657c06355a23e7824becce2ee88ed6f5644e4c7c"
+    }
+  ],
+  "implementationPins": {
+    "packages/admin/src/admin/parsers/schema.py": "8933f86432300fb1e010fd9fd0a25f9219a875baaa919fb4f87b6239e13e0ebc",
+    "packages/admin/src/admin/parsers/_plain.py": "246c8f1f0ac0407006a22fdbccae4c3bc845f32b517eca1f9c51671aa86ce45e"
+  }
+}
