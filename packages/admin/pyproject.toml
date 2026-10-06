@@ -10,6 +10,8 @@ dependencies = [
     "ebooklib>=0.20",
     "beautifulsoup4>=4.15.0",
     "lxml>=6.1.1",
+    "tinycss2>=1.5.1",
+    "cssselect2>=0.10.1",
     "python-multipart>=0.0.32",
     "text-fabric>=13.1.0",
     # PDF parsing

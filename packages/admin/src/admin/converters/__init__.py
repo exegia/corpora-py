@@ -12,6 +12,7 @@ Text-Fabric dataset; `convert_to_cfm` compiles that into Context-Fabric's
 from ..parsers import SourceFormat
 from ._category import categorize, detect_category
 from ._epub_to_tf import convert_epub_to_tf
+from ._epub_to_usx import convert_epub_to_usx, validate_cusx
 from ._html_to_tf import convert_html_to_tf
 from ._pdf_to_tf import convert_pdf_to_tf
 from ._tei_to_tf import convert_tei_to_tf
@@ -41,6 +42,7 @@ __all__ = [
     "SectionSpec",
     "categorize",
     "convert_epub_to_tf",
+    "convert_epub_to_usx",
     "convert_html_to_tf",
     "convert_pdf_to_tf",
     "convert_tei_to_tf",
@@ -51,4 +53,5 @@ __all__ = [
     "convert_to_cfm",
     "convert_to_corpus",
     "detect_category",
+    "validate_cusx",
 ]

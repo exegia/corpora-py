@@ -48,6 +48,9 @@ flowchart LR
 
 ## Use it
 
+EPUBs can also become portable Corpora USX packages (`.cusx`) through
+[`POST /convert/epub-to-usx`](docs/epub-to-usx.md). The existing `.corpus` conversion remains available.
+
 ### 1. Convert a document
 
 ```bash

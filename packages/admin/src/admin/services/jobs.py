@@ -125,6 +125,8 @@ def result_filename_for(
     never persists the original source file as the library object.
     """
     slug = _slugify(name) or _slugify(job_id) or job_id
+    if source_format == "epub-to-usx":
+        return f"{slug}.cusx"
     if isinstance(source_format, SourceFormat):
         return f"{slug}{_CORPUS_SUFFIX}"
     return f"{slug}{_GRAPH_SUFFIX}"

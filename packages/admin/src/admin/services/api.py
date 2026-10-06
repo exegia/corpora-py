@@ -25,13 +25,13 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from ..converters import CONVERTERS
+from ..converters import CONVERTERS, convert_epub_to_usx
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers.schema import CorpusCategory, SourceFormat
 from .conversion import (
@@ -138,7 +138,8 @@ class ConversionJobStatus(BaseModel):
     id: str
     source_format: str = Field(
         description="A `SourceFormat` value for `/convert` jobs; `/ingest` "
-        "jobs (same registry) carry a detected file suffix instead."
+        "jobs (same registry) carry a detected file suffix instead. "
+        "EPUB-to-USX jobs use `epub-to-usx` and return `.cusx`."
     )
     name: str
     display_name: str | None = Field(
@@ -164,7 +165,7 @@ class ConversionJobStatus(BaseModel):
     )
     result_filename: str = Field(
         description="The filename a client should persist the result under "
-        "(always ends in `.corpus` for /convert jobs); matches the "
+        "(`.corpus` or `.cusx` for /convert jobs); matches the "
         "`Content-Disposition` on `/download`."
     )
     download_ready: bool
@@ -314,7 +315,7 @@ def _run_conversion(
     *,
     source_path: Path,
     work_dir: Path,
-    source_format: SourceFormat,
+    source_format: SourceFormat | str,
     name: str,
     description: str,
     job_id: str,
@@ -339,6 +340,26 @@ def _run_conversion(
     during a multi-minute conversion instead of a status stuck on "running"
     with no other signal.
     """
+    if source_format == "epub-to-usx":
+        try:
+            _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
+            return convert_epub_to_usx(
+                source_path,
+                output_path_for=lambda display: (
+                    _RESULTS_ROOT / f"{_slugify(display) or 'book'}-{job_id[:8]}.cusx"
+                ),
+                work_dir=work_dir / "usx",
+                name=name,
+                on_log=lambda message: job_manager.log(job_id, message),
+                on_display_name=lambda display: job_manager.set_display_name(job_id, display),
+                on_validation=lambda summary: job_manager.set_validation(job_id, summary),
+            )
+        except ValueError as exc:
+            raise JobFailedError(str(exc)) from exc
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+    if not isinstance(source_format, SourceFormat):
+        raise JobFailedError("Unknown conversion job kind")
     job = job_manager.get(job_id)
     try:
         return run_conversion(
@@ -387,8 +408,7 @@ def _run_conversion(
     responses={
         413: {
             "model": ErrorDetail,
-            "description": f"Upload exceeds the "
-            f"{_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
+            "description": f"Upload exceeds the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
         },
         422: {
             "description": "Invalid upload filename, no converter registered "
@@ -400,8 +420,7 @@ def _run_conversion(
         },
         429: {
             "model": ErrorDetail,
-            "description": "Job queue is full — retry after in-flight "
-            "conversions finish.",
+            "description": "Job queue is full — retry after in-flight conversions finish.",
         },
         503: {
             "model": ErrorDetail,
@@ -432,6 +451,9 @@ async def create_conversion(
         "the source carries is downgraded with a warning on the job log "
         "(issue #176).",
     ),
+    output_format: Literal["corpus", "cusx"] = Form(
+        "corpus", description="Output archive format; cusx currently accepts EPUB sources only."
+    ),
 ) -> dict[str, str]:
     """Upload a source document and start converting it in the background.
 
@@ -448,6 +470,9 @@ async def create_conversion(
             f"Available: {sorted(f.value for f in CONVERTERS)}",
         )
 
+    if output_format == "cusx" and source_format != SourceFormat.EPUB:
+        raise HTTPException(status_code=422, detail="CUSX output accepts EPUB sources only")
+    job_format = "epub-to-usx" if output_format == "cusx" else source_format
     claims = _claims(request)
     owner = claims.get("sub") if claims else None
 
@@ -472,13 +497,13 @@ async def create_conversion(
         try:
             job = job_manager.submit(
                 job_id=job_id,
-                source_format=source_format,
+                source_format=job_format,
                 name=name,
                 owner=owner,
                 fn=lambda: _run_conversion(
                     source_path=source_path,
                     work_dir=work_dir,
-                    source_format=source_format,
+                    source_format=job_format,
                     name=name,
                     description=description,
                     job_id=job_id,
@@ -517,6 +542,34 @@ async def create_conversion(
         "status_url": f"/convert/{job.id}",
         "ws_url": f"/convert/{job.id}/ws",
     }
+
+
+@router.post(
+    "/epub-to-usx",
+    status_code=202,
+    response_model=ConversionAccepted,
+    description="Convert an EPUB through Text-Fabric into the Corpora USX 0.1.0 draft package. "
+    "Download is a ZIP with the .cusx extension. Conversion evidence stays outside the package. "
+    + _TRANSPORT_GUIDANCE,
+    responses={
+        413: {"model": ErrorDetail},
+        422: {"description": "Invalid EPUB upload"},
+        429: {"model": ErrorDetail},
+        503: {"model": ErrorDetail},
+    },
+)
+async def create_epub_to_usx(
+    request: Request, file: UploadFile, name: str = Form("")
+) -> dict[str, str]:
+    return await create_conversion(
+        request=request,
+        file=file,
+        source_format=SourceFormat.EPUB,
+        name=name,
+        description="",
+        category=None,
+        output_format="cusx",
+    )
 
 
 @router.get("", response_model=ConversionJobList)
@@ -577,7 +630,7 @@ async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
     responses={
         200: {
             "content": {"application/zip": {}},
-            "description": "The finished `.corpus` archive; "
+            "description": "The finished `.corpus` or `.cusx` archive; "
             "`Content-Disposition` carries `result_filename`.",
         },
         404: {"model": ErrorDetail, "description": "Unknown (or foreign) job id."},
@@ -600,7 +653,7 @@ async def download_conversion(job_id: str, request: Request) -> FileResponse:
     of a saveable file. 409 (not 404) until `download_ready`, matching the
     `GET /convert/{id}` contract.
     """
-    archive = _resolve_succeeded(job_id, request)
+    archive = _resolve_succeeded(job_id, request, corpus_only=False)
     # `archive.name` is the slug of the display name (the human-readable
     # title from the source, see issue #109) plus any collision suffix --
     # matching what `to_dict()` exposes as `result_filename`, so the
@@ -649,7 +702,7 @@ def _store_op(fn):
         ) from extra
 
 
-def _resolve_succeeded(job_id: str, request: Request) -> Path:
+def _resolve_succeeded(job_id: str, request: Request, *, corpus_only: bool = True) -> Path:
     """Return the result archive path for a succeeded, visible job or raise 404 / 409.
 
     Hydrates a remote `result_key` onto a local file when this instance
@@ -663,8 +716,10 @@ def _resolve_succeeded(job_id: str, request: Request) -> Path:
         )
     path = _store_op(lambda: job_manager.materialize(job))
     if path is None:
+        raise HTTPException(status_code=409, detail=f"Job is {job.status.value}, not ready")
+    if corpus_only and path.suffix == ".cusx":
         raise HTTPException(
-            status_code=409, detail=f"Job is {job.status.value}, not ready"
+            status_code=409, detail="CUSX content is available through the job download"
         )
     return path
 
