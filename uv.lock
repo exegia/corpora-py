@@ -21,6 +21,7 @@ resolution-markers = [
 members = [
     "corpora-admin",
     "corpora-common",
+    "corpora-linking",
     "corpora-mcp",
     "corpora-py",
 ]
@@ -447,6 +448,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "corpora-linking"
+version = "0.1.0"
+source = { editable = "packages/linking" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+
+[[package]]
 name = "corpora-mcp"
 version = "5.0.0"
 source = { editable = "packages/mcp" }
@@ -489,6 +501,7 @@ dependencies = [
     { name = "lxml" },
     { name = "pdf-inspector" },
     { name = "platformdirs" },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "pypdf" },
@@ -509,6 +522,7 @@ docling = [
 dev = [
     { name = "corpora-admin" },
     { name = "corpora-common" },
+    { name = "corpora-linking" },
     { name = "corpora-mcp" },
     { name = "httpx" },
     { name = "jsonschema" },
@@ -535,6 +549,7 @@ requires-dist = [
     { name = "lxml", specifier = ">=6.1.1" },
     { name = "pdf-inspector", specifier = ">=1.17.0" },
     { name = "platformdirs", specifier = ">=4.10.0" },
+    { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pyjwt", specifier = ">=2.13.0" },
     { name = "pypdf", specifier = ">=6.14.2" },
@@ -550,6 +565,7 @@ provides-extras = ["docling"]
 dev = [
     { name = "corpora-admin", editable = "packages/admin" },
     { name = "corpora-common", editable = "packages/common" },
+    { name = "corpora-linking", editable = "packages/linking" },
     { name = "corpora-mcp", editable = "packages/mcp" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "jsonschema", specifier = ">=4.26" },
