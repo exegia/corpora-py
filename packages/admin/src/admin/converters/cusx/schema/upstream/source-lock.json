@@ -1,0 +1,16 @@
+{
+  "base": "USX 3.0.8",
+  "repository": "https://github.com/ubsicap/usx",
+  "commit": "2ec4bc5df6d5676693066040aff06e145368a0cb",
+  "retrieved": "2026-10-05",
+  "files": {
+    "usx.rng": {
+      "url": "https://raw.githubusercontent.com/ubsicap/usx/2ec4bc5df6d5676693066040aff06e145368a0cb/schema/usx.rng",
+      "sha256": "15aa14aa898a9d3d4e30363042d56e9474ea8054286587c5124458ef5f1cc110"
+    },
+    "usx.rnc": {
+      "url": "https://raw.githubusercontent.com/ubsicap/usx/2ec4bc5df6d5676693066040aff06e145368a0cb/schema/usx.rnc",
+      "sha256": "e93d6e23845ae66e36f9d2097c472338424b63c1948646f0a6ad703248af5585"
+    }
+  }
+}
