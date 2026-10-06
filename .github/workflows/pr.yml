@@ -50,10 +50,28 @@ jobs:
     name: check
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: isolated-ai-tests
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
+      - name: Initialize isolated Supabase test roles
+        env:
+          CORPORA_AI_TEST_POSTGRES: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec "$CORPORA_AI_TEST_POSTGRES" psql -U postgres -v ON_ERROR_STOP=1
+          -c 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;'
       - run: make ci
+        env:
+          CORPORA_AI_TEST_POSTGRES: ${{ job.services.postgres.id }}
 
   # The release PR's third gate is the publishable artifact itself: corpora-py
   # ships as one self-contained wheel that bundles every workspace member's

@@ -68,3 +68,7 @@ resources/python/
 # vercel link artifact (.env.local, holding the pulled VERCEL_OIDC_TOKEN,
 # is already covered above)
 .vercel
+
+# Reviewed, versioned application migrations.
+!packages/admin/sql/migrations/*.sql
+!packages/admin/sql/tests/*.sql
