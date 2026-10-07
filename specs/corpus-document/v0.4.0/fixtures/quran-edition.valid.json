@@ -1,0 +1,120 @@
+{
+  "specVersion": "0.4.0",
+  "id": "urn:example:bundle",
+  "requiredCapabilities": [
+    "core:text"
+  ],
+  "works": [
+    {
+      "id": "urn:example:work",
+      "title": "Quran illustrative excerpt"
+    }
+  ],
+  "editions": [
+    {
+      "id": "urn:example:edition",
+      "workId": "urn:example:work",
+      "title": "Quran illustrative excerpt sample",
+      "language": "ar",
+      "kind": "recension"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "urn:example:rev",
+      "editionId": "urn:example:edition",
+      "sequence": 1,
+      "profileIds": []
+    }
+  ],
+  "streams": [
+    {
+      "id": "urn:example:text",
+      "revisionId": "urn:example:rev",
+      "order": 0,
+      "text": "بِسْمِ الله\nالْحَمْدُ"
+    }
+  ],
+  "anchors": [
+    {
+      "id": "urn:example:a-opening",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 0,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-praise",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 11,
+          "end": 21
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "urn:example:opening",
+      "revisionId": "urn:example:rev",
+      "type": "core:verse",
+      "anchorId": "urn:example:a-opening"
+    },
+    {
+      "id": "urn:example:praise",
+      "revisionId": "urn:example:rev",
+      "type": "core:verse",
+      "anchorId": "urn:example:a-praise"
+    }
+  ],
+  "schemes": [
+    {
+      "id": "urn:example:quran-sample",
+      "name": "core:quran-sample",
+      "version": "1.0.0",
+      "workId": "urn:example:work",
+      "editionId": "urn:example:edition",
+      "revisionId": "urn:example:rev",
+      "entries": [
+        {
+          "key": "1:1",
+          "order": 0,
+          "targetIds": [
+            "urn:example:opening"
+          ]
+        },
+        {
+          "key": "1:2",
+          "order": 1,
+          "targetIds": [
+            "urn:example:praise"
+          ]
+        }
+      ]
+    }
+  ],
+  "resolutions": [
+    {
+      "reference": {
+        "schemeId": "urn:example:quran-sample",
+        "schemeVersion": "1.0.0",
+        "editionId": "urn:example:edition",
+        "revisionId": "urn:example:rev",
+        "startKey": "1:1",
+        "endKey": "1:2"
+      },
+      "status": "resolved",
+      "targetIds": [
+        "urn:example:opening",
+        "urn:example:praise"
+      ],
+      "candidates": []
+    }
+  ]
+}

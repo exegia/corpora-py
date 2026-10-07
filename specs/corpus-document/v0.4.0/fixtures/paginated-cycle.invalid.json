@@ -1,0 +1,143 @@
+{
+  "specVersion": "0.4.0",
+  "id": "urn:example:bundle",
+  "requiredCapabilities": [
+    "core:text"
+  ],
+  "works": [
+    {
+      "id": "urn:example:work",
+      "title": "Paginated book"
+    }
+  ],
+  "editions": [
+    {
+      "id": "urn:example:edition",
+      "workId": "urn:example:work",
+      "title": "Paginated book sample",
+      "language": "en",
+      "kind": "edition"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "urn:example:rev",
+      "editionId": "urn:example:edition",
+      "sequence": 1,
+      "profileIds": []
+    }
+  ],
+  "streams": [
+    {
+      "id": "urn:example:text",
+      "revisionId": "urn:example:rev",
+      "order": 0,
+      "text": "First paragraph crosses\na page.\nSecond."
+    }
+  ],
+  "anchors": [
+    {
+      "id": "urn:example:a-p1",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 0,
+          "end": 31
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-p2",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 31,
+          "end": 38
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-page1",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 0,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "id": "urn:example:a-page2",
+      "revisionId": "urn:example:rev",
+      "segments": [
+        {
+          "streamId": "urn:example:text",
+          "start": 24,
+          "end": 38
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "urn:example:p1",
+      "revisionId": "urn:example:rev",
+      "type": "core:paragraph",
+      "anchorId": "urn:example:a-p1"
+    },
+    {
+      "id": "urn:example:p2",
+      "revisionId": "urn:example:rev",
+      "type": "core:paragraph",
+      "anchorId": "urn:example:a-p2"
+    },
+    {
+      "id": "urn:example:page1",
+      "revisionId": "urn:example:rev",
+      "type": "core:page",
+      "anchorId": "urn:example:a-page1"
+    },
+    {
+      "id": "urn:example:page2",
+      "revisionId": "urn:example:rev",
+      "type": "core:page",
+      "anchorId": "urn:example:a-page2"
+    }
+  ],
+  "structures": [
+    {
+      "id": "urn:example:paragraphs",
+      "revisionId": "urn:example:rev",
+      "name": "core:paragraphs",
+      "members": [
+        {
+          "nodeId": "urn:example:p1",
+          "order": 0,
+          "parentNodeId": "urn:example:p1"
+        },
+        {
+          "nodeId": "urn:example:p2",
+          "order": 1
+        }
+      ]
+    },
+    {
+      "id": "urn:example:pages",
+      "revisionId": "urn:example:rev",
+      "name": "core:pages",
+      "members": [
+        {
+          "nodeId": "urn:example:page1",
+          "order": 0
+        },
+        {
+          "nodeId": "urn:example:page2",
+          "order": 1
+        }
+      ]
+    }
+  ]
+}

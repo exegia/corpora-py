@@ -1,0 +1,451 @@
+{
+  "specVersion": "0.4.0",
+  "id": "urn:usx-example:usx-scripture",
+  "requiredCapabilities": [
+    "core:text",
+    "core:anchors",
+    "core:structures",
+    "core:annotations"
+  ],
+  "works": [
+    {
+      "id": "urn:usx-example:work-usx-scripture",
+      "title": "usx-scripture"
+    }
+  ],
+  "editions": [
+    {
+      "id": "urn:usx-example:edition-usx-scripture",
+      "workId": "urn:usx-example:work-usx-scripture",
+      "title": "Synthetic USX projection",
+      "language": "en",
+      "kind": "edition"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "urn:usx-example:rev-usx-scripture",
+      "editionId": "urn:usx-example:edition-usx-scripture",
+      "sequence": 1,
+      "profileIds": [
+        "urn:corpora:profile:usx-projection:0.4.0"
+      ],
+      "importId": "urn:usx-example:import-usx-scripture"
+    }
+  ],
+  "streams": [
+    {
+      "id": "urn:usx-example:stream-usx-scripture",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "order": 0,
+      "text": "Introduction\nAlpha beta."
+    }
+  ],
+  "profiles": [
+    {
+      "id": "urn:corpora:profile:usx-projection:0.4.0",
+      "version": "0.4.0",
+      "nodeTypes": [
+        "usx:book",
+        "usx:chapter",
+        "usx:poetryLine",
+        "usx:char",
+        "usx:quotation",
+        "usx:peripheral",
+        "usx:table",
+        "usx:row",
+        "usx:cell",
+        "usx:sidebar"
+      ],
+      "featureKeys": [],
+      "requiredCapabilities": [
+        "core:positions"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "urn:usx-example:mapper",
+      "name": "Synthetic mapping author",
+      "kind": "software"
+    }
+  ],
+  "assets": [
+    {
+      "id": "urn:usx-example:usx-scripture-source",
+      "mediaType": "application/xml",
+      "uri": "fixture:usx-scripture.usx",
+      "sha256": "db7da02b550c8a0807102ca2e7ebac404a16973dc6f2357bc456b531a546a03d"
+    }
+  ],
+  "imports": [
+    {
+      "id": "urn:usx-example:import-usx-scripture",
+      "assetIds": [
+        "urn:usx-example:usx-scripture-source"
+      ],
+      "adapter": "synthetic-usx-projection",
+      "adapterVersion": "draft-0.4.0",
+      "agentId": "urn:usx-example:mapper",
+      "report": [
+        {
+          "aspect": "source",
+          "status": "preserved",
+          "detail": "Original synthetic source asset bytes and checksum retained; not parser output."
+        },
+        {
+          "aspect": "text joins",
+          "status": "transformed",
+          "detail": "Displayed blocks joined with explicit newline or tab separators; note body excluded from main stream."
+        },
+        {
+          "aspect": "USX style inventory",
+          "status": "unsupported",
+          "detail": "Only this hand-authored projection is exercised, not a complete USX implementation."
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "urn:usx-example:book",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "usx:book",
+      "extensions": {
+        "usx:attributes": {
+          "code": "GEN",
+          "style": "id"
+        }
+      },
+      "anchorId": "urn:usx-example:a-book"
+    },
+    {
+      "id": "urn:usx-example:intro",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "core:heading",
+      "extensions": {
+        "usx:attributes": {
+          "style": "imt1"
+        }
+      },
+      "anchorId": "urn:usx-example:a-intro"
+    },
+    {
+      "id": "urn:usx-example:chapter",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "usx:chapter",
+      "extensions": {
+        "usx:attributes": {
+          "number": "1",
+          "sid": "GEN 1",
+          "eid": "GEN 1"
+        }
+      },
+      "anchorId": "urn:usx-example:a-chapter"
+    },
+    {
+      "id": "urn:usx-example:verse",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "core:verse",
+      "extensions": {
+        "usx:attributes": {
+          "number": "1-2",
+          "altnumber": "1a",
+          "pubnumber": "I–II",
+          "sid": "GEN 1:1-2",
+          "eid": "GEN 1:1-2"
+        }
+      },
+      "anchorId": "urn:usx-example:a-verse",
+      "sourceIds": [
+        {
+          "assetId": "urn:usx-example:usx-scripture-source",
+          "value": "GEN 1:1-2"
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:q1",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "usx:poetryLine",
+      "extensions": {
+        "usx:attributes": {
+          "style": "q1"
+        }
+      },
+      "anchorId": "urn:usx-example:a-q1"
+    },
+    {
+      "id": "urn:usx-example:q2",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "usx:poetryLine",
+      "extensions": {
+        "usx:attributes": {
+          "style": "q2",
+          "vid": "GEN 1:1-2"
+        }
+      },
+      "anchorId": "urn:usx-example:a-q2"
+    },
+    {
+      "id": "urn:usx-example:italic",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "usx:char",
+      "extensions": {
+        "usx:attributes": {
+          "style": "it"
+        }
+      },
+      "anchorId": "urn:usx-example:a-italic"
+    },
+    {
+      "id": "urn:usx-example:quote",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "usx:quotation",
+      "extensions": {
+        "usx:attributes": {
+          "style": "qt-s",
+          "sid": "q1",
+          "eid": "q1",
+          "who": "Speaker"
+        }
+      },
+      "anchorId": "urn:usx-example:a-quote"
+    },
+    {
+      "id": "urn:usx-example:note-point",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "type": "core:milestone",
+      "extensions": {
+        "usx:attributes": {
+          "style": "f",
+          "caller": "+"
+        }
+      },
+      "position": {
+        "streamId": "urn:usx-example:stream-usx-scripture",
+        "offset": 25
+      }
+    }
+  ],
+  "anchors": [
+    {
+      "id": "urn:usx-example:a-book",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 0,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-intro",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 0,
+          "end": 12
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-chapter",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 13,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-verse",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 13,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-q1",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 13,
+          "end": 19
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-q2",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 19,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-italic",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 13,
+          "end": 18
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:a-quote",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "segments": [
+        {
+          "streamId": "urn:usx-example:stream-usx-scripture",
+          "start": 13,
+          "end": 24
+        }
+      ]
+    }
+  ],
+  "structures": [
+    {
+      "id": "urn:usx-example:layout",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "name": "usx:layout",
+      "members": [
+        {
+          "nodeId": "urn:usx-example:book",
+          "order": 0
+        },
+        {
+          "nodeId": "urn:usx-example:intro",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:book"
+        },
+        {
+          "nodeId": "urn:usx-example:q1",
+          "order": 1,
+          "parentNodeId": "urn:usx-example:book"
+        },
+        {
+          "nodeId": "urn:usx-example:q2",
+          "order": 2,
+          "parentNodeId": "urn:usx-example:book"
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:scripture",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "name": "usx:scripture",
+      "members": [
+        {
+          "nodeId": "urn:usx-example:book",
+          "order": 0
+        },
+        {
+          "nodeId": "urn:usx-example:chapter",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:book"
+        },
+        {
+          "nodeId": "urn:usx-example:verse",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:chapter"
+        }
+      ]
+    },
+    {
+      "id": "urn:usx-example:inline",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "name": "usx:inline",
+      "members": [
+        {
+          "nodeId": "urn:usx-example:quote",
+          "order": 0
+        },
+        {
+          "nodeId": "urn:usx-example:italic",
+          "order": 0,
+          "parentNodeId": "urn:usx-example:quote"
+        },
+        {
+          "nodeId": "urn:usx-example:note-point",
+          "order": 1,
+          "parentNodeId": "urn:usx-example:quote"
+        }
+      ]
+    }
+  ],
+  "extensions": {
+    "usx:sourceVersion": "3.1",
+    "usx:documentationRelease": "3.1.1"
+  },
+  "annotations": [
+    {
+      "id": "urn:usx-example:footnote",
+      "type": "usx:footnote",
+      "agentId": "urn:usx-example:mapper",
+      "targets": [
+        {
+          "id": "urn:usx-example:note-point"
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "text": "A note.",
+          "marks": [
+            {
+              "start": 0,
+              "end": 7,
+              "type": "usx:ft"
+            }
+          ]
+        }
+      ],
+      "extensions": {
+        "usx:attributes": {
+          "style": "f",
+          "caller": "+"
+        },
+        "usx:markAttributes": [
+          {
+            "style": "ft",
+            "closed": "false"
+          }
+        ]
+      }
+    }
+  ],
+  "schemes": [
+    {
+      "id": "urn:usx-example:scheme",
+      "name": "usx:sourceCitation",
+      "version": "1.0.0",
+      "workId": "urn:usx-example:work-usx-scripture",
+      "editionId": "urn:usx-example:edition-usx-scripture",
+      "revisionId": "urn:usx-example:rev-usx-scripture",
+      "entries": [
+        {
+          "key": "GEN 1:1-2",
+          "order": 0,
+          "targetIds": [
+            "urn:usx-example:verse"
+          ]
+        }
+      ]
+    }
+  ]
+}

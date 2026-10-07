@@ -18,7 +18,8 @@ The implementation order agreed on 2026-09-18 is AI curation, then
    Recovery core and explicit SQLite journal implemented in `ai.wal` / `ai.wal_sqlite`.
    Hosted journal mapping and atomic draft pointers are implemented in `ai.wal_supabase`.
    Typed archive editing and gated HTTP/MCP apply, undo, and history are implemented.
-   Trusted draft provisioning and corpus-wide confirmation remain before this issue can close.
+   Owned job-to-draft provisioning and reader/export APIs are implemented below.
+   Corpus-wide confirmation remains before this issue can close.
 4. [#235: Durable threads and suggestions](https://github.com/exegia/corpora-py/issues/235).
    Implemented with owned pinned scopes, explicit forks, messages, suggestion states,
    and durable Supabase/SQLite storage. Hosted rollout requires the migration below.
@@ -112,7 +113,7 @@ Required section features and their types come from the loaded `otext` schema. O
 linguistic requirements and source-based boundary/label comparisons are not inferred.
 Infrastructure errors return a generic 503; unreadable archives return 422; absent
 identity at the service boundary returns 403 (the HTTP middleware normally returns
-401 earlier). Suggestion generation, apply/undo, and chat remain stubs. Durable threads and rejection are implemented below.
+401 earlier). Suggestion generation and chat remain pending. Durable threads, rejection, and gated mutations are implemented below.
 
 Run `uv run pytest tests/corpora_py/test_ai_service.py` for HTTP, MCP (including real
 ASGI transport), ownership, scope, and stale-selection coverage.
@@ -160,7 +161,7 @@ suggestions. `save_suggestion` returns a thread-qualified opaque ID; use that
 returned ID in events and subsequent operations. Suggestions must match their
 section's scope, base version, and supplied content hash. Pending suggestions can
 become applied, rejected, or stale; terminal transitions are idempotent and cannot
-be changed to another terminal state. Applying remains reserved for #234's WAL
+be changed to another terminal state. Applying is handled transactionally by #234's WAL
 transaction; this storage service itself never edits corpus content.
 
 Updates use revision compare-and-swap, retrying contention up to five times.
@@ -227,8 +228,8 @@ publication with retained receipts, and map a whole operation into field rows in
 one database transaction. Persist operation grouping plus both evidence snapshots
 and the receipt binding. Stable field UUIDs from `Intent.entries()` can be used as
 `corpus_changes.id`; each undo entry links its corresponding original field row.
-The existing singular `ApplyResponse.change` must not hide additional field rows:
-coordinate an additive response containing the full group before enabling writes.
+The public mutation API below retains `ApplyResponse.change` and adds
+`changes` for the full group.
 
 Archive `history.yml` remains the version/snapshot timeline. The staged archive
 must carry the operation provenance and version bump; `corpus_changes` supplies
@@ -236,11 +237,11 @@ field-level displaced readings and responsibility. `commit_id` is linked when th
 working version is committed. Readers/exporters must retain that provenance.
 Provider credentials belong in neither store.
 
-Production wiring must resolve suggestions through owned threads, validate target
-membership and field types, validate corpus confirmation tokens bound to caller,
-suggestion and version, enforce locks, synchronize suggestion state, expose scoped
-history, and wire HTTP/MCP plus pending-operation reconciliation. Until these are
-implemented, apply/undo/history endpoints remain 501 and #234 stays open.
+Production wiring below resolves owned suggestions, checks target membership and
+field types, enforces locks, synchronizes suggestion state, and exposes HTTP/MCP
+mutations and scoped history. Retries reconcile durable pending operations.
+Corpus-wide confirmation remains closed with 428 until bound tokens are connected;
+#234 remains open.
 
 `tests/corpora_py/test_ai_wal.py` uses a transactional SQLite draft fixture to test
 the adapter contract, not the production archive writer. It exercises journal
@@ -324,7 +325,7 @@ through those transactions. Object HTTP upload/read-back is tested with mocked
 transport; no hosted bucket was changed during verification.
 
 The archive editor and public mutation integration below build on these transactions.
-#234 remains open for trusted working-draft provisioning and bound confirmation.
+#234 remains open for bound corpus-wide confirmation.
 
 
 ## Typed archive editing (#234, third slice)
@@ -408,12 +409,81 @@ With mutations enabled, AI validation and thread access resolve the owned draft
 registry before the legacy archive/job source. Registered corpora load verified
 HEAD bytes, so old pinned versions correctly become stale. Registry errors fail
 closed; only an absent registration can use the legacy read path. Legacy storage,
-corpus-detail caches, and non-AI readers are not redirected by this slice. Keep the
-setting enabled for registered AI sessions; disabling it also disables HEAD lookup.
+corpus-detail caches, and non-AI readers are not redirected by this slice. Explicit `draft:<UUID>` references (below) resolve HEAD even when writes are disabled.
+Legacy flat registrations still require the setting for HEAD lookup.
 
 Real-archive tests drive the new SQL function through HTTP and MCP, including
 multi-field apply/undo, retry identity, pagination, ownership, locked drafts,
 registered-HEAD validation, and both orderings of the rejection/publication race.
 Corpus-wide confirmation still returns 428, including for arbitrary nonempty
-strings. Source-text and boundary repairs remain unsupported. Next: trusted draft
-provisioning and reader integration, then the bound corpus confirmation protocol.
+strings. Source-text and boundary repairs remain unsupported. Owned draft provisioning and reader integration are described below.
+Next: the bound corpus confirmation protocol.
+
+
+## Owned working drafts and readers (#234, fifth slice)
+
+`POST /ai/drafts` accepts `{ "job_id": "<conversion UUID>" }`. The verified caller
+must exactly own a succeeded conversion job; anonymous legacy jobs, another
+user's job, and arbitrary global document IDs do not qualify. The service copies
+the result into a private temporary directory, checks the archive and retained TF
+sources, stages immutable bytes, and then creates the document and draft binding
+in one database transaction. Non-archive ingest results are rejected.
+
+Provisioning requires `AI_MUTATIONS_ENABLED=true`, `AI_STORE=supabase`, a writable
+deployment, a corresponding `public.users` profile, and migration
+`20260918180400_ai_owned_drafts.sql` after the previous three AI migrations. The
+capability check refuses provisioning against an older database. This migration
+has only been tested in isolated PostgreSQL; it has not been applied live.
+
+A deterministic document ID gives each owner/job pair one working draft.
+Concurrent creation uses a transaction lock and returns the first binding; a
+retry after edits returns current HEAD and never replaces it with the source.
+The original job archive remains unchanged. Upload failure cannot create a
+binding. A failed database transaction or a concurrent losing initializer can
+leave an unreferenced staged object; retention-aware cleanup is still separate.
+
+Responses contain `id`, `corpus` (`draft:<UUID>`), `version`, `revision`, `digest`,
+`state`, and an authenticated `archive_url`. Use **that corpus identifier and
+version** when creating a pinned AI thread or validating a scope. Drafts are listed
+through `GET /ai/drafts?limit=50&offset=0` (1–100, ordered by ID); a detail lookup is
+`GET /ai/drafts/{id}`. Creation retries still check the source job; existing draft
+reads do not depend on the job's result remaining locally available.
+
+The reader uses these authenticated routes under `/ai/drafts/{id}`:
+
+| Route | Result |
+|---|---|
+| `/manifest`, `/index`, `/versions` | Metadata, section navigation, and version timeline |
+| `/nodes/{node}` | Current node text, features, context, and annotations |
+| `/sections?parent=...&offset=0&limit=50` | Section navigation (limit 1–200) |
+| `/content?ref=...&fmt=...&offset=0&limit=50` | Paginated passages (limit 1–200) |
+| `/archive` | Verified current `.corpus` bytes, including edits and provenance |
+
+JSON reader responses are `{ "draft": <snapshot metadata>, "data": <existing
+corpus-detail shape> }`. Each read resolves and verifies one immutable HEAD,
+then uses a private per-call extraction; it never registers an archive in the
+shared corpus-detail cache. Version reads use `history.yml` or manifest metadata;
+they do not execute Git against archive-supplied configuration. The returned revision tells clients which snapshot
+the view describes. The archive response sets its digest ETag, `X-Draft-Revision`,
+and `Cache-Control: private, no-store`, and removes its temporary download after
+serving it. No signed storage URL or service key is exposed.
+
+Explicit draft references never fall back to shared storage, even if not found.
+Reader/export/validation access continues when mutations are disabled or a draft
+is locked. Legacy `/storage` and conversion-job routes continue to represent their
+original artifacts; clients must use the draft routes for working-copy content.
+MCP provides `create_working_draft`, `list_working_drafts`, and
+`read_working_draft` with the same ownership and snapshot rules.
+
+The migration adds `corpus_documents.ai_private` and a restrictive policy so
+private draft metadata cannot leak through the legacy broad read/insert/delete
+policies. Browser roles cannot insert private rows, change private rows back to
+public, or truncate the table. Existing draft bindings are marked private; normal
+legacy records retain their existing access. Server-mediated draft responses
+remain owner-scoped. The deployed source/status check constraints are preserved
+(`source=upload`, `status=converted` for the newly uploaded working copy).
+
+Verification covers the actual create → thread → apply → reader/export → undo
+flow, immutable source preservation, both HTTP and MCP, concurrent provisioning,
+foreign/anonymous/incomplete jobs, legacy metadata privacy, disabled-write reads,
+missing-draft fail-closed behavior, and upload failure without a document binding.
