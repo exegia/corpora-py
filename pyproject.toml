@@ -22,6 +22,7 @@ license-files = ["LICENSE"]
 dependencies = [
     "dotenvx>=0.0.0",
     # ── common (settings, auth, web) ──
+    "pydantic>=2.0",
     "pydantic-settings>=2.14.2",
     "fastapi>=0.139.0",
     "cryptography>=42.0.0",
@@ -71,6 +72,7 @@ packages = [
     "packages/common/src/common",
     "packages/mcp/src/corpora_mcp",
     "packages/admin/src/admin",
+    "packages/linking/src/corpora_linking",
 ]
 
 [tool.hatch.build.targets.editable]
@@ -88,6 +90,7 @@ members = ["packages/*"]
 corpora-common = { workspace = true }
 corpora-mcp = { workspace = true }
 corpora-admin = { workspace = true }
+corpora-linking = { workspace = true }
 
 [dependency-groups]
 # Dev-only (not shipped in the published wheel).
@@ -99,6 +102,7 @@ dev = [
     "corpora-common",
     "corpora-mcp",
     "corpora-admin",
+    "corpora-linking",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=7.1.0",
