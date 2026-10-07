@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
@@ -379,7 +379,7 @@ wheels = [
 
 [[package]]
 name = "corpora-admin"
-version = "5.0.0"
+version = "6.0.0"
 source = { editable = "packages/admin" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -427,7 +427,7 @@ provides-extras = ["docling"]
 
 [[package]]
 name = "corpora-common"
-version = "5.0.0"
+version = "6.0.0"
 source = { editable = "packages/common" }
 dependencies = [
     { name = "cryptography" },
@@ -448,7 +448,7 @@ requires-dist = [
 
 [[package]]
 name = "corpora-mcp"
-version = "5.0.0"
+version = "6.0.0"
 source = { editable = "packages/mcp" }
 dependencies = [
     { name = "corpora-common" },
@@ -472,7 +472,7 @@ provides-extras = ["sse"]
 
 [[package]]
 name = "corpora-py"
-version = "5.0.0"
+version = "6.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
