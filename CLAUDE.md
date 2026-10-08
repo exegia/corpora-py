@@ -28,6 +28,7 @@ make help
 uv build --package corpora-common --wheel --out-dir dist/
 uv build --package corpora-mcp    --wheel --out-dir dist/
 uv build --package corpora-admin  --wheel --out-dir dist/
+uv build --package corpora-linking --wheel --out-dir dist/
 
 # Build all workspace wheels at once into dist/
 make build-wheel
@@ -172,13 +173,15 @@ vercel deploy --prod   # manual production deploy
 
 ## Architecture
 
-This is a **uv workspace** of three published Python packages plus an umbrella meta-package:
+This is a **uv workspace** of independently buildable Python packages plus an umbrella package.
+The new linking core has an independent version; the root wheel remains the only automated PyPI publication:
 
 | Package  | PyPI name        | Source                          | Purpose                                                                                 |
 |----------|------------------|---------------------------------|-----------------------------------------------------------------------------------------|
 | Common   | `corpora-common` | `packages/common/src/common/`   | Settings, logging, shared utilities                                                     |
 | MCP      | `corpora-mcp`    | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI                                                           |
 | Admin    | `corpora-admin`  | `packages/admin/src/admin/`     | EPUB/HTML/PDF/TEI → Text-Fabric converters + conversion HTTP API                        |
+| Linking | `corpora-linking` | `packages/linking/src/corpora_linking/` | Isolated reference/selection values and adapter ports |
 | Umbrella | `corpora-py`     | `src/corpora_py/`               | Depends on all three; combined FastAPI app (`corpora-api` CLI); used by sidecar/example |
 
 - **Install everything** (dev / example / sidecar): `uv sync` or install `corpora-py`
@@ -448,3 +451,11 @@ bunx shadcn@latest add <component-name>     # not `shadcn-ui`, which is the old 
 - Components land in `example/app/components/ui/` (ReUI ones in `components/reui/`)
 - Tailwind CSS 4 — **no `tailwind.config.ts`**; theme and imports live in `example/app/app.css`
 - Import via the alias: `import { Button } from "~/components/ui/button"`
+
+## Reference linking scaffold
+
+`packages/linking` is the isolated `corpora-linking` core, bundled in the root
+wheel and independently buildable. Read its [agent instructions](packages/linking/AGENTS.md)
+and [implementation specification](specs/reference-linking/spec.md). Detection,
+CUSX/Supabase adapters and management UI remain staged. It does not replace the
+v0.4 corpus-document contract or the scoped CUSX reference proposal.
