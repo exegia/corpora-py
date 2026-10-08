@@ -352,3 +352,27 @@ at `/tmp/reference-linking-scholarly-demo.json`. The disposable PostgreSQL conta
 was removed. Existing Starlette/httpx warning remains. No push, merge, deployment,
 external publication or live database changes occurred. Unknown discovery persistence
 and retry/review integration remain staged explicitly in scholarly.md.
+
+# Offline scholarly discovery management follow-up
+
+Added SQLite discovery registration/history, semantic event fingerprints preserving
+original IDs on retries, explicit catalog refresh with stable work-hypothesis IDs,
+rejection and atomic work selection creating an ordinary pending/unresolved Reference.
+Unknowns and unchosen ambiguous hypotheses remain in discovery history. Complete
+original/converted mappings remain attached to discovery revisions; overlapping maps
+are retained as evidence on the selected working Reference without projecting bounds.
+The adapter trusts local caller actors and introduces no PostgreSQL tables/routes.
+
+Verification: 1026 passed, 34 skipped, including nine new discovery tests and the
+existing 24 real PostgreSQL tests. Coverage includes durable unknown/rejected records,
+retry preservation, ID stability through catalog disappearance/reappearance, stale
+sources/versions and changed-event rejection, concurrent retries/selection, retained
+mapping evidence, atomic rollback on forced selection failure and the walkthrough.
+Ruff passes; mypy passes for 125 files; graph conformance passes seven tests/25 fixtures.
+Both wheels build. The actual installed umbrella wheel runs the complete discovery
+walkthrough away from checkout in a fresh environment with Pydantic only; isolated
+core wheel import also passes without psycopg. Example JSON is available at
+`/tmp/reference-linking-discovery-review-demo.json`. Disposable PostgreSQL was removed.
+Existing Starlette/httpx warning remains. No push, merge, deploy, live database changes
+or external publication occurred. PostgreSQL discovery authorization/persistence and
+production converter wiring remain staged.

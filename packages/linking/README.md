@@ -224,3 +224,10 @@ portable `CitationDiscovery` records with stable IDs rather than guessed work ID
 Run `uv run python packages/linking/examples/scholarly_link.py` for synthetic intake
 and exact retrieval. See [scholarly intake](../../specs/reference-linking/scholarly.md)
 for the pending recognizer and discovery-storage integrations.
+
+`corpora_py.linking_discoveries.SQLiteDiscoveryStore` now persists unknown discoveries
+and registration events in the local working database. Explicit catalog refresh and
+work choice append versioned history; choosing a work creates a pending Reference,
+with passage resolution/review still required. Run
+`uv run python packages/linking/examples/discovery_review.py` for the offline walkthrough.
+PostgreSQL discovery support and production authorization remain staged.

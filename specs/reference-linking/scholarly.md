@@ -55,10 +55,46 @@ Run `uv run python packages/linking/examples/scholarly_link.py`. It emits portab
 JSON for identified, ambiguous and unknown citations and separately verifies a
 synthetic mapped passage. The example performs no database or network I/O.
 
-Production conversion-event and working-store adapters currently accept References,
-not discovery records; unknown scholarly intake therefore requires a dedicated staged
-storage/event adapter before production converter wiring. That adapter must retain
-original-file mappings, enforce resource authorization and use event IDs for retries,
-with working database authority and no approval on import. This core slice does not
-claim that SQLite/Supabase already persist or review unknown discoveries. All existing
-graph/reference and C-USX publication contracts remain unchanged.
+The umbrella now provides an offline SQLite discovery adapter with registration
+events, retained mapping evidence and audited work-selection history. PostgreSQL
+discovery persistence and production converter hooks remain staged; they must enforce
+resource authorization and retry contracts with working database authority. All
+existing graph/reference and C-USX publication contracts remain unchanged.
+
+# Local discovery history
+
+`corpora_py.linking_discoveries.SQLiteDiscoveryStore(working_store, authority_id=...)`
+uses the same caller-selected SQLite file as the offline working store. It trusts
+caller-supplied actors; it implements no authentication or RLS. Registration requires
+a pinned source snapshot and verifies quote/context before saving. Optional complete
+original/converted mappings are validated against that snapshot and retained on every
+discovery revision.
+
+`register(..., event_id=..., reason=...)` atomically stores version 1 and the registration
+event. Its fingerprint covers source text/identity, mention, catalog outcome, provenance
+and mappings, excluding newly allocated discovery/hypothesis UUIDs. Identical retries
+return the original registration with the original IDs even after later decisions;
+changed event evidence conflicts. Distinct events do not deduplicate text. Reusing a
+discovery UUID for another registration conflicts.
+
+`refresh_identification` verifies the same pinned source and explicitly reruns catalog
+identity, preserving the discovery UUID and existing hypothesis IDs by work identity,
+including candidates that disappear and later return. It appends CAS history with
+actor/time/reason; it does not choose a work. All original evidence remains in history.
+`reject` retains the unresolved discovery; a fresh identification action is required
+before selecting a rejected record. Discovery decisions do not confer approval.
+
+`select_work` requires an identified candidate and current version, then atomically
+appends the selection decision and creates one ordinary pending/unresolved Reference
+with the original hypothesis UUID. All unchosen hypotheses remain in discovery evidence.
+Only overlapping native mappings are associated with the working reference; the full
+mapping set stays in discovery history. No native citation bounds are projected. The
+working store's resolver/review pipeline still verifies and approves the actual link.
+Selected discoveries remain immutable intake/decision evidence; further edits use the
+working reference's history. Hypothesis ID collisions fail without overwriting links.
+
+Run `uv run python packages/linking/examples/discovery_review.py` for unknown intake,
+ambiguous catalog refresh, reviewer work choice and retry ID preservation. It uses
+synthetic data and a temporary local database, returning inspectable JSON. This adapter
+is append-only through its API; database owners can alter files directly. Production
+authorization, PostgreSQL discovery tables and application routes remain pending.
