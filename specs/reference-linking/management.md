@@ -73,3 +73,7 @@ clients must not treat unreviewed asserted resolution fields as validation proof
 
 The [offline Supabase proposal](supabase.md) specifies private storage and server-side
 authorization/transaction contracts. Its SQL is a design artifact, not an applied migration.
+
+The optional PostgreSQL working-store adapter now implements creation, history, CAS
+and review using authenticated membership checks; see the Supabase proposal for its
+server boundary and remaining event/publication integration.

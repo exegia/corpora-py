@@ -98,6 +98,9 @@ GRANT SELECT ON ALL TABLES IN SCHEMA reference_working TO service_role;
 GRANT INSERT ON reference_working.heads, reference_working.revisions,
     reference_working.conversion_events, reference_working.publication_events TO service_role;
 GRANT UPDATE (current_version) ON reference_working.heads TO service_role;
--- Space/member administration deliberately has no service-role write grant here.
+-- PostgreSQL row locks require UPDATE privilege; server credential can mutate
+-- membership rows and must remain trusted. No client membership API is provided.
+GRANT UPDATE ON reference_working.memberships TO service_role;
+-- Space/member creation and removal have no service-role grant here.
 -- History/event rows have no UPDATE or DELETE grants. Owners remain privileged.
 COMMIT;

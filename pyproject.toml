@@ -52,6 +52,7 @@ dependencies = [
 # Full Docling converter for /ingest (admin.ingest) — heavy (torch). Enable
 # with `uv sync --extra docling` in dev, or install `corpora-py[docling]`.
 docling = ["docling>=2.0"]
+linking-postgres = ["psycopg[binary]>=3.2,<4"]
 linking-pdf = [
     "pdfplumber>=0.11.7,<0.12",
 ]

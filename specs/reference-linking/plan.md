@@ -33,8 +33,9 @@ type: plan
    whole-document C-USX selector embedding remains pending. Local acknowledgment/
    withdrawal events and version-checked reopening are now implemented; remaining
    publication work includes authenticated multi-destination delivery/removal receipts. Offline [Supabase schema and authorization proposal](supabase.md) now defines
-   private tables, server authorization and transaction contracts. The PostgreSQL adapter,
-   runtime permission tests and deployment remain pending and separately scoped.
+   private tables, server authorization and transaction contracts. A bounded PostgreSQL working-store adapter and local runtime permission/CAS tests
+   are implemented. PostgreSQL event/publication adapters, production authorization
+   integration and deployment remain pending and separately scoped.
 5. Extraction: select public naming/version policy, preserve license and fixtures,
    test standalone install, document adapters and establish a separate release
    process. Current root release/publish scripts intentionally remain unchanged.

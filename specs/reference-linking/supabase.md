@@ -43,8 +43,9 @@ new reference resolution enum. Actor UUIDs come from verified authentication, wh
 provenance retains the original creator or detector. Historical actors survive account
 deletion; membership removal immediately removes future access.
 
-The schema grants history/event INSERT only and head-pointer UPDATE only to the server
-role. It does not make logs tamper resistant against database owners, ensure contiguous
+The schema grants history/event INSERT and head-pointer UPDATE to the server
+role. Membership UPDATE is also required for FOR SHARE row locking; the privileged
+server credential can therefore mutate memberships and must remain trusted. It does not make logs tamper resistant against database owners, ensure contiguous
 versions by itself, or implement transitions without the adapter. Snapshot bytes and
 external delivery/removal receipts are future artifact storage work; the ledger digest
 alone is not proof that C-USX was delivered or removed.
@@ -65,7 +66,7 @@ proof of the caller's rights. Reads require any membership. Capabilities are ind
 `publish` allows acknowledgment/withdrawal; `admin` manages membership and may explicitly
 exercise all capabilities. Reopening a withdrawn record requires contribute. Automated
 jobs require an explicitly provisioned authenticated principal, not implicit access to
-all spaces. Space/member provisioning needs a separate privileged administrative path.
+all spaces. Space/member creation and removal need a separate privileged administrative path.
 
 Lock the matching membership rows with FOR SHARE for the transaction, so concurrent
 revocation serializes with the authorized operation. Membership administration must
@@ -116,8 +117,9 @@ local ledger's single-active-artifact-per-review-cycle limitation.
 
 # Validation before implementation/deployment
 
-The SQL has PostgreSQL parser verification only. Constraints, permissions and RLS have
-not been executed against PostgreSQL or Supabase. Before a migration is authorized,
+The SQL and bounded working-store adapter have now been exercised against disposable
+local PostgreSQL 17 with fixture Supabase roles and auth.users. No Supabase project
+or live database was accessed. This is not a complete production Supabase integration. Before a migration is authorized,
 run a disposable local database suite covering missing/expired authentication,
 cross-space reads/writes, forged actors, independent capabilities, membership revocation
 races, denied direct client writes, immutable history grants, null/malformed envelopes,
@@ -133,3 +135,29 @@ Design references checked: [Supabase RLS](https://supabase.com/docs/guides/datab
 and [database testing](https://supabase.com/docs/guides/database/testing). The public
 changelog endpoint returned HTTP 403 in this environment; no changelog verification is
 claimed. No live project was queried or modified.
+
+# Implemented bounded adapter
+
+`corpora_py.linking_postgres.PostgreSQLReferenceStore` is an optional server adapter
+installed with `corpora-py[linking-postgres]`. Supply trusted DSN, space UUID, JWKS URL,
+audience and the caller's JWT. It verifies the JWT before any database connection and
+again for each read/write, derives the UUID subject, and checks database membership
+inside each transaction. Do not construct it from untrusted connection/authentication
+configuration. It never creates schemas or provisions memberships. The repository
+JWKS verifier's existing validation behavior applies; immediate session revocation
+and production document-access enforcement still require an application boundary.
+
+Creation, history, get, save, target resolution, approval/rejection and withdrawn-record
+reopening reuse the SQLite adapter's public lifecycle methods and a shared pure revision
+builder. PostgreSQL owns CAS, head locking, membership locking and atomic append.
+This initial adapter does not implement conversion-event registration, publication
+acknowledgment/withdrawal, repeatable-read export, HTTP routes or connection pooling.
+Publication snapshot operations remain offline; do not substitute per-reference reads
+for a coherent production export transaction.
+
+Tests require the optional extra and `LINKING_TEST_POSTGRES_DSN` pointing to an explicitly
+loopback, disposable empty database with administrative privileges. They provision
+fixture roles/auth schema and the proposal, then remove those fixtures. Never aim them
+at a developer's persistent database. Without the variable they skip. Authentication
+in these storage tests uses controlled verifier results; cryptographic verification
+is provided and tested separately by the existing JWKS module.

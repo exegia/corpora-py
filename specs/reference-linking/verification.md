@@ -240,3 +240,25 @@ and a production adapter remain pending. Public Supabase documentation was consu
 the changelog endpoint returned HTTP 403. No live project access or modification,
 push or deployment occurred. Library code and dependency lockfile are unchanged;
 previous wheel and application test results remain applicable.
+
+# PostgreSQL working-store follow-up
+
+Implemented an optional psycopg server adapter for creation/get/history/save,
+resolution, review and reopening. It derives actors from the existing JWKS verifier,
+rechecks tokens and membership per operation, locks memberships and heads, and
+atomically appends revisions with CAS. SQLite and PostgreSQL share lifecycle revision
+construction. No schema initialization or HTTP routing is performed by the adapter.
+PostgreSQL conversion-event and publication adapters remain future work.
+
+Verification: 989 passed, 34 skipped with both optional linking extras and a disposable
+loopback PostgreSQL 17 container. Seven new real-database tests cover independent
+capabilities, review/audit, token rejection, tenant isolation, concurrent creation/CAS,
+membership revocation and locking, denied client access/history rewrites and rollback
+of a failed creation. Authentication results are controlled in database tests; the
+existing JWT suite checks cryptographic authentication separately. Ruff passes; mypy
+passes for 118 files; graph conformance passes seven tests/25 fixtures. Both wheels
+build and isolated imports away from the checkout pass. Core install needs Pydantic
+only and has no psycopg dependency. Umbrella smoke supplies psycopg, PyJWT/cryptography
+and existing common-utils import dependencies (Pydantic settings, platformdirs,
+FastAPI); it is not a full app installation test. The disposable container was removed.
+Existing Starlette/httpx warning remains. No live database access, push or deployment.

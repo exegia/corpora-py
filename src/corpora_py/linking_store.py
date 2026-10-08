@@ -199,44 +199,69 @@ class SQLiteReferenceStore:
             actual = row[0] if row else None
             if actual != expected_version:
                 raise VersionConflictError("working reference version changed")
-            if row:
-                previous_revision = WorkingRevision.model_validate_json(row[1])
-                previous = previous_revision.reference
-                if conversion is None and previous.source == reference.source:
-                    conversion = previous_revision.conversion
-                if previous.publication != "draft" and not (
-                    action == "reopen" and previous.publication == "withdrawn"
-                ):
-                    raise ValueError(
-                        "published snapshot requires a publication reconciliation adapter"
-                    )
-                if action in ("approve", "reject") and previous.review != "pending":
-                    raise ValueError("review transitions require a pending draft")
-                if (
-                    action == "edit"
-                    and previous == reference
-                    and previous_revision.conversion == conversion
-                ):
-                    return int(row[0])
-            elif action != "edit":
-                raise ValueError("reference must be created before lifecycle transitions")
-            if conversion is not None and (
-                conversion.reference.id != reference.id
-                or conversion.reference.source != reference.source
-            ):
-                raise ValueError("conversion evidence belongs to another reference or source")
-            revision = WorkingRevision(
-                version=(actual or 0) + 1,
+            previous_revision = WorkingRevision.model_validate_json(row[1]) if row else None
+            revision = prepare_revision(
+                reference,
+                previous_revision=previous_revision,
                 actor_id=self.actor_id,
                 reason=reason,
-                recorded_at=datetime.now(UTC),
                 action=action,
-                reference=reference,
                 validation=validation,
                 conversion=conversion,
             )
+            if previous_revision is not None and revision.version == previous_revision.version:
+                return revision.version
             db.execute(
                 "INSERT INTO linking_revisions(reference_id, version, record) VALUES (?, ?, ?)",
                 (str(reference.id), revision.version, revision.model_dump_json()),
             )
             return revision.version
+
+
+def prepare_revision(
+    reference: Reference,
+    *,
+    previous_revision: WorkingRevision | None,
+    actor_id: str,
+    reason: str,
+    action: Literal["edit", "resolve", "approve", "reject", "publish", "withdraw", "reopen"],
+    validation: ValidationReport | None = None,
+    conversion: ConvertedReference | None = None,
+) -> WorkingRevision:
+    """Shared lifecycle enforcement after the storage adapter checks CAS."""
+    reference = Reference.model_validate(reference.model_dump())
+    if not reason.strip():
+        raise ValueError("revision reason is required")
+    if previous_revision is not None:
+        previous = previous_revision.reference
+        if conversion is None and previous.source == reference.source:
+            conversion = previous_revision.conversion
+        if previous.publication != "draft" and not (
+            action == "reopen" and previous.publication == "withdrawn"
+        ):
+            raise ValueError("published snapshot requires a publication reconciliation adapter")
+        if action in ("approve", "reject") and previous.review != "pending":
+            raise ValueError("review transitions require a pending draft")
+        if (
+            action == "edit"
+            and previous == reference
+            and previous_revision.conversion == conversion
+        ):
+            return previous_revision
+    elif action != "edit":
+        raise ValueError("reference must be created before lifecycle transitions")
+    if conversion is not None and (
+        conversion.reference.id != reference.id or conversion.reference.source != reference.source
+    ):
+        raise ValueError("conversion evidence belongs to another reference or source")
+    revision = WorkingRevision(
+        version=(previous_revision.version if previous_revision else 0) + 1,
+        actor_id=actor_id,
+        reason=reason,
+        recorded_at=datetime.now(UTC),
+        action=action,
+        reference=reference,
+        validation=validation,
+        conversion=conversion,
+    )
+    return revision
