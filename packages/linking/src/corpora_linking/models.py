@@ -54,12 +54,41 @@ class PdfRectangle(Value):
         return self
 
 
+class PdfPoint(Value):
+    x: float = Field(ge=0, allow_inf_nan=False)
+    y: float = Field(ge=0, allow_inf_nan=False)
+
+
+class PdfQuad(Value):
+    """Clockwise polygon in unrotated CropBox-relative top-left points."""
+
+    points: tuple[PdfPoint, PdfPoint, PdfPoint, PdfPoint]
+
+    @model_validator(mode="after")
+    def convex(self) -> Self:
+        turns = []
+        for i in range(4):
+            a, b, c = self.points[i], self.points[(i + 1) % 4], self.points[(i + 2) % 4]
+            turns.append((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x))
+        if not all(turn > 0 for turn in turns):
+            raise ValueError("PDF quad must be nondegenerate, convex and clockwise")
+        return self
+
+
 class PdfLocator(Value):
     kind: Literal["pdf"] = "pdf"
     asset_id: NonEmpty
     page: int = Field(ge=1, strict=True)
-    rectangles: tuple[PdfRectangle, ...] = Field(min_length=1)
+    rectangles: tuple[PdfRectangle, ...] = ()
+    quads: tuple[PdfQuad, ...] = ()
+    text: TextLocator | None = None
     coordinates: Literal["unrotated-cropbox-top-left-points"] = "unrotated-cropbox-top-left-points"
+
+    @model_validator(mode="after")
+    def geometry(self) -> Self:
+        if not self.rectangles and not self.quads:
+            raise ValueError("PDF selection requires rectangles or quads")
+        return self
 
 
 class EpubLocator(Value):
@@ -69,6 +98,7 @@ class EpubLocator(Value):
     asset_id: NonEmpty
     href: NonEmpty
     cfi: NonEmpty
+    text: TextLocator | None = None
 
 
 class EpubResourceLocator(Value):
@@ -87,6 +117,20 @@ class HtmlTextLocator(Value):
     parser: Literal["beautifulsoup-html.parser/v1"] = "beautifulsoup-html.parser/v1"
     parser_version: NonEmpty
     node_path: tuple[Annotated[int, Field(ge=0, strict=True)], ...] = Field(min_length=1)
+    text: TextLocator
+
+
+class HtmlRangeLocator(Value):
+    """Range spanning pinned parsed HTML text nodes; Unicode scalar node offsets."""
+
+    kind: Literal["html-range"] = "html-range"
+    asset_id: NonEmpty
+    parser: Literal["beautifulsoup-html.parser/v1"] = "beautifulsoup-html.parser/v1"
+    parser_version: NonEmpty
+    start_path: tuple[Annotated[int, Field(ge=0, strict=True)], ...] = Field(min_length=1)
+    start_offset: int = Field(ge=0, strict=True)
+    end_path: tuple[Annotated[int, Field(ge=0, strict=True)], ...] = Field(min_length=1)
+    end_offset: int = Field(ge=0, strict=True)
     text: TextLocator
 
 
@@ -112,6 +156,7 @@ Locator = Annotated[
     | EpubLocator
     | EpubResourceLocator
     | HtmlTextLocator
+    | HtmlRangeLocator
     | StructuralLocator
     | CitationLocator,
     Field(discriminator="kind"),
