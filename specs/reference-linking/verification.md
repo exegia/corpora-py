@@ -45,3 +45,21 @@ work-only targets, locator/mapping JSON round trips, independent lifecycle
 states, ambiguity/cardinality, a fake resolver implementing the public port and
 the TF compatibility seam. Live detection, source parsers, Supabase lifecycle
 and CUSX serialization are deliberately staged in the [plan](plan.md).
+
+# Bible detector follow-up
+
+Restored PR261's scaffold from its pull-request ref because the named remote
+feature branch was unavailable. The earlier unpushed `a312a741` object was absent
+in this workspace; restored the manual retrieval example and adapter notes here.
+
+The bounded detector is fixture-backed and keeps exact source evidence and
+unresolved catalog hypotheses. Verification: Ruff passes; mypy passes across 103
+source files; pytest reports 900 passed, 34 skipped (38 linking tests), with the
+existing Starlette/httpx deprecation warning. Corpus-document conformance passes
+7 tests and 25 fixtures. Both independent and umbrella wheel builds succeed.
+Fresh isolated environments import the installed wheels away from the checkout
+and run detector/manual retrieval smoke checks under `python -I`. The umbrella
+smoke uses `--no-deps` plus Pydantic and verifies the bundled linking surface;
+it does not claim full application dependency installation.
+
+No push, merge, deployment, publishing or database changes were performed.

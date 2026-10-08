@@ -40,3 +40,21 @@ Build: `uv build --package corpora-linking --wheel --out-dir dist/`.
 Tests: `uv run pytest tests/linking`. See the
 [implementation specification](../../specs/reference-linking/spec.md) and
 [agent instructions](AGENTS.md) for constraints and staged work.
+
+## Bible detection
+
+`BibleCitationDetector` implements `Detector` using caller-supplied `BibleBook`
+work IDs and aliases, a stream ID, and explicit profile/scheme/version context.
+Call `detect(source, text)` on the complete immutable stream and a fully scoped
+source endpoint without locators. It recognizes explicit `John 3:16` and
+same-chapter ranges such as `Jn. 3:16–18`, preserving spelling, scalar offsets
+and context. It does not infer implicit books, validate verse existence, resolve
+editions, or accept compound lists/cross-chapter ranges. Every output is unresolved
+and pending review. Colliding aliases emit one hypothesis per catalog work with
+ambiguity evidence; consumers must retain all hypotheses together for review.
+Reruns allocate new IDs: persistence adapters must implement the documented
+reconciliation policy before repeated conversion is integrated.
+
+Run the [manual retrieval example](examples/manual_link.py):
+`uv run python packages/linking/examples/manual_link.py`.
+It verifies both selections and rejects changed revisions or quote/context mismatches.

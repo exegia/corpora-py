@@ -62,7 +62,8 @@ rejects unknown fields. No new CUSX XML grammar is established here.
   resource existence and native offset conversion are adapter responsibilities.
 - Structural anchors and citation requests are optional typed locators. A canonical
   citation retains profile, scheme ID/version and optional reading; display text
-  is never exact-location authority. This core does not parse citation grammar.
+  is never exact-location authority. The bounded Bible detector recognizes explicit alias chapter:verse ranges;
+  catalog validation and exact passage resolution remain external.
 - Explicit conversion mappings preserve original and converted endpoints,
   method and exact/approximate/unverified fidelity. Approximate OCR or layout
   mappings never authorize exact target claims.
@@ -103,3 +104,5 @@ define discontinuous and multi-page selection representations and PDF transforms
 then design Supabase tables/history/RLS and XML snapshot conflict rules. None is
 a prerequisite for the scaffold. PyMuPDF/pdfplumber/EbookLib are candidate adapters,
 not new mandatory dependencies. See [plan](plan.md) for the next slice.
+
+See [adapter investigation](adapters.md) for source-library and CFI constraints.

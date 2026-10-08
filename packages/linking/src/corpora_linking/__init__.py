@@ -1,5 +1,6 @@
 """Public linking core, independent of Corpora, storage and source parsers."""
 
+from .detection import BibleBook, BibleCitationDetector
 from .interfaces import Detector, PublicationAdapter, ReferenceStore, Resolver
 from .locators import normalize_text, verify_text_anchor
 from .models import (
@@ -18,6 +19,8 @@ from .models import (
 )
 
 __all__ = [
+    "BibleBook",
+    "BibleCitationDetector",
     "CitationLocator",
     "ConversionMapping",
     "Detector",
