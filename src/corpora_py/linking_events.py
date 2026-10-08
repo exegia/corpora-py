@@ -64,34 +64,10 @@ class ConversionEventRegistry:
         detector_revision: str,
         reason: str,
     ) -> ConversionEvent:
-        if not detector_revision.strip() or not reason.strip():
-            raise ValueError("detector revision and reason are required")
         event_id = UUID(str(event_id))
-        conversion = ConversionInput.model_validate_json(conversion.model_dump_json())
-        report = detect_converted_references(conversion, detector)
-        report = ConversionReferenceReport.model_validate_json(report.model_dump_json())
-        ids = {item.reference.id for item in report.references}
-        if len(ids) != len(report.references):
-            raise ValueError("detector emitted duplicate reference IDs")
-        for item in report.references:
-            ref = item.reference
-            if (
-                ref.provenance.origin != "automatic"
-                or ref.review != "pending"
-                or ref.publication != "draft"
-                or ref.resolution != "unresolved"
-            ):
-                raise ValueError("conversion events require automatic unresolved pending drafts")
-        semantic = report.model_dump(mode="json")
-        for item in semantic["references"]:
-            del item["reference"]["id"]
-        encoded = json.dumps(
-            {"detector_revision": detector_revision, "report": semantic},
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+        report, digest = prepare_conversion(
+            conversion, detector, detector_revision=detector_revision, reason=reason
+        )
         with closing(sqlite3.connect(self.store.path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             prior = db.execute(
@@ -142,3 +118,37 @@ class ConversionEventRegistry:
                 (self.authority_id, str(event_id), event.model_dump_json()),
             )
             return event
+
+
+def prepare_conversion(
+    conversion: ConversionInput, detector: Detector, *, detector_revision: str, reason: str
+) -> tuple[ConversionReferenceReport, str]:
+    """Validate detector output and fingerprint semantics identically for all stores."""
+    if not detector_revision.strip() or not reason.strip():
+        raise ValueError("detector revision and reason are required")
+    conversion = ConversionInput.model_validate_json(conversion.model_dump_json())
+    report = detect_converted_references(conversion, detector)
+    report = ConversionReferenceReport.model_validate_json(report.model_dump_json())
+    ids = {item.reference.id for item in report.references}
+    if len(ids) != len(report.references):
+        raise ValueError("detector emitted duplicate reference IDs")
+    for item in report.references:
+        ref = item.reference
+        if (
+            ref.provenance.origin != "automatic"
+            or ref.review != "pending"
+            or ref.publication != "draft"
+            or ref.resolution != "unresolved"
+        ):
+            raise ValueError("conversion events require automatic unresolved pending drafts")
+    semantic = report.model_dump(mode="json")
+    for item in semantic["references"]:
+        del item["reference"]["id"]
+    encoded = json.dumps(
+        {"detector_revision": detector_revision, "report": semantic},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return report, digest

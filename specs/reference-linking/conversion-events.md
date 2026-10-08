@@ -55,3 +55,8 @@ Production jobs must persist/reuse their event identity across retries and estab
 trusted actor/authority, archive and configuration policies. The event digest is
 content evidence, not an account authorization or raw asset checksum replacement.
 It is not a migration or live Supabase operation.
+
+The optional `PostgreSQLConversionEventRegistry` now implements the same fingerprint
+and UUID-preserving retry contract using transactional advisory locks and atomic
+head/revision/event insertion. Authority comes from the configured space and each
+request checks current authenticated contribute capability. See [storage](supabase.md).

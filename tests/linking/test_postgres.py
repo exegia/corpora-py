@@ -209,3 +209,142 @@ def test_creation_failure_rolls_back_head(stores, database, tmp_path):
     finally:
         with psycopg.connect(database) as db:
             db.execute("ALTER TABLE reference_working.revisions DROP CONSTRAINT fixture_failure")
+
+
+def test_conversion_event_retries_concurrency_and_changed_input(stores, tmp_path):
+    from test_events import fixture as event_fixture
+
+    from corpora_py.linking_postgres_events import PostgreSQLConversionEventRegistry
+
+    factory, _, _, _, _ = stores
+    _, _, conversion, detector = event_fixture(tmp_path)
+    registry = PostgreSQLConversionEventRegistry(factory())
+    event_id = uuid4()
+
+    def register(_):
+        return registry.register(
+            conversion, detector, event_id=event_id, detector_revision="1", reason="conversion"
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, retry = list(pool.map(register, range(2)))
+    assert first == retry == registry.get(event_id)
+    ref = first.report.references[0].reference
+    factory("reviewer").reject(ref.id, expected_version=1, reason="review")
+    assert register(None) == first
+    assert factory().get(ref.id).review == "rejected"
+    with pytest.raises(VersionConflictError):
+        registry.register(
+            conversion, detector, event_id=event_id, detector_revision="2", reason="changed"
+        )
+    assert len(factory().history(ref.id)) == 2
+
+
+def test_conversion_event_failure_rolls_back_all_references(stores, database, tmp_path):
+    from test_events import fixture as event_fixture
+
+    from corpora_py.linking_postgres_events import PostgreSQLConversionEventRegistry
+
+    factory, space, _, _, _ = stores
+    _, _, conversion, detector = event_fixture(tmp_path)
+    registry = PostgreSQLConversionEventRegistry(factory())
+    event_id = uuid4()
+    with psycopg.connect(database) as db:
+        db.execute(
+            "ALTER TABLE reference_working.conversion_events ADD CONSTRAINT fixture_event_failure CHECK (detector_revision <> 'fail')"
+        )
+    try:
+        with pytest.raises(psycopg.errors.CheckViolation):
+            registry.register(
+                conversion, detector, event_id=event_id, detector_revision="fail", reason="rollback"
+            )
+        assert registry.get(event_id) is None
+        with psycopg.connect(database) as db:
+            assert (
+                db.execute(
+                    "SELECT count(*) FROM reference_working.heads WHERE space_id = %s", (space,)
+                ).fetchone()[0]
+                == 0
+            )
+    finally:
+        with psycopg.connect(database) as db:
+            db.execute(
+                "ALTER TABLE reference_working.conversion_events DROP CONSTRAINT fixture_event_failure"
+            )
+
+
+def test_publication_permissions_replay_withdrawal_and_reopen(stores, database, tmp_path):
+    from corpora_py.linking_postgres_events import PostgreSQLPublicationLedger
+    from corpora_py.linking_publication import PublicationSnapshot
+
+    factory, space, _, creator, _ = stores
+    _, ref, resolver = reference_fixture(tmp_path)
+    factory().save(ref, expected_version=None)
+    factory("reviewer").approve(ref.id, expected_version=1, resolver=resolver, reason="verified")
+    ledger = PostgreSQLPublicationLedger(factory())
+    payload = ledger.export_current([ref.id])
+    event_id = uuid4()
+    with pytest.raises(PermissionError):
+        ledger.acknowledge_snapshot(
+            payload, ref.id, event_id=event_id, expected_version=2, reason="ack"
+        )
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'publish')", (space, creator)
+        )
+
+    def acknowledge(_):
+        return ledger.acknowledge_snapshot(
+            payload, ref.id, event_id=event_id, expected_version=2, reason="ack"
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        event, replay = list(pool.map(acknowledge, range(2)))
+    assert event == replay
+    assert factory().get(ref.id).publication == "published"
+    with pytest.raises(ValueError):
+        ledger.acknowledge_snapshot(
+            payload, ref.id, event_id=event_id, expected_version=2, reason="changed"
+        )
+    with pytest.raises(ValueError, match="reconciliation"):
+        factory().save(ref, expected_version=3)
+    withdrawn = ledger.withdraw(ref.id, event_id=uuid4(), expected_version=3, reason="remove")
+    assert withdrawn.artifact_digest == event.artifact_digest
+    assert ledger.pending_removals() == (withdrawn,)
+    assert len(ledger.history(ref.id)) == 2
+    assert PublicationSnapshot.model_validate_json(ledger.export_current([ref.id])).entries == ()
+    assert factory().reopen(ref.id, expected_version=4, reason="revise") == 5
+
+
+def test_publication_event_failure_rolls_back_working_state(stores, database, tmp_path):
+    from corpora_py.linking_postgres_events import PostgreSQLPublicationLedger
+
+    factory, space, _, creator, _ = stores
+    _, ref, resolver = reference_fixture(tmp_path)
+    factory().save(ref, expected_version=None)
+    factory("reviewer").approve(ref.id, expected_version=1, resolver=resolver, reason="verified")
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'publish')", (space, creator)
+        )
+        db.execute(
+            "ALTER TABLE reference_working.publication_events ADD CONSTRAINT fixture_publication_failure CHECK (reason <> 'fail')"
+        )
+    ledger = PostgreSQLPublicationLedger(factory())
+    try:
+        with pytest.raises(psycopg.errors.CheckViolation):
+            ledger.acknowledge_snapshot(
+                ledger.export_current([ref.id]),
+                ref.id,
+                event_id=uuid4(),
+                expected_version=2,
+                reason="fail",
+            )
+        assert ledger.history(ref.id) == ()
+        assert len(factory().history(ref.id)) == 2
+        assert factory().get(ref.id).publication == "draft"
+    finally:
+        with psycopg.connect(database) as db:
+            db.execute(
+                "ALTER TABLE reference_working.publication_events DROP CONSTRAINT fixture_publication_failure"
+            )

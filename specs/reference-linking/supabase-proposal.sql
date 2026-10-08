@@ -59,6 +59,7 @@ CREATE TABLE reference_working.conversion_events (
     space_id uuid NOT NULL REFERENCES reference_working.spaces(id),
     authority_id text NOT NULL,
     event_id uuid NOT NULL,
+    record jsonb NOT NULL CHECK (jsonb_typeof(record) = 'object'),
     fingerprint text NOT NULL CHECK (fingerprint ~ '^[0-9a-f]{64}$'),
     detector_revision text NOT NULL,
     report jsonb NOT NULL CHECK (jsonb_typeof(report) = 'object'),
@@ -71,6 +72,7 @@ CREATE TABLE reference_working.publication_events (
     authority_id text NOT NULL,
     event_id uuid NOT NULL,
     reference_id uuid NOT NULL,
+    record jsonb NOT NULL CHECK (jsonb_typeof(record) = 'object'),
     approval_version bigint NOT NULL,
     resulting_version bigint NOT NULL,
     action text NOT NULL CHECK (action IN ('acknowledge', 'withdraw')),
@@ -101,6 +103,8 @@ GRANT UPDATE (current_version) ON reference_working.heads TO service_role;
 -- PostgreSQL row locks require UPDATE privilege; server credential can mutate
 -- membership rows and must remain trusted. No client membership API is provided.
 GRANT UPDATE ON reference_working.memberships TO service_role;
+-- Row locking also freezes authority while recording/exporting events.
+GRANT UPDATE (authority_id) ON reference_working.spaces TO service_role;
 -- Space/member creation and removal have no service-role grant here.
 -- History/event rows have no UPDATE or DELETE grants. Owners remain privileged.
 COMMIT;

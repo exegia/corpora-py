@@ -262,3 +262,23 @@ only and has no psycopg dependency. Umbrella smoke supplies psycopg, PyJWT/crypt
 and existing common-utils import dependencies (Pydantic settings, platformdirs,
 FastAPI); it is not a full app installation test. The disposable container was removed.
 Existing Starlette/httpx warning remains. No live database access, push or deployment.
+
+# PostgreSQL event and publication follow-up
+
+Added authenticated conversion registration, publication acknowledgment/withdrawal,
+ledger history/tombstones and repeatable-read export outside the reusable core.
+Authority is loaded and locked from the configured space. Event advisory locks
+serialize retries; writes use one transaction and preserve prior IDs/versions.
+Conversion fingerprint validation is shared with SQLite. Full typed event records
+are retained beside queryable envelope fields in the unapplied schema proposal.
+
+Verification: 993 passed, 34 skipped, including 11 real PostgreSQL tests. New coverage
+checks concurrent event retries, changed inputs, retained review, independent publish
+permission, acknowledgment retries, withdrawal/reopening and rollback after failed
+conversion/publication event inserts. Ruff passes; mypy passes for 119 files; graph
+conformance passes seven tests/25 fixtures. Both wheels build. Actual-wheel imports
+away from the checkout pass in isolated environments; the core has no psycopg
+installation. Umbrella import verification supplies existing auth/common dependencies,
+not the complete application stack. Existing Starlette/httpx warning remains.
+Disposable loopback PostgreSQL fixtures/container were removed. No production schema,
+Supabase project, remote delivery, push, merge or deployment was modified.

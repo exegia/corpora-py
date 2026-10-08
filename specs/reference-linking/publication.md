@@ -105,3 +105,9 @@ copies/repackaged artifacts across multiple destinations requires a future
 multi-destination distribution ledger. Prepared exports are not automatically
 acknowledged. Raw payload archive storage, authenticated actors, remote delivery/
 removal receipts and whole-document C-USX embedding remain production work.
+
+The optional `PostgreSQLPublicationLedger` now records acknowledgments/withdrawals
+atomically with working revisions and exports current references in a repeatable-read
+transaction. It authenticates every operation, obtains authority from the space, and
+requires publish capability for ledger writes. This remains a ledger of decisions,
+not evidence of remote distribution or removal. See [storage](supabase.md).

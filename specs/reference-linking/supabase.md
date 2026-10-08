@@ -44,8 +44,9 @@ provenance retains the original creator or detector. Historical actors survive a
 deletion; membership removal immediately removes future access.
 
 The schema grants history/event INSERT and head-pointer UPDATE to the server
-role. Membership UPDATE is also required for FOR SHARE row locking; the privileged
-server credential can therefore mutate memberships and must remain trusted. It does not make logs tamper resistant against database owners, ensure contiguous
+role. Membership UPDATE and space authority UPDATE are also required for FOR SHARE row
+locking; the privileged server credential can therefore mutate these values and must
+remain trusted. It does not make logs tamper resistant against database owners, ensure contiguous
 versions by itself, or implement transitions without the adapter. Snapshot bytes and
 external delivery/removal receipts are future artifact storage work; the ledger digest
 alone is not proof that C-USX was delivered or removed.
@@ -150,10 +151,10 @@ and production document-access enforcement still require an application boundary
 Creation, history, get, save, target resolution, approval/rejection and withdrawn-record
 reopening reuse the SQLite adapter's public lifecycle methods and a shared pure revision
 builder. PostgreSQL owns CAS, head locking, membership locking and atomic append.
-This initial adapter does not implement conversion-event registration, publication
-acknowledgment/withdrawal, repeatable-read export, HTTP routes or connection pooling.
-Publication snapshot operations remain offline; do not substitute per-reference reads
-for a coherent production export transaction.
+The separate event adapters now implement conversion-event registration, publication
+acknowledgment/withdrawal and repeatable-read export. HTTP routes, production document
+access enforcement and connection pooling remain pending. Do not substitute
+per-reference reads for a coherent production export transaction.
 
 Tests require the optional extra and `LINKING_TEST_POSTGRES_DSN` pointing to an explicitly
 loopback, disposable empty database with administrative privileges. They provision
@@ -161,3 +162,24 @@ fixture roles/auth schema and the proposal, then remove those fixtures. Never ai
 at a developer's persistent database. Without the variable they skip. Authentication
 in these storage tests uses controlled verifier results; cryptographic verification
 is provided and tested separately by the existing JWKS module.
+
+# PostgreSQL events and publication
+
+`PostgreSQLConversionEventRegistry(store)` and `PostgreSQLPublicationLedger(store)`
+in `corpora_py.linking_postgres_events` obtain authority from the space row, never
+a user-supplied authority assertion. Membership and authority rows are locked while
+the transaction operates. Event advisory locks serialize retries; detected reference
+inserts occur in UUID order. Hash collisions only serialize independent operations.
+Retries still require current capability and a valid token. Conversion fingerprints
+use the same pure validation/fingerprint helper as SQLite, exclude allocated UUIDs
+and retain all original IDs/evidence in the event record. Empty reports are durable.
+
+The proposal now stores validated full event JSON alongside indexed envelope fields.
+Only the adapter writes both representations; these records are not independently
+editable lifecycle authorities. Publication retries bind reference, action, actor,
+reason, expected version and artifact digest. Event and working revision insertion
+commit together; failures roll back head changes. Withdrawals retain the approved
+version/digest and leave tombstones for a future delivery adapter. Export reads current
+heads in one repeatable-read transaction and omits withdrawn references. A concurrent
+conflicting transaction may require a caller retry; the adapter does not guess a new
+expected version. The single-active-artifact limitation remains.

@@ -24,7 +24,7 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
     Requires the separately provisioned private schema. Each operation opens its
     own connection and rechecks current membership. The caller supplies trusted
     configuration; do not expose DSNs, JWKS settings or space choices without
-    application authorization. No conversion/publication ledger is implemented.
+    application authorization. Event and ledger adapters are provided separately.
     """
 
     def __init__(self, dsn: str, *, space_id: UUID, token: str, jwks_url: str, audience: str):
@@ -147,25 +147,7 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
                         "INSERT INTO reference_working.heads VALUES (%s, %s, %s)",
                         (self.space_id, reference.id, revision.version),
                     )
-                db.execute(
-                    "INSERT INTO reference_working.revisions "
-                    "(space_id, reference_id, version, actor_id, recorded_at, reason, action, reference, validation, conversion) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                    (
-                        self.space_id,
-                        reference.id,
-                        revision.version,
-                        actor,
-                        revision.recorded_at,
-                        reason,
-                        action,
-                        Jsonb(reference.model_dump(mode="json")),
-                        Jsonb(validation.model_dump(mode="json")) if validation else None,
-                        Jsonb(revision.conversion.model_dump(mode="json"))
-                        if revision.conversion
-                        else None,
-                    ),
-                )
+                self._insert_revision(db, revision)
                 if row:
                     db.execute(
                         "UPDATE reference_working.heads SET current_version = %s "
@@ -175,3 +157,22 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
                 return revision.version
         except psycopg.errors.UniqueViolation as exc:
             raise VersionConflictError("working reference creation conflicted") from exc
+
+    def _insert_revision(self, db: psycopg.Connection, revision: WorkingRevision) -> None:
+        db.execute(
+            "INSERT INTO reference_working.revisions "
+            "(space_id, reference_id, version, actor_id, recorded_at, reason, action, reference, validation, conversion) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                self.space_id,
+                revision.reference.id,
+                revision.version,
+                UUID(revision.actor_id),
+                revision.recorded_at,
+                revision.reason,
+                revision.action,
+                Jsonb(revision.reference.model_dump(mode="json")),
+                Jsonb(revision.validation.model_dump(mode="json")) if revision.validation else None,
+                Jsonb(revision.conversion.model_dump(mode="json")) if revision.conversion else None,
+            ),
+        )
