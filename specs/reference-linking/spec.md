@@ -133,5 +133,6 @@ This is outside the reusable core and changes no existing TF jobs or C-USX schem
 Actual extraction adapters, converter hooks and approved XML export remain pending.
 
 The [offline management adapter](management.md) now implements versioned local
-storage, audited resolution and validated review. Production storage, publication
-status transitions and approved C-USX synchronization remain pending.
+storage, audited resolution and validated review. Production storage, publication status transitions and full C-USX document
+synchronization remain pending. Approved JSON snapshot sidecars and conservative
+ID reconciliation are implemented in the [publication adapter](publication.md).

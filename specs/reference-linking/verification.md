@@ -159,3 +159,20 @@ and the umbrella local review example, preserving IDs and publication draft.
 Umbrella smoke provides Pydantic only, not the full app dependency stack. Existing
 Starlette/httpx warning remains. No push, merge, deploy, publishing or live database
 changes; SQLite files used for verification are local temporary fixtures.
+
+# Approved snapshot and reconciliation follow-up
+
+Added versioned lossless JSON snapshot sidecars, approved audited working exports,
+pending-draft imports and stable-ID create/unchanged/conflict planning. Local CAS
+checks prevent stale-plan writes; upstream versions never override local history.
+Bounded existing USX jmp rendering preserves reference IDs and encoded scopes,
+rejecting invented anchors/unresolved targets/invalid XML characters. Full C-USX
+insertion and publication/withdrawal acknowledgment remain pending.
+
+Verification: 959 passed, 34 skipped (97 linking tests), with optional PDF support.
+Ruff and mypy pass (114 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated installed environments verify core resolution
+and the umbrella snapshot roundtrip, preserving IDs and requiring review after
+import. Umbrella smoke provides Pydantic only, not the full app dependency stack.
+Existing Starlette/httpx warning remains. No push, merge, deploy, external
+publication or live database changes; generated snapshots are local fixture data.

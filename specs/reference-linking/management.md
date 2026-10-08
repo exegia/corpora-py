@@ -57,7 +57,8 @@ compare-and-swap/history writes, conversion-report storage and review permission
 It must use the same conflict/validation tests. Deployments remain separately
 scoped and no live database was touched for this slice.
 
-Import/synchronization remains future work: match stable IDs and explicit content
+The [snapshot adapter](publication.md) now implements conservative import planning
+and per-reference application. The synchronization contract is: match stable IDs and explicit content
 versions; identical snapshots are idempotent, conflicting/newer working snapshots
 require reconciliation, and imports never confer approval. Rerun conversion must
 use an explicit event/idempotency identity rather than deduplicating passage text

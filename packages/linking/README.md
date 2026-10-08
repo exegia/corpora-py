@@ -172,3 +172,16 @@ Run the [local review example](examples/review_link.py):
 `uv run python packages/linking/examples/review_link.py`.
 It records creation and validated approval by separate actors in a temporary
 local database, keeping publication draft and reference identity unchanged.
+
+## Approved export and stable-ID import
+
+`corpora_py.linking_publication.SnapshotPublicationAdapter` exports approved JSON
+snapshots without changing working state. `plan_import` reports new, identical or
+conflicting IDs; explicit application creates pending drafts or checks an unchanged
+local version. Conflicts never overwrite records or confer imported approval.
+`render_cusx_jump` supports existing anchored USX links for resolved structural or
+document targets; arbitrary selectors remain lossless in the sidecar until their
+C-USX embedding is agreed. See [publication contract](../../specs/reference-linking/publication.md).
+
+Run `uv run python packages/linking/examples/publication_roundtrip.py` for a local
+export/import roundtrip preserving IDs and requiring new review after import.
