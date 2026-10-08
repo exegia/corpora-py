@@ -17,7 +17,9 @@ type: plan
    unavailable and stale outcomes. Opt-in umbrella conversion sidecars now retain location mappings and validate
    converted citation anchors. Production converter hooks remain pending. Preserve original spelling
    and selection evidence; add no live database or UI dependency.
-3. Initial mapping integration implemented; source adapters remain: PDF geometry/quads, EPUB native CFI and HTML selection mapping;
+3. Initial mapping integration and bounded pdfplumber extraction implemented;
+   optional PDF extra verifies byte/text digests and emits approximate word geometry.
+   Remaining source adapters and geometry support: PDF geometry/quads, EPUB native CFI and HTML selection mapping;
    conversion reports declare stream joins, normalization, OCR and fidelity.
    Validate package revisions/checksums and exact endpoint boundaries.
 4. Management: versioned working store/history, review transitions and approved

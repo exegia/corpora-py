@@ -517,6 +517,9 @@ docling = [
     { name = "docling", version = "2.99.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
     { name = "docling", version = "2.113.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
 ]
+linking-pdf = [
+    { name = "pdfplumber" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -548,6 +551,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.25" },
     { name = "lxml", specifier = ">=6.1.1" },
     { name = "pdf-inspector", specifier = ">=1.17.0" },
+    { name = "pdfplumber", marker = "extra == 'linking-pdf'", specifier = ">=0.11.7,<0.12" },
     { name = "platformdirs", specifier = ">=4.10.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
@@ -559,7 +563,7 @@ requires-dist = [
     { name = "text-fabric", specifier = ">=13.1.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
 ]
-provides-extras = ["docling"]
+provides-extras = ["docling", "linking-pdf"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2459,6 +2463,33 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/55/14c205ee0896738a7a48fd759dd295b9b2513668f2664fb8f1173d2dde71/pdf_inspector-1.17.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:40b759e37c70708563f30ba5ba879e654308538584c3696d67cf0cecaaed0c05", size = 5111667, upload-time = "2026-08-21T20:57:45.142Z" },
     { url = "https://files.pythonhosted.org/packages/5e/26/2fe9f8a620d1c86742c27a87fe5fd15ef5dd8d1c95704223642037b16161/pdf_inspector-1.17.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1bf93070239efbf781e96930c8389d04fde41a48125ceec2c08e6867acb63176", size = 5347989, upload-time = "2026-08-21T20:57:47.758Z" },
     { url = "https://files.pythonhosted.org/packages/94/f1/2b8843c594c27f9e7e8e552be4d9901a0c0eee78d93524be56916c4e3b8c/pdf_inspector-1.17.0-cp38-abi3-win_amd64.whl", hash = "sha256:bbe731d39eb620a03e4b79afd6e620dca824f22571560508caab97492a016578", size = 4696320, upload-time = "2026-08-21T20:57:49.704Z" },
+]
+
+[[package]]
+name = "pdfminer-six"
+version = "20260107"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "charset-normalizer" },
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/34/a4/5cec1112009f0439a5ca6afa8ace321f0ab2f48da3255b7a1c8953014670/pdfminer_six-20260107.tar.gz", hash = "sha256:96bfd431e3577a55a0efd25676968ca4ce8fd5b53f14565f85716ff363889602", size = 8512094, upload-time = "2026-01-07T13:29:12.937Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/20/8b/28c4eaec9d6b036a52cb44720408f26b1a143ca9bce76cc19e8f5de00ab4/pdfminer_six-20260107-py3-none-any.whl", hash = "sha256:366585ba97e80dffa8f00cebe303d2f381884d8637af4ce422f1df3ef38111a9", size = 6592252, upload-time = "2026-01-07T13:29:10.742Z" },
+]
+
+[[package]]
+name = "pdfplumber"
+version = "0.11.10"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pdfminer-six" },
+    { name = "pillow" },
+    { name = "pypdfium2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/05/56/6f450312ba05a27d7713b73857c1a25100dbda04fbc1331b13fb227a607d/pdfplumber-0.11.10.tar.gz", hash = "sha256:b95b2d28c66efb0a794a83b88c6c6aea5987532a445d20a1cbcfa657022e6e57", size = 102892, upload-time = "2026-06-15T03:31:31.035Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a2/9a/07d658e1e7fad860f1c541ab941348125dbdab773be3a0afaf32361866c7/pdfplumber-0.11.10-py3-none-any.whl", hash = "sha256:7741ea81bf165b474b153e6789d10d18e06b6ddcf3ec84289c3ef2fed6802580", size = 60047, upload-time = "2026-06-15T03:31:29.702Z" },
 ]
 
 [[package]]

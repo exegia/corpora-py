@@ -96,3 +96,21 @@ geometry and CFI and define extraction order/joins. No existing TF conversion jo
 is automatically changed; C-USX serialization still needs an agreed adapter.
 Run `uv run python packages/linking/examples/converted_link.py` for a fixture-backed
 EPUB-location example. This example requires the umbrella package.
+
+## Optional PDF extraction
+
+Install `corpora-py[linking-pdf]` (workspace: `uv sync --extra linking-pdf`).
+`corpora_py.linking_pdf.extract_pdf_references_input` extracts words with
+pdfplumber into the conversion sidecar. Supply fully scoped whole-document
+endpoints: original revision is `sha256:` plus the PDF-byte digest; converted
+revision is the digest of the emitted stream's UTF-8 bytes. Both are verified.
+The adapter's `sha256_revision` helper uses that convention.
+
+The stream joins words with one ASCII space and pages with U+000C, preserving
+empty pages and performing no Unicode normalization. Word rectangles use
+one-based pages and unrotated top-left points. Word-level geometry is marked
+approximate; citation substrings never acquire guessed native bounds. This
+initial adapter rejects rotated pages/glyphs, nontrivial CropBoxes and nonzero
+page origins. OCR, layout-aware reading order, transforms and quads remain future
+work. Tests run with `uv run --extra linking-pdf pytest tests/linking/test_pdf.py`.
+The existing TF parser and conversion jobs remain unchanged.

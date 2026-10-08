@@ -93,3 +93,19 @@ Python: independent core resolution smoke and umbrella conversion example with
 JSON roundtrip pass. Umbrella smoke provides only Pydantic, not full app dependencies.
 The existing Starlette/httpx warning remains. No push, deploy, merge, publication
 or live database changes.
+
+# Optional PDF extraction follow-up
+
+Added the optional umbrella `linking-pdf` extra and a pdfplumber extraction adapter.
+PDF bytes and UTF-8 stream digests are checked; words retain approximate native
+rectangles with explicit spaces/page separators. Actual PDF fixtures test geometry,
+citation mapping, blank pages, changed checksums and crop/rotation rejection.
+Core dependencies and existing TF conversion jobs remain unchanged.
+
+Verification with the optional extra: 922 passed, 34 skipped (60 linking tests).
+Ruff and mypy pass (108 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated installed environments run core resolution and
+umbrella PDF extraction against the generated fixture from outside the checkout.
+Umbrella smoke supplies Pydantic/pdfplumber dependencies, not the full application
+stack. Existing Starlette/httpx deprecation remains. No push, merge, deploy,
+publication or database modifications.
