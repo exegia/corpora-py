@@ -20,7 +20,8 @@ type: plan
    and ambiguous work hypotheses while keeping passage resolution separate. Production converter
    hooks remain pending. Offline scholarly discovery storage now retains unknowns,
    registration retry IDs, catalog refresh and explicit work-selection history.
-   PostgreSQL discovery persistence/authorization remain pending. Preserve original spelling
+   PostgreSQL discovery persistence now has session/capability/resource checks and
+   local transaction tests. Production converter orchestration remains pending. Preserve original spelling
    and selection evidence; add no live database or UI dependency.
 3. Initial mapping integration and bounded pdfplumber extraction implemented;
    optional PDF extra verifies byte/text digests and emits approximate word geometry.

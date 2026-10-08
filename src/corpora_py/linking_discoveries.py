@@ -117,24 +117,9 @@ class SQLiteDiscoveryStore:
         reason: str,
         mappings: tuple[ConversionMapping, ...] = (),
     ) -> DiscoveryRevision:
-        discovery = CitationDiscovery.model_validate_json(discovery.model_dump_json())
-        snapshot = TextSnapshot.model_validate(snapshot.model_dump())
-        self._verify(discovery, snapshot)
-        conversion = ConversionInput(converted=snapshot, mappings=mappings)
-        if not reason.strip():
-            raise ValueError("registration reason is required")
-        semantic = discovery.model_dump(mode="json")
-        del semantic["id"]
-        for ref in semantic["hypotheses"]:
-            del ref["id"]
-        digest = hashlib.sha256(
-            json.dumps(
-                {"discovery": semantic, "conversion": conversion.model_dump(mode="json")},
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-            ).encode()
-        ).hexdigest()
+        discovery, mappings, digest = prepare_discovery_registration(
+            discovery, snapshot, reason=reason, mappings=mappings
+        )
         with closing(sqlite3.connect(self.store.path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             prior = db.execute(
@@ -157,7 +142,7 @@ class SQLiteDiscoveryStore:
                 reason=reason,
                 recorded_at=datetime.now(UTC),
                 discovery=discovery,
-                mappings=conversion.mappings,
+                mappings=mappings,
             )
             self._insert(db, revision)
             db.execute(
@@ -268,63 +253,122 @@ class SQLiteDiscoveryStore:
         with closing(sqlite3.connect(self.store.path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             current = self._current(db, discovery_id, expected_version)
-            if current.action == "reject" and action != "identify":
-                raise ValueError("rejected discovery requires explicit fresh identification")
-            discovery = replacement or current.discovery
-            selected = None
-            if action == "select":
-                candidates = [ref for ref in discovery.hypotheses if ref.target.work_id == work_id]
-                if len(candidates) != 1:
-                    raise ValueError(
-                        "select an identified work; refresh unknown catalog evidence first"
-                    )
-                selected = candidates[0]
-                if db.execute(
-                    "SELECT 1 FROM linking_revisions WHERE reference_id = ?", (str(selected.id),)
-                ).fetchone():
-                    raise VersionConflictError("hypothesis ID already belongs to working history")
-            revision = DiscoveryRevision(
-                version=current.version + 1,
-                action=action,
+            revision, working = prepare_discovery_decision(
+                current,
                 actor_id=self.store.actor_id,
                 reason=reason,
-                recorded_at=datetime.now(UTC),
-                discovery=discovery,
-                mappings=current.mappings,
-                selected_reference_id=selected.id if selected else None,
+                action=action,
+                replacement=replacement,
+                work_id=work_id,
             )
-            if selected is not None:
-                selector = discovery.mention.selection
-                overlapping = tuple(
-                    mapping
-                    for mapping in current.mappings
-                    if isinstance(mapping.converted.locators[0], TextLocator)
-                    and mapping.converted.locators[0].start < selector.end
-                    and mapping.converted.locators[0].end > selector.start
-                )
-                conversion = (
-                    ConvertedReference(
-                        reference=selected,
-                        mappings=overlapping,
-                        diagnostics=(
-                            "native bounds are retained evidence, not projected citation bounds",
-                        ),
-                    )
-                    if current.mappings
-                    else None
-                )
-                working = WorkingRevision(
-                    version=1,
-                    action="edit",
-                    actor_id=self.store.actor_id,
-                    reason=reason,
-                    recorded_at=revision.recorded_at,
-                    reference=selected,
-                    conversion=conversion,
-                )
+            if working is not None:
+                if db.execute(
+                    "SELECT 1 FROM linking_revisions WHERE reference_id = ?",
+                    (str(working.reference.id),),
+                ).fetchone():
+                    raise VersionConflictError("hypothesis ID already belongs to working history")
                 db.execute(
                     "INSERT INTO linking_revisions VALUES (?, ?, ?)",
-                    (str(selected.id), working.version, working.model_dump_json()),
+                    (str(working.reference.id), working.version, working.model_dump_json()),
                 )
             self._insert(db, revision)
             return revision
+
+
+def prepare_discovery_registration(
+    discovery: CitationDiscovery,
+    snapshot: TextSnapshot,
+    *,
+    reason: str,
+    mappings: tuple[ConversionMapping, ...],
+) -> tuple[CitationDiscovery, tuple[ConversionMapping, ...], str]:
+    discovery = CitationDiscovery.model_validate_json(discovery.model_dump_json())
+    snapshot = TextSnapshot.model_validate(snapshot.model_dump())
+    SQLiteDiscoveryStore._verify(discovery, snapshot)
+    conversion = ConversionInput(converted=snapshot, mappings=mappings)
+    if not reason.strip():
+        raise ValueError("registration reason is required")
+    semantic = discovery.model_dump(mode="json")
+    del semantic["id"]
+    for ref in semantic["hypotheses"]:
+        del ref["id"]
+    digest = hashlib.sha256(
+        json.dumps(
+            {"discovery": semantic, "conversion": conversion.model_dump(mode="json")},
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    return discovery, conversion.mappings, digest
+
+
+def prepare_discovery_decision(
+    current: DiscoveryRevision,
+    *,
+    actor_id: str,
+    reason: str,
+    action: Literal["identify", "select", "reject"],
+    replacement: CitationDiscovery | None = None,
+    work_id: str | None = None,
+) -> tuple[DiscoveryRevision, WorkingRevision | None]:
+    """Shared decision rules after authorization and storage CAS."""
+    if not reason.strip():
+        raise ValueError("discovery decision reason is required")
+    if current.action == "select":
+        raise ValueError("selected discovery is retained; edit its working reference instead")
+    if current.action == "reject" and action != "identify":
+        raise ValueError("rejected discovery requires explicit fresh identification")
+    discovery = replacement or current.discovery
+    if (
+        discovery.id != current.discovery.id
+        or discovery.source != current.discovery.source
+        or discovery.mention != current.discovery.mention
+        or discovery.provenance != current.discovery.provenance
+    ):
+        raise ValueError("identification cannot replace discovery identity or source evidence")
+    selected = None
+    if action == "select":
+        candidates = [ref for ref in discovery.hypotheses if ref.target.work_id == work_id]
+        if len(candidates) != 1:
+            raise ValueError("select an identified work; refresh unknown catalog evidence first")
+        selected = candidates[0]
+    revision = DiscoveryRevision(
+        version=current.version + 1,
+        action=action,
+        actor_id=actor_id,
+        reason=reason,
+        recorded_at=datetime.now(UTC),
+        discovery=discovery,
+        mappings=current.mappings,
+        selected_reference_id=selected.id if selected else None,
+    )
+    working = None
+    if selected is not None:
+        selector = discovery.mention.selection
+        overlapping = tuple(
+            mapping
+            for mapping in current.mappings
+            if isinstance(mapping.converted.locators[0], TextLocator)
+            and mapping.converted.locators[0].start < selector.end
+            and mapping.converted.locators[0].end > selector.start
+        )
+        conversion = (
+            ConvertedReference(
+                reference=selected,
+                mappings=overlapping,
+                diagnostics=("native bounds are retained evidence, not projected citation bounds",),
+            )
+            if current.mappings
+            else None
+        )
+        working = WorkingRevision(
+            version=1,
+            action="edit",
+            actor_id=actor_id,
+            reason=reason,
+            recorded_at=revision.recorded_at,
+            reference=selected,
+            conversion=conversion,
+        )
+    return revision, working

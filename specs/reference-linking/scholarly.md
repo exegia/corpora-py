@@ -57,7 +57,7 @@ synthetic mapped passage. The example performs no database or network I/O.
 
 The umbrella now provides an offline SQLite discovery adapter with registration
 events, retained mapping evidence and audited work-selection history. PostgreSQL
-discovery persistence and production converter hooks remain staged; they must enforce
+discovery persistence now shares the same decision rules; production converter hooks remain staged; they must enforce
 resource authorization and retry contracts with working database authority. All
 existing graph/reference and C-USX publication contracts remain unchanged.
 
@@ -96,5 +96,8 @@ working reference's history. Hypothesis ID collisions fail without overwriting l
 Run `uv run python packages/linking/examples/discovery_review.py` for unknown intake,
 ambiguous catalog refresh, reviewer work choice and retry ID preservation. It uses
 synthetic data and a temporary local database, returning inspectable JSON. This adapter
-is append-only through its API; database owners can alter files directly. Production
-authorization, PostgreSQL discovery tables and application routes remain pending.
+is append-only through its API; database owners can alter files directly. The PostgreSQL adapter now enforces session/capability/resource checks; production
+provider wiring and application routes remain pending.
+
+The optional PostgreSQL adapter is documented in [storage](supabase.md); unlike the
+local SQLite actor contract, it checks verified principals and current grants.

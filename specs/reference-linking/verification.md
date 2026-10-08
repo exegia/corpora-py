@@ -376,3 +376,13 @@ core wheel import also passes without psycopg. Example JSON is available at
 Existing Starlette/httpx warning remains. No push, merge, deploy, live database changes
 or external publication occurred. PostgreSQL discovery authorization/persistence and
 production converter wiring remain staged.
+
+# PostgreSQL scholarly discovery follow-up
+
+Added PostgreSQL discovery registration/history, catalog refresh and reviewer-only
+work selection using the same pure decisions/fingerprints as SQLite. Every operation
+checks sessions, membership and retained resource scopes. Advisory locks serialize
+registration/CAS; selection and pending working-reference creation commit together.
+Tests cover concurrent retries/choices, capability denial, source revocation, tenant
+isolation and forced selection failure rolling back the working reference. Schema
+additions remain an unapplied proposal; no production database was modified.

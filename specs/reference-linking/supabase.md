@@ -34,6 +34,7 @@ as a user's claim to another authority.
 | entitlement_heads | Provider-bound version/digest and last complete grant snapshot |
 | heads | Current version pointer, with a deferred foreign key to its snapshot |
 | revisions | Immutable-by-adapter reference JSON, actor, reason, action, validation and conversion evidence |
+| discovery_revisions / discovery_events | Append-only scholarly intake decisions and registration retry identity |
 | conversion_events | Explicit authority/event identity, detector revision, canonical fingerprint and original report |
 | publication_events | Acknowledgment or withdrawal, exact approved/resulting versions and artifact digest |
 
@@ -55,7 +56,7 @@ alone is not proof that C-USX was delivered or removed.
 
 # Authorization contract
 
-Keep `reference_working` outside exposed API schemas. All eight tables enable RLS with
+Keep `reference_working` outside exposed API schemas. All ten tables enable RLS with
 no client policies, and schema/table grants deny `anon` and `authenticated` access.
 Read and write requests go through the server adapter; no browser service key, direct
 client mutation, or SECURITY DEFINER RPC is introduced by this proposal.
@@ -272,3 +273,26 @@ is invented or changed by this implementation.
 
 Current design reference: [Supabase user sessions](https://supabase.com/docs/guides/auth/sessions).
 Local tests use fixture auth tables/controlled JWT claims, not a live Supabase project.
+
+# PostgreSQL scholarly discoveries
+
+`PostgreSQLDiscoveryStore(store)` in `corpora_py.linking_postgres_discoveries`
+implements the same discovery history, registration fingerprint, catalog refresh,
+rejection and work-selection rules as SQLite. Shared pure helpers prevent lifecycle
+rules from diverging. Reads verify sessions, membership and every retained endpoint
+in history; registration/refresh require contribute capability, while rejection and
+work selection require review capability. Selection creates a pending unresolved
+working Reference atomically with its decision, not an approved passage link.
+
+Authority is obtained from the configured space. Registration and discovery advisory
+locks serialize initial retries and subsequent CAS without mutable history pointers.
+Unknowns need only source-resource access; identified candidate works and native
+mapping evidence each need explicit grants. Revoked grants block retries and history
+reads. Append-only schema grants prohibit direct client access/history rewrites.
+Typed record JSON carries all IDs, actors, reasons, UTC times, mapping evidence and
+unchosen hypotheses. The schema remains an unapplied proposal outside migrations.
+
+Tests run only on disposable local PostgreSQL, including concurrent retries/work
+choices, capability denial, source revocation, tenant isolation and atomic rollback
+after reference creation fails to append its selection decision. Production routes,
+converter orchestration and authoritative provider/catalog wiring remain separate.

@@ -675,3 +675,158 @@ def test_entitlement_sync_concurrency_and_drift_repair(stores, database, tmp_pat
     revoke_resource(database, space, subjects["reviewer"], ref.target)
     assert synchronizer.synchronize(subjects["reviewer"], snapshot, expected_version=1) == 2
     assert synchronizer.synchronize(subjects["reviewer"], snapshot, expected_version=2) == 2
+
+
+def discovery_fixture(stores, database, tmp_path):
+    from corpora_linking import Endpoint, SnapshotCatalog, identify_scholarly_citation
+    from psycopg.types.json import Jsonb
+    from test_scholarly import fixture as scholarly_fixture
+
+    from corpora_py.linking_access import endpoint_scope
+    from corpora_py.linking_postgres_discoveries import PostgreSQLDiscoveryStore
+
+    factory, space, _, creator, subjects = stores
+    snapshot, mention, provenance = scholarly_fixture()
+    discovery = identify_scholarly_citation(
+        snapshot, mention, SnapshotCatalog(), provenance=provenance
+    )
+    with psycopg.connect(database) as db:
+        for actor in subjects.values():
+            for endpoint in (
+                snapshot.endpoint,
+                Endpoint(work_id="book"),
+                Endpoint(work_id="other"),
+            ):
+                key, scope = endpoint_scope(endpoint)
+                db.execute(
+                    "INSERT INTO reference_working.resource_access VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                    (space, actor, key, Jsonb(scope)),
+                )
+    return factory, PostgreSQLDiscoveryStore(factory()), snapshot, discovery
+
+
+def test_postgres_unknown_discovery_retry_refresh_and_work_selection(stores, database, tmp_path):
+    from corpora_linking import CatalogEntry, SnapshotCatalog
+
+    from corpora_py.linking_postgres_discoveries import PostgreSQLDiscoveryStore
+
+    factory, discoveries, snapshot, discovery = discovery_fixture(stores, database, tmp_path)
+    event_id = uuid4()
+    first = discoveries.register(discovery, snapshot, event_id=event_id, reason="unknown")
+    catalog = SnapshotCatalog(
+        entries=(
+            CatalogEntry(work_id="book", names=(discovery.mention.cited_name,)),
+            CatalogEntry(work_id="other", names=(discovery.mention.cited_name,)),
+        )
+    )
+    identified = discoveries.refresh_identification(
+        discovery.id, snapshot, catalog, expected_version=1, reason="bibliography"
+    )
+    assert identified.discovery.id == discovery.id
+    with pytest.raises(PermissionError):
+        discoveries.select_work(
+            discovery.id, "book", expected_version=2, reason="creator cannot review"
+        )
+    reviewer = PostgreSQLDiscoveryStore(factory("reviewer"))
+    selected = reviewer.select_work(
+        discovery.id, "book", expected_version=2, reason="work verified"
+    )
+    reference = factory().get(selected.selected_reference_id)
+    assert reference.review == "pending" and reference.resolution == "unresolved"
+    assert discoveries.register(discovery, snapshot, event_id=event_id, reason="retry") == first
+    assert [item.action for item in discoveries.history(discovery.id)] == [
+        "register",
+        "identify",
+        "select",
+    ]
+    assert len(selected.discovery.hypotheses) == 2
+
+
+def test_postgres_discovery_concurrent_retry_and_selection(stores, database, tmp_path):
+    from corpora_linking import CatalogEntry, SnapshotCatalog
+
+    from corpora_py.linking_postgres_discoveries import PostgreSQLDiscoveryStore
+
+    factory, discoveries, snapshot, discovery = discovery_fixture(stores, database, tmp_path)
+    event_id = uuid4()
+
+    def register(_):
+        return discoveries.register(discovery, snapshot, event_id=event_id, reason="unknown")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(register, range(2)))
+    assert results[0] == results[1]
+    discoveries.refresh_identification(
+        discovery.id,
+        snapshot,
+        SnapshotCatalog(
+            entries=(
+                CatalogEntry(work_id="book", names=(discovery.mention.cited_name,)),
+                CatalogEntry(work_id="other", names=(discovery.mention.cited_name,)),
+            )
+        ),
+        expected_version=1,
+        reason="catalog",
+    )
+    reviewer = PostgreSQLDiscoveryStore(factory("reviewer"))
+
+    def select(work):
+        try:
+            return reviewer.select_work(discovery.id, work, expected_version=2, reason="choice")
+        except VersionConflictError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sum(item is not None for item in pool.map(select, ("book", "other"))) == 1
+    assert len(discoveries.history(discovery.id)) == 3
+
+
+def test_postgres_discovery_access_revocation_and_space_isolation(stores, database, tmp_path):
+    from corpora_py.linking_postgres_discoveries import PostgreSQLDiscoveryStore
+
+    factory, discoveries, snapshot, discovery = discovery_fixture(stores, database, tmp_path)
+    event_id = uuid4()
+    discoveries.register(discovery, snapshot, event_id=event_id, reason="unknown")
+    with pytest.raises(PermissionError):
+        PostgreSQLDiscoveryStore(factory(selected_space=stores[2])).get(discovery.id)
+    revoke_resource(database, stores[1], stores[3], snapshot.endpoint)
+    for operation in (
+        lambda: discoveries.history(discovery.id),
+        lambda: discoveries.register(discovery, snapshot, event_id=event_id, reason="retry"),
+    ):
+        with pytest.raises(PermissionError):
+            operation()
+
+
+def test_postgres_discovery_selection_failure_rolls_back_reference(stores, database, tmp_path):
+    from corpora_linking import CatalogEntry, SnapshotCatalog
+
+    from corpora_py.linking_postgres_discoveries import PostgreSQLDiscoveryStore
+
+    factory, discoveries, snapshot, discovery = discovery_fixture(stores, database, tmp_path)
+    discoveries.register(discovery, snapshot, event_id=uuid4(), reason="unknown")
+    identified = discoveries.refresh_identification(
+        discovery.id,
+        snapshot,
+        SnapshotCatalog(
+            entries=(CatalogEntry(work_id="book", names=(discovery.mention.cited_name,)),)
+        ),
+        expected_version=1,
+        reason="catalog",
+    )
+    with psycopg.connect(database) as db:
+        db.execute(
+            "ALTER TABLE reference_working.discovery_revisions ADD CONSTRAINT fixture_discovery_failure CHECK (version <> 3) NOT VALID"
+        )
+    try:
+        with pytest.raises(psycopg.errors.CheckViolation):
+            PostgreSQLDiscoveryStore(factory("reviewer")).select_work(
+                discovery.id, "book", expected_version=2, reason="choice"
+            )
+        assert factory().get(identified.discovery.hypotheses[0].id) is None
+        assert len(discoveries.history(discovery.id)) == 2
+    finally:
+        with psycopg.connect(database) as db:
+            db.execute(
+                "ALTER TABLE reference_working.discovery_revisions DROP CONSTRAINT fixture_discovery_failure"
+            )

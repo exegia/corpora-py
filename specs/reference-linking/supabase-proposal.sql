@@ -73,6 +73,25 @@ ALTER TABLE reference_working.heads ADD CONSTRAINT heads_revision
     REFERENCES reference_working.revisions(space_id, reference_id, version)
     DEFERRABLE INITIALLY DEFERRED;
 
+CREATE TABLE reference_working.discovery_revisions (
+    space_id uuid NOT NULL REFERENCES reference_working.spaces(id),
+    discovery_id uuid NOT NULL,
+    version bigint NOT NULL CHECK (version > 0),
+    record jsonb NOT NULL CHECK (jsonb_typeof(record) = 'object'),
+    PRIMARY KEY (space_id, discovery_id, version)
+);
+CREATE TABLE reference_working.discovery_events (
+    space_id uuid NOT NULL,
+    authority_id text NOT NULL,
+    event_id uuid NOT NULL,
+    discovery_id uuid NOT NULL,
+    digest text NOT NULL CHECK (digest ~ '^[0-9a-f]{64}$'),
+    record jsonb NOT NULL CHECK (jsonb_typeof(record) = 'object'),
+    PRIMARY KEY (space_id, authority_id, event_id),
+    FOREIGN KEY (space_id, discovery_id, registration_version)
+        REFERENCES reference_working.discovery_revisions(space_id, discovery_id, version),
+    registration_version bigint NOT NULL DEFAULT 1 CHECK (registration_version = 1)
+);
 CREATE TABLE reference_working.conversion_events (
     space_id uuid NOT NULL REFERENCES reference_working.spaces(id),
     authority_id text NOT NULL,
@@ -106,6 +125,8 @@ CREATE TABLE reference_working.publication_events (
 );
 
 -- Deny client access, including accidental future schema exposure. No RPCs yet.
+ALTER TABLE reference_working.discovery_revisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reference_working.discovery_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.entitlement_heads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.resource_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.spaces ENABLE ROW LEVEL SECURITY;
@@ -117,7 +138,7 @@ ALTER TABLE reference_working.publication_events ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA reference_working FROM PUBLIC, anon, authenticated;
 GRANT USAGE ON SCHEMA reference_working TO service_role;
 GRANT SELECT ON ALL TABLES IN SCHEMA reference_working TO service_role;
-GRANT INSERT ON reference_working.heads, reference_working.revisions,
+GRANT INSERT ON reference_working.discovery_revisions, reference_working.discovery_events, reference_working.heads, reference_working.revisions,
     reference_working.conversion_events, reference_working.publication_events TO service_role;
 GRANT UPDATE (current_version) ON reference_working.heads TO service_role;
 -- PostgreSQL row locks require UPDATE privilege; server credential can mutate
