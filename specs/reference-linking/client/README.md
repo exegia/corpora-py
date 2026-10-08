@@ -19,6 +19,22 @@ You do not need paragraph IDs or sentence numbers.
 - **My server is ready:** jump to [Step 1](#step-1-get-the-four-things-your-app-needs).
 - **My server is not ready:** use the [server checklist](#before-you-connect-a-client).
 
+## Try the browser playground
+
+From the repository root:
+
+```bash
+uv run python packages/linking/examples/client/server.py
+```
+
+Open **http://127.0.0.1:8787**. Click **Select the example passages**,
+then **Preview selections**, **Save link**, and **Open destination**.
+Choose Reviewer to test approval. **Test stale selection** checks that a changed
+version is rejected. The page uses temporary SQLite storage and synthetic demo
+roles; it does not connect to live Supabase.
+
+Stop it with Ctrl+C. See the [playground README](../../../packages/linking/examples/client/README.md).
+
 ## See it work first — no server needed
 
 From the `corpora-py` repository:
