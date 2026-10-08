@@ -195,3 +195,13 @@ no distribution. Withdrawn references are omitted from its next prepared export;
 removal tombstones preserve older artifact evidence. Explicit reopening requires
 new review. See the [ledger contract](../../specs/reference-linking/publication.md)
 for authority assumptions and the initial single-active-artifact limit.
+
+## Conversion rerun idempotency
+
+`corpora_py.linking_events.ConversionEventRegistry` atomically registers an explicit
+conversion-event UUID and its automatic reference batch in the local working store.
+Retries reuse original IDs/evidence without resetting review or publication state.
+Changed inputs, mapping evidence or detector outputs under the same event ID reject.
+Distinct events never deduplicate by passage text. See the
+[event contract](../../specs/reference-linking/conversion-events.md) for configuration,
+ordering, concurrency and production job identity requirements.

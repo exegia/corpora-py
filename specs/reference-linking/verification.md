@@ -194,3 +194,20 @@ Concurrency and forced event-insert failure fixtures verify atomic CAS and rollb
 Umbrella smoke provides Pydantic only, not the full app dependency stack. Existing
 Starlette/httpx warning remains. No push, merge, deploy, external publication or
 live database changes; ledger events are local fixture data only.
+
+# Conversion rerun idempotency follow-up
+
+Added atomic local conversion-event registration with caller-supplied authority,
+event UUID and detector revision. Identical semantic retries return the originally
+allocated IDs/report without modifying current review/publication history. Changed
+text/revision/mappings/detector/output conflicts. Distinct events retain distinct
+references even for identical passages. Empty runs are durable; concurrent retries,
+ID collisions and forced insert failures exercise batch atomicity and rollback.
+
+Verification: 980 passed, 34 skipped (118 linking tests), with optional PDF support.
+Ruff and mypy pass (116 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated installed environments verify core resolution
+and umbrella event retries preserving IDs and later review decisions. Umbrella smoke
+provides Pydantic only, not the full app dependency stack. Existing Starlette/httpx
+warning remains. No push, merge, deploy, external publication or live database
+changes; event/storage verification uses temporary local fixtures.

@@ -67,8 +67,8 @@ unchanged; this helper does not claim complete C-USX or graph conformance.
 # Remaining lifecycle work
 
 Remote delivery/removal receipts, multi-destination distribution history, import conflict resolution UI, authenticated review and
-production database adapters remain pending. Conversion rerun idempotency requires
-explicit event identity; these rules do not invent one from quote text. No live
+production database adapters remain pending. Conversion rerun idempotency now uses an [explicit event registry](conversion-events.md);
+these rules never invent event identity from quote text. No live
 Supabase schema or records were changed for this slice.
 
 # Offline acknowledgment and withdrawal ledger

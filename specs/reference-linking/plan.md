@@ -15,7 +15,9 @@ type: plan
    context. Emit unresolved records against fixture text; alias collisions retain all
    hypotheses. Offline catalog and snapshot resolver adapters now cover work-only, ambiguous,
    unavailable and stale outcomes. Opt-in umbrella conversion sidecars now retain location mappings and validate
-   converted citation anchors. Production converter hooks remain pending. Preserve original spelling
+   converted citation anchors. Atomic conversion-event registration now reuses
+   original IDs on retries and rejects changed event inputs. Production converter
+   hooks remain pending. Preserve original spelling
    and selection evidence; add no live database or UI dependency.
 3. Initial mapping integration and bounded pdfplumber extraction implemented;
    optional PDF extra verifies byte/text digests and emits approximate word geometry.
