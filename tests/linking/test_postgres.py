@@ -27,7 +27,9 @@ def database():
         db.execute(
             "CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS"
         )
-        db.execute("CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY)")
+        db.execute(
+            "CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY); CREATE TABLE auth.sessions(id uuid PRIMARY KEY, user_id uuid REFERENCES auth.users(id), not_after timestamptz)"
+        )
         db.execute(Path("specs/reference-linking/supabase-proposal.sql").read_text())
     yield dsn
     with psycopg.connect(dsn, autocommit=True) as db:
@@ -69,12 +71,16 @@ def stores(database, monkeypatch, tmp_path):
                     "INSERT INTO reference_working.resource_access VALUES (%s, %s, %s, %s)",
                     (space, actor, key, Jsonb(scope)),
                 )
+    sessions = {"creator": uuid4(), "reviewer": uuid4()}
+    with psycopg.connect(database) as db:
+        for token, actor in (("creator", creator), ("reviewer", reviewer)):
+            db.execute("INSERT INTO auth.sessions VALUES (%s, %s, NULL)", (sessions[token], actor))
     subjects = {"creator": creator, "reviewer": reviewer}
 
     def verify(token, **kwargs):
         if token not in subjects:
             raise linking_postgres.AuthError("invalid or expired token")
-        return {"sub": str(subjects[token])}
+        return {"sub": str(subjects[token]), "session_id": str(sessions[token])}
 
     monkeypatch.setattr(linking_postgres, "verify_jwt", verify)
     server_dsn = psycopg.conninfo.make_conninfo(database, options="-c role=service_role")
@@ -526,3 +532,146 @@ def test_resource_lock_serializes_revocation(stores, database, tmp_path):
                     "DELETE FROM reference_working.resource_access WHERE space_id = %s AND user_id = %s",
                     (space, creator),
                 )
+
+
+@pytest.mark.parametrize("change", ["delete", "expire", "wrong_user"])
+def test_session_revocation_rejects_still_signed_tokens(stores, database, tmp_path, change):
+    factory, _, _, creator, subjects = stores
+    _, ref, _ = reference_fixture(tmp_path)
+    store = factory()
+    store.save(ref, expected_version=None)
+    with psycopg.connect(database) as db:
+        if change == "delete":
+            db.execute("DELETE FROM auth.sessions WHERE user_id = %s", (creator,))
+        elif change == "expire":
+            db.execute(
+                "UPDATE auth.sessions SET not_after = now() - interval '1 second' WHERE user_id = %s",
+                (creator,),
+            )
+        else:
+            db.execute(
+                "UPDATE auth.sessions SET user_id = %s WHERE user_id = %s",
+                (subjects["reviewer"], creator),
+            )
+    with pytest.raises(linking_postgres.AuthError):
+        store.history(ref.id)
+    with pytest.raises(linking_postgres.AuthError):
+        store.save(ref, expected_version=1)
+
+
+def test_session_claim_is_required_before_database_access(stores, monkeypatch):
+    factory, _, _, creator, _ = stores
+    monkeypatch.setattr(
+        linking_postgres, "verify_jwt", lambda *args, **kwargs: {"sub": str(creator)}
+    )
+    with pytest.raises(linking_postgres.AuthError, match="session_id"):
+        factory()
+
+
+def test_entitlement_sync_requires_admin_and_uses_cas(stores, database, tmp_path):
+    from corpora_py.linking_entitlements import (
+        EntitlementSnapshot,
+        PostgreSQLEntitlementSynchronizer,
+    )
+
+    factory, space, _, creator, subjects = stores
+    _, ref, _ = reference_fixture(tmp_path)
+    scope = ref.source.model_copy(update={"locators": ()})
+    snapshot = EntitlementSnapshot(
+        provider_id="fixture", provider_revision="inventory-1", resources=(scope, ref.target)
+    )
+    synchronizer = PostgreSQLEntitlementSynchronizer(factory(), provider_id="fixture")
+    with pytest.raises(PermissionError):
+        synchronizer.synchronize(subjects["reviewer"], snapshot, expected_version=None)
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'admin')", (space, creator)
+        )
+    reviewer = subjects["reviewer"]
+    assert synchronizer.synchronize(reviewer, snapshot, expected_version=None) == 1
+    reordered = snapshot.model_copy(update={"resources": tuple(reversed(snapshot.resources))})
+    assert synchronizer.synchronize(reviewer, reordered, expected_version=1) == 1
+    with pytest.raises(VersionConflictError):
+        synchronizer.synchronize(reviewer, snapshot, expected_version=None)
+    denied = snapshot.model_copy(update={"provider_revision": "inventory-2", "resources": ()})
+    assert synchronizer.synchronize(reviewer, denied, expected_version=1) == 2
+    factory().save(ref, expected_version=None)
+    with pytest.raises(PermissionError):
+        factory("reviewer").get(ref.id)
+    with pytest.raises(ValueError, match="provider"):
+        PostgreSQLEntitlementSynchronizer(factory(), provider_id="other").synchronize(
+            reviewer, snapshot.model_copy(update={"provider_id": "other"}), expected_version=2
+        )
+
+
+def test_entitlement_sync_failure_restores_prior_grants(stores, database):
+    from corpora_linking import Endpoint
+
+    from corpora_py.linking_entitlements import (
+        EntitlementSnapshot,
+        PostgreSQLEntitlementSynchronizer,
+    )
+
+    factory, space, _, creator, subjects = stores
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'admin')", (space, creator)
+        )
+        db.execute(
+            "ALTER TABLE reference_working.entitlement_heads ADD CONSTRAINT fixture_sync_failure CHECK (provider_revision <> 'fail')"
+        )
+        count = db.execute(
+            "SELECT count(*) FROM reference_working.resource_access WHERE space_id = %s AND user_id = %s",
+            (space, subjects["reviewer"]),
+        ).fetchone()[0]
+    try:
+        snapshot = EntitlementSnapshot(
+            provider_id="fixture", provider_revision="fail", resources=(Endpoint(work_id="new"),)
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            PostgreSQLEntitlementSynchronizer(factory(), provider_id="fixture").synchronize(
+                subjects["reviewer"], snapshot, expected_version=None
+            )
+        with psycopg.connect(database) as db:
+            assert (
+                db.execute(
+                    "SELECT count(*) FROM reference_working.resource_access WHERE space_id = %s AND user_id = %s",
+                    (space, subjects["reviewer"]),
+                ).fetchone()[0]
+                == count
+            )
+    finally:
+        with psycopg.connect(database) as db:
+            db.execute(
+                "ALTER TABLE reference_working.entitlement_heads DROP CONSTRAINT fixture_sync_failure"
+            )
+
+
+def test_entitlement_sync_concurrency_and_drift_repair(stores, database, tmp_path):
+    from corpora_py.linking_entitlements import (
+        EntitlementSnapshot,
+        PostgreSQLEntitlementSynchronizer,
+    )
+
+    factory, space, _, creator, subjects = stores
+    _, ref, _ = reference_fixture(tmp_path)
+    snapshot = EntitlementSnapshot(
+        provider_id="fixture", provider_revision="1", resources=(ref.target,)
+    )
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'admin')", (space, creator)
+        )
+    synchronizer = PostgreSQLEntitlementSynchronizer(factory(), provider_id="fixture")
+
+    def sync(_):
+        try:
+            return synchronizer.synchronize(subjects["reviewer"], snapshot, expected_version=None)
+        except VersionConflictError:
+            return "conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(sync, range(2)), key=str) == [1, "conflict"]
+    revoke_resource(database, space, subjects["reviewer"], ref.target)
+    assert synchronizer.synchronize(subjects["reviewer"], snapshot, expected_version=1) == 2
+    assert synchronizer.synchronize(subjects["reviewer"], snapshot, expected_version=2) == 2

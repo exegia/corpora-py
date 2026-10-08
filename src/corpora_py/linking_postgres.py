@@ -38,15 +38,25 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
         self._audience = audience
         self.actor_id = str(self._principal())
 
-    def _principal(self) -> UUID:
+    def _claims(self) -> tuple[UUID, UUID]:
         claims = verify_jwt(self._token, jwks_url=self._jwks_url, audience=self._audience)
         try:
-            return UUID(claims["sub"])
+            return UUID(claims["sub"]), UUID(claims["session_id"])
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
-            raise AuthError("JWT requires a UUID subject") from exc
+            raise AuthError("JWT requires UUID subject and session_id") from exc
+
+    def _principal(self) -> UUID:
+        return self._claims()[0]
 
     def _authorize(self, db: psycopg.Connection, capability: str | None) -> UUID:
-        actor = self._principal()
+        actor, session_id = self._claims()
+        session = db.execute(
+            "SELECT id FROM auth.sessions WHERE id = %s AND user_id = %s "
+            "AND (not_after IS NULL OR not_after > clock_timestamp())",
+            (session_id, actor),
+        ).fetchone()
+        if session is None:
+            raise AuthError("session is unavailable or expired")
         rows = db.execute(
             "SELECT capability FROM reference_working.memberships "
             "WHERE space_id = %s AND user_id = %s FOR SHARE",

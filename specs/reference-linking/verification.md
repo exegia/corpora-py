@@ -304,3 +304,28 @@ it does not install the full application stack. Existing Starlette/httpx warning
 remains. Disposable local PostgreSQL was removed. No live Supabase project, deployment,
 push, merge or production migration was touched. Production entitlement synchronization,
 JWT session revocation and HTTP integration remain staged.
+
+# Entitlement synchronization and session validation follow-up
+
+Added an authenticated admin-only trusted entitlement snapshot synchronizer with
+provider binding, local CAS, canonical order-independent digests, atomic complete
+grant replacement and drift repair. No authoritative Corpora entitlement provider
+exists in this repository; ownership/freshness verification and production provider
+wiring remain explicit application responsibilities. Added mandatory UUID session_id
+claims and per-operation auth.sessions subject/deadline checks to PostgreSQL adapters.
+Deleted, mismatched and expired sessions fail without relying on JWT expiration alone.
+No auth session mutation or application authentication middleware change was made.
+
+Verification: 1006 passed, 34 skipped, including 24 real PostgreSQL tests. New tests
+cover session deletion/expiry/subject mismatch, missing session claims, admin-only
+synchronization, provider takeover/CAS rejection, order-independent retries, concurrent
+initial adoption, drift repair and complete grant rollback on failed synchronization.
+Ruff passes; mypy passes for 121 files; graph conformance passes seven tests/25 fixtures.
+Both wheels build. Actual-wheel isolated imports away from checkout pass, including
+canonical entitlement digest checks; core remains free of psycopg. Umbrella verification
+uses the documented existing auth import dependencies rather than a full app install.
+Existing Starlette/httpx warning remains. Disposable loopback PostgreSQL was removed.
+Supabase session documentation was consulted; tests use fixture auth tables, not a live
+project. No push, merge, deployment or production migration occurred. Session checks
+operate at request start; GoTrue refresh/inactivity/single-session policy evaluation
+and a production verified entitlement provider remain outside this bounded slice.

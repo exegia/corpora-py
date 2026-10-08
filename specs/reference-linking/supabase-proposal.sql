@@ -25,6 +25,16 @@ CREATE TABLE reference_working.resource_access (
     scope jsonb NOT NULL CHECK (jsonb_typeof(scope) = 'object'),
     PRIMARY KEY (space_id, user_id, resource_key)
 );
+CREATE TABLE reference_working.entitlement_heads (
+    space_id uuid NOT NULL REFERENCES reference_working.spaces(id),
+    user_id uuid NOT NULL REFERENCES auth.users(id),
+    version bigint NOT NULL CHECK (version > 0),
+    provider_id text NOT NULL,
+    provider_revision text NOT NULL,
+    digest text NOT NULL CHECK (digest ~ '^[0-9a-f]{64}$'),
+    record jsonb NOT NULL CHECK (jsonb_typeof(record) = 'object'),
+    PRIMARY KEY (space_id, user_id)
+);
 CREATE TABLE reference_working.heads (
     space_id uuid NOT NULL REFERENCES reference_working.spaces(id),
     reference_id uuid NOT NULL,
@@ -96,6 +106,7 @@ CREATE TABLE reference_working.publication_events (
 );
 
 -- Deny client access, including accidental future schema exposure. No RPCs yet.
+ALTER TABLE reference_working.entitlement_heads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.resource_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.spaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.memberships ENABLE ROW LEVEL SECURITY;
@@ -116,6 +127,11 @@ GRANT UPDATE ON reference_working.memberships TO service_role;
 GRANT UPDATE ON reference_working.resource_access TO service_role;
 -- Row locking also freezes authority while recording/exporting events.
 GRANT UPDATE (authority_id) ON reference_working.spaces TO service_role;
+-- Authenticated admin adapter provisions exact grants atomically.
+GRANT INSERT, DELETE ON reference_working.resource_access TO service_role;
+GRANT INSERT, UPDATE ON reference_working.entitlement_heads TO service_role;
+GRANT USAGE ON SCHEMA auth TO service_role;
+GRANT SELECT (id, user_id, not_after) ON auth.sessions TO service_role;
 -- Space/member creation and removal have no service-role grant here.
 -- History/event rows have no UPDATE or DELETE grants. Owners remain privileged.
 COMMIT;

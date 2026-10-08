@@ -36,7 +36,8 @@ type: plan
    private tables, server authorization and transaction contracts. A bounded PostgreSQL working-store adapter and local runtime permission/CAS tests
    are implemented. PostgreSQL conversion-event registration and publication ledger/export adapters
    now have local atomicity/retry tests. Exact resource grants now protect reads/writes and all retained endpoint evidence.
-   Production entitlement/grant provisioning, session revocation, HTTP integration,
+   Admin-only entitlement snapshot synchronization and per-operation auth.sessions
+   checks are implemented locally. Production entitlement-provider wiring, HTTP integration,
    delivery receipts and deployment remain pending and separately scoped.
 5. Extraction: select public naming/version policy, preserve license and fixtures,
    test standalone install, document adapters and establish a separate release

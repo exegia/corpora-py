@@ -31,6 +31,7 @@ as a user's claim to another authority.
 | --- | --- |
 | spaces / memberships | Server-managed boundary and independent capabilities |
 | resource_access | Explicit per-user exact resource scopes; independent of space capabilities |
+| entitlement_heads | Provider-bound version/digest and last complete grant snapshot |
 | heads | Current version pointer, with a deferred foreign key to its snapshot |
 | revisions | Immutable-by-adapter reference JSON, actor, reason, action, validation and conversion evidence |
 | conversion_events | Explicit authority/event identity, detector revision, canonical fingerprint and original report |
@@ -54,7 +55,7 @@ alone is not proof that C-USX was delivered or removed.
 
 # Authorization contract
 
-Keep `reference_working` outside exposed API schemas. All seven tables enable RLS with
+Keep `reference_working` outside exposed API schemas. All eight tables enable RLS with
 no client policies, and schema/table grants deny `anon` and `authenticated` access.
 Read and write requests go through the server adapter; no browser service key, direct
 client mutation, or SECURITY DEFINER RPC is introduced by this proposal.
@@ -69,6 +70,7 @@ proof of the caller's rights. Reads require any membership. Capabilities are ind
 exercise all capabilities. Reopening a withdrawn record requires contribute. Automated
 jobs require an explicitly provisioned authenticated principal, not implicit access to
 all spaces. Space/member creation and removal need a separate privileged administrative path.
+Resource grants have a distinct authenticated admin synchronization path.
 
 Lock the matching membership rows with FOR SHARE for the transaction, so concurrent
 revocation serializes with the authorized operation. Membership administration must
@@ -147,14 +149,14 @@ again for each read/write, derives the UUID subject, and checks database members
 inside each transaction. Do not construct it from untrusted connection/authentication
 configuration. It never creates schemas or provisions memberships. The repository
 JWKS verifier's existing validation behavior applies; immediate session revocation
-and production grant provisioning still require an application boundary.
+still require a trusted entitlement provider and application boundary.
 
 Creation, history, get, save, target resolution, approval/rejection and withdrawn-record
 reopening reuse the SQLite adapter's public lifecycle methods and a shared pure revision
 builder. PostgreSQL owns CAS, head locking, membership locking and atomic append.
 The separate event adapters now implement conversion-event registration, publication
-acknowledgment/withdrawal and repeatable-read export. HTTP routes, production resource
-grant provisioning and connection pooling remain pending. Do not substitute
+acknowledgment/withdrawal and repeatable-read export. HTTP routes, production entitlement-provider
+wiring and connection pooling remain pending. Do not substitute
 per-reference reads for a coherent production export transaction.
 
 Tests require the optional extra and `LINKING_TEST_POSTGRES_DSN` pointing to an explicitly
@@ -213,11 +215,60 @@ authorized caller. PostgreSQL can abort concurrent operations with deadlock or
 serialization errors; callers may retry the same operation and expected version,
 never silently advance CAS. Administrative credentials remain trusted.
 
-The adapter does not provision or infer grants. A future application boundary must
+The working store does not provision or infer grants. The separate admin synchronizer
+now atomically applies an explicit complete snapshot. A future application boundary must
 map Corpora's corpus/document entitlements to these exact scopes using a trusted
 inventory, and must provision original and converted scopes explicitly. Unresolved
 cited works require their own work-scope grant; approval exceptions cannot bypass
 authorization. Deleting a document does not automatically invalidate a grant; inventory
-availability and exact resolver verification remain distinct responsibilities. JWT
-session revocation, entitlement synchronization and HTTP wiring remain staged. No
+availability and exact resolver verification remain distinct responsibilities. Entitlement-provider verification and HTTP wiring remain staged. No
 production account model or live database has been changed.
+
+# Session checks and entitlement synchronization
+
+Each PostgreSQL operation now requires a verified JWT with UUID `sub` and `session_id`.
+The subject/session pair must exist in `auth.sessions`, with `not_after` either null
+or later than the database clock. The proposal grants the server SELECT only on
+`id`, `user_id`, and `not_after`; no auth-session mutation or lock privilege is added.
+Missing/malformed claims fail before adapter construction opens a database connection.
+Subsequent operations reverify the JWT and database session. Deleted signed-out sessions,
+wrong-user sessions and expired session deadlines fail even while a JWT remains signed
+and unexpired. Database failures fail closed; there is no offline session bypass.
+
+This is an operation-start check, not cancellation of operations already authorized
+or retraction of returned content. It does not implement GoTrue's inactivity timeout,
+single-session policy or refresh-token revocation algorithm. Supabase documents that
+some session policies are evaluated on refresh and expired rows may remain temporarily;
+row existence alone is insufficient, hence the explicit deadline check. Confirm the
+production auth schema and policy requirements before deployment. The general app's
+existing authentication middleware is unchanged.
+
+`PostgreSQLEntitlementSynchronizer(store, provider_id=...)` requires the initiating
+user's current session and admin capability. `synchronize(target_user, snapshot,
+expected_version=...)` takes an `EntitlementSnapshot` with provider identity/revision
+and explicit unlocated resource Endpoints. The target must belong to the same space.
+One configured provider owns the whole grant set for that user/space. No inheritance
+from work names, corpus paths, JWT metadata or user assertions occurs. Original-file
+and converted-text resources must both be listed; locators and duplicate scopes
+are rejected. Empty snapshots revoke all resource access.
+
+Synchronization locks the target, compares the local version, and atomically replaces
+grants and its provider-bound head. Initial adoption uses expected_version=None and
+explicitly replaces any manually provisioned grants. Later calls require the current
+version. Identical provider content/grants are idempotent independent of endpoint
+order; changed snapshots or drift repair advance the local version. Stale calls and
+provider takeover attempts fail. Provider revisions are opaque evidence, not sortable
+local version numbers. The application must verify freshness/authority when fetching
+provider evidence; this adapter cannot establish that an input snapshot is truthful.
+The mutable synchronization head is not an immutable grant audit ledger.
+
+Corpora-py currently has no authoritative entitlement table or callable provider contract.
+The synchronizer therefore remains a trusted integration seam, with no HTTP route or
+automatic registration hook. Never pass a client request body directly to it. A production
+provider must obtain and verify actual ownership/shared-access entitlements before
+constructing snapshots; multiple providers require an agreed union/ownership design
+instead of repeatedly replacing each other's grants. No existing ownership policy
+is invented or changed by this implementation.
+
+Current design reference: [Supabase user sessions](https://supabase.com/docs/guides/auth/sessions).
+Local tests use fixture auth tables/controlled JWT claims, not a live Supabase project.
