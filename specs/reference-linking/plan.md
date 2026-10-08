@@ -21,7 +21,8 @@ type: plan
    optional PDF extra verifies byte/text digests and emits approximate word geometry.
    EPUB resource extraction now verifies archive/text digests and retains approximate
    spine resource mappings without invented CFIs.
-   Remaining source adapters and geometry support: PDF geometry/quads, EPUB native CFI and HTML selection mapping;
+   HTML text-node extraction and pinned native quote retrieval are implemented.
+   Remaining source adapters and geometry support: PDF geometry/quads, EPUB native CFI and browser/multi-node HTML selection mapping;
    conversion reports declare stream joins, normalization, OCR and fidelity.
    Validate package revisions/checksums and exact endpoint boundaries.
 4. Management: versioned working store/history, review transitions and approved

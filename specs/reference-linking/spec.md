@@ -61,6 +61,9 @@ rejects unknown fields. No new CUSX XML grammar is established here.
 - EPUB selections retain asset, resource href and opaque native CFI.
   Resource-only evidence uses a separate epub-resource locator without a fabricated CFI. CFI syntax,
   resource existence and native offset conversion are adapter responsibilities.
+- HTML text-node selectors retain asset, parser convention/runtime version, child
+  path and a node-scoped text locator. Paths require no element IDs; browser DOM
+  and UTF-16 offsets need an explicit adapter translation.
 - Structural anchors and citation requests are optional typed locators. A canonical
   citation retains profile, scheme ID/version and optional reading; display text
   is never exact-location authority. The bounded Bible detector recognizes explicit alias chapter:verse ranges;

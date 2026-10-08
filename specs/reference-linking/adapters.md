@@ -58,3 +58,20 @@ Fixtures include manifest/spine order differences, split inline citations, astra
 and decomposed Unicode, empty resources, missing/repeated spine entries, digest
 mismatches and XML validation. Native CFI path/assertion and UTF-16 offset handling
 remain explicit future work; resource mappings confer no exact passage authority.
+
+# Implemented HTML slice
+
+The umbrella HTML adapter verifies asset and stream digests, decodes strict UTF-8,
+and extracts BeautifulSoup html.parser text nodes with an explicit block/LF policy.
+It preserves per-node mappings and introduces a typed HtmlTextLocator carrying
+parser convention/runtime version, child path and Unicode-scalar text selector.
+Native retrieval validates the pinned asset, parser version, path, exact quote
+and context without searching repeated quotes or relocating stale anchors.
+
+Paths count every parser `.contents` child, including skipped comment/whitespace
+nodes, and refer to this parser's tree, not a browser DOM. Entity decoding and
+parser repair are explicit; raw-byte offsets and browser UTF-16 translation are
+not inferred. Inserted separators have no original node mapping. Exact mapping
+fidelity is limited to individual text-node correspondence, not CSS rendering or
+cross-node citation bounds. Fixtures cover split inline citations, Unicode,
+entities, repeated text, digest/path/parser failures and partial manual selection.

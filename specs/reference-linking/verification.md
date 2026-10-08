@@ -125,3 +125,20 @@ locators/resolution and umbrella extraction/JSON roundtrip against an actual EPU
 fixture away from the checkout. Umbrella smoke supplies only Pydantic/EbookLib/lxml
 and their dependencies, not the full application stack. Existing Starlette/httpx
 warning remains. No push, deploy, merge, publication or live database modifications.
+
+# HTML extraction and native text retrieval follow-up
+
+Added UTF-8 BeautifulSoup HTML extraction with original-byte/converted-stream digest
+checks, text-node correspondence mappings and explicit LF/block rules. HtmlTextLocator
+retains parser convention/runtime version, child path and node-scoped scalar quote.
+Native retrieval validates asset, parser, path, quote/context without relocation.
+Fixtures cover inline citations, entities, Unicode, repeated text, partial manual
+selection, stale parser/assets/quotes, invalid paths, fragments and empty content.
+
+Verification: 934 passed, 34 skipped (72 linking tests), with optional PDF support.
+Ruff and mypy pass (110 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated installed environments verify core locator JSON
+roundtrips/resolution and umbrella HTML extraction, native retrieval and sidecar
+roundtrip away from the checkout. Umbrella smoke installs only Pydantic/BeautifulSoup
+and their dependencies, not the full app stack. Existing Starlette/httpx warning
+remains. No push, deploy, merge, publication or database modifications.

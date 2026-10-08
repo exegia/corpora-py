@@ -131,3 +131,28 @@ Existing `EpubLocator` still requires a supplied native CFI. Resource evidence
 never proves exact native citation bounds; DOM-aware CFI generation/resolution
 and UTF-16 conversion remain future work. The adapter changes no existing EPUB
 parser or conversion job. Tests: `uv run pytest tests/linking/test_epub.py`.
+
+## HTML extraction and native text retrieval
+
+`corpora_py.linking_html.extract_html_references_input` uses the umbrella's existing
+BeautifulSoup dependency and strict UTF-8 decoding. It verifies original-byte and
+converted-stream SHA-256 revisions and emits text-node mappings. Entities decode
+through `html.parser`; text whitespace and Unicode remain unchanged. `br` inserts
+LF; block boundaries insert LF when the stream does not already end in LF. The
+block tag list lives in the adapter. Head/script/style/template/noscript content
+and comments/declarations are excluded. Inserted separators have no native mapping.
+
+`HtmlTextLocator` records asset, parser convention/version, a child-index path
+from the parsed document root, and a `TextLocator` scoped to `dom-node`. Every
+`.contents` child counts, including whitespace and comments. Its offsets count
+Unicode scalars within that one decoded text node, never bytes or browser UTF-16.
+`retrieve_html_selection(data, endpoint)` verifies asset digest, parser version,
+path, quote and context and returns only the selected text. Repeated quotes are
+never searched for or relocated. Paths require no HTML IDs or sentence numbering.
+
+Mappings are exact for individual parser text nodes, not rendered layout. A
+citation spanning nodes retains all overlapping mappings; no single native range
+is invented. Browser DOM translation, multi-node native range selection, CSS
+visibility and layout remain adapter work. Parser-version changes require explicit
+re-extraction and review. Existing HTML/TF conversion jobs remain unchanged.
+Tests: `uv run pytest tests/linking/test_html.py`.

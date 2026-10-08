@@ -79,6 +79,17 @@ class EpubResourceLocator(Value):
     href: NonEmpty
 
 
+class HtmlTextLocator(Value):
+    """Unicode selection in one text node of a pinned, explicitly parsed DOM."""
+
+    kind: Literal["html-text"] = "html-text"
+    asset_id: NonEmpty
+    parser: Literal["beautifulsoup-html.parser/v1"] = "beautifulsoup-html.parser/v1"
+    parser_version: NonEmpty
+    node_path: tuple[Annotated[int, Field(ge=0, strict=True)], ...] = Field(min_length=1)
+    text: TextLocator
+
+
 class StructuralLocator(Value):
     kind: Literal["structural"] = "structural"
     anchor_id: NonEmpty
@@ -100,6 +111,7 @@ Locator = Annotated[
     | PdfLocator
     | EpubLocator
     | EpubResourceLocator
+    | HtmlTextLocator
     | StructuralLocator
     | CitationLocator,
     Field(discriminator="kind"),
