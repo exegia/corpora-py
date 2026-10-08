@@ -19,6 +19,8 @@ type: plan
    and selection evidence; add no live database or UI dependency.
 3. Initial mapping integration and bounded pdfplumber extraction implemented;
    optional PDF extra verifies byte/text digests and emits approximate word geometry.
+   EPUB resource extraction now verifies archive/text digests and retains approximate
+   spine resource mappings without invented CFIs.
    Remaining source adapters and geometry support: PDF geometry/quads, EPUB native CFI and HTML selection mapping;
    conversion reports declare stream joins, normalization, OCR and fidelity.
    Validate package revisions/checksums and exact endpoint boundaries.

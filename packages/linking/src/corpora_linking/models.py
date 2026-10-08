@@ -71,6 +71,14 @@ class EpubLocator(Value):
     cfi: NonEmpty
 
 
+class EpubResourceLocator(Value):
+    """An EPUB resource only, without invented fragment or CFI precision."""
+
+    kind: Literal["epub-resource"] = "epub-resource"
+    asset_id: NonEmpty
+    href: NonEmpty
+
+
 class StructuralLocator(Value):
     kind: Literal["structural"] = "structural"
     anchor_id: NonEmpty
@@ -88,7 +96,12 @@ class CitationLocator(Value):
 
 
 Locator = Annotated[
-    TextLocator | PdfLocator | EpubLocator | StructuralLocator | CitationLocator,
+    TextLocator
+    | PdfLocator
+    | EpubLocator
+    | EpubResourceLocator
+    | StructuralLocator
+    | CitationLocator,
     Field(discriminator="kind"),
 ]
 

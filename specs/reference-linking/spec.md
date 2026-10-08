@@ -58,7 +58,8 @@ rejects unknown fields. No new CUSX XML grammar is established here.
   unrotated CropBox-relative top-left points. Crop/rotation transforms and page
   bounds are adapter responsibilities. Quads and discontiguous multi-page
   selections are staged, not implicitly approximated by a single rectangle.
-- EPUB selections retain asset, resource href and opaque native CFI. CFI syntax,
+- EPUB selections retain asset, resource href and opaque native CFI.
+  Resource-only evidence uses a separate epub-resource locator without a fabricated CFI. CFI syntax,
   resource existence and native offset conversion are adapter responsibilities.
 - Structural anchors and citation requests are optional typed locators. A canonical
   citation retains profile, scheme ID/version and optional reading; display text

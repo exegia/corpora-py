@@ -114,3 +114,20 @@ initial adapter rejects rotated pages/glyphs, nontrivial CropBoxes and nonzero
 page origins. OCR, layout-aware reading order, transforms and quads remain future
 work. Tests run with `uv run --extra linking-pdf pytest tests/linking/test_pdf.py`.
 The existing TF parser and conversion jobs remain unchanged.
+
+## EPUB resource extraction
+
+`corpora_py.linking_epub.extract_epub_references_input` uses the umbrella's
+existing EbookLib/lxml dependencies. It verifies EPUB-byte and converted UTF-8
+stream SHA-256 revisions, walks linear XHTML spine resources in reading order,
+and emits approximate resource-to-text mappings. It preserves DOM body text and
+tails verbatim, inserts LF for `br`, excludes script/style/comment content while
+retaining tails, and separates resources with U+000C, including empty resources.
+It rejects missing/repeated spine resources, unsupported media/path forms and
+XHTML with a DOCTYPE. It does not claim rendered layout or CSS visibility fidelity.
+
+The public `EpubResourceLocator` stores asset and resource href without a CFI.
+Existing `EpubLocator` still requires a supplied native CFI. Resource evidence
+never proves exact native citation bounds; DOM-aware CFI generation/resolution
+and UTF-16 conversion remain future work. The adapter changes no existing EPUB
+parser or conversion job. Tests: `uv run pytest tests/linking/test_epub.py`.

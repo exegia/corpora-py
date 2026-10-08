@@ -109,3 +109,19 @@ umbrella PDF extraction against the generated fixture from outside the checkout.
 Umbrella smoke supplies Pydantic/pdfplumber dependencies, not the full application
 stack. Existing Starlette/httpx deprecation remains. No push, merge, deploy,
 publication or database modifications.
+
+# EPUB resource extraction follow-up
+
+Added EbookLib/lxml linear-spine extraction with original archive and converted
+stream digest verification, verbatim DOM text/tail policy and approximate resource
+mappings. Added a typed epub-resource locator without CFI precision. Fixtures cover
+spine order, inline citations, Unicode, empty resources, invalid spine entries,
+checksum mismatches and bounded XML extraction. Core dependencies remain unchanged.
+
+Verification: 928 passed, 34 skipped (66 linking tests) with the PDF extra enabled.
+Ruff and mypy pass (109 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated environments verify installed core resource
+locators/resolution and umbrella extraction/JSON roundtrip against an actual EPUB
+fixture away from the checkout. Umbrella smoke supplies only Pydantic/EbookLib/lxml
+and their dependencies, not the full application stack. Existing Starlette/httpx
+warning remains. No push, deploy, merge, publication or live database modifications.

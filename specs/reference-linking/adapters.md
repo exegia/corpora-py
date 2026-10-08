@@ -42,3 +42,19 @@ upright glyphs; unsupported transforms reject instead of mislabeling coordinates
 Actual PDF fixtures cover citation detection, rectangles, blank pages, checksum
 mismatch, crop and rotation rejection. Native citation projection, OCR, multi-column
 reading-order guarantees and supported crop/rotation transforms remain pending.
+
+# Implemented EPUB slice
+
+The umbrella EbookLib/lxml adapter reads raw item content (not rewritten
+`get_content()`), orders linear XHTML resources by spine, verifies archive/text
+digests and emits approximate resource-range mappings. A new optional typed
+`EpubResourceLocator` records asset/href without fabricating CFI precision.
+DOM text/tails remain verbatim; `br` becomes LF, script/style/comment content is
+excluded, and resources join with U+000C, retaining empty resources. XML uses no
+external entity resolution and rejects DOCTYPE declarations. This is an extraction
+stream, not browser-rendered text, and CSS visibility is not evaluated.
+
+Fixtures include manifest/spine order differences, split inline citations, astral
+and decomposed Unicode, empty resources, missing/repeated spine entries, digest
+mismatches and XML validation. Native CFI path/assertion and UTF-16 offset handling
+remain explicit future work; resource mappings confer no exact passage authority.
