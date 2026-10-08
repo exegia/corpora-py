@@ -25,7 +25,8 @@ type: plan
    Remaining source adapters and geometry support: PDF geometry/quads, EPUB native CFI and browser/multi-node HTML selection mapping;
    conversion reports declare stream joins, normalization, OCR and fidelity.
    Validate package revisions/checksums and exact endpoint boundaries.
-4. Management: versioned working store/history, review transitions and approved
+4. Offline SQLite working store/history and validated review transitions implemented.
+   Next management slice: approved
    CUSX export/import with ID preservation, conflict/idempotence tests. Design
    Supabase tables/RLS offline, then require separate authorization for deployment.
 5. Extraction: select public naming/version policy, preserve license and fixtures,

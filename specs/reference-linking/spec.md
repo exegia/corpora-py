@@ -76,7 +76,7 @@ rejects unknown fields. No new CUSX XML grammar is established here.
   Ambiguity is represented by resolver results with multiple candidates.
   Vector search is optional discovery and never exact-location authority.
 
-# Proposed lifecycle and synchronization (not implemented)
+# Working lifecycle and proposed publication synchronization
 
 Supabase will be authoritative for working records and append-only lifecycle
 history with actor, time, reason and optimistic version checks. A future adapter
@@ -131,3 +131,7 @@ unverified native evidence. Enclosing blocks never imply exact native citation
 bounds. Original identity and geometry/CFI validation remain provider duties.
 This is outside the reusable core and changes no existing TF jobs or C-USX schema.
 Actual extraction adapters, converter hooks and approved XML export remain pending.
+
+The [offline management adapter](management.md) now implements versioned local
+storage, audited resolution and validated review. Production storage, publication
+status transitions and approved C-USX synchronization remain pending.

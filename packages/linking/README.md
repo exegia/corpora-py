@@ -156,3 +156,19 @@ is invented. Browser DOM translation, multi-node native range selection, CSS
 visibility and layout remain adapter work. Parser-version changes require explicit
 re-extraction and review. Existing HTML/TF conversion jobs remain unchanged.
 Tests: `uv run pytest tests/linking/test_html.py`.
+
+## Offline working-reference management
+
+`corpora_py.linking_store.SQLiteReferenceStore` provides local SQLite revision
+history outside the core. Creation uses `save(reference, expected_version=None)`;
+updates require the current version. The adapter records actor/time/reason and
+retains conversion evidence. Explicit resolution and review operations use the
+same source/target validation for manual and automatic references; approval never
+publishes a record. Concurrent stale writes raise `VersionConflictError`.
+See [management contract](../../specs/reference-linking/management.md) for review
+transitions, unresolved external citation exceptions and production adapter limits.
+
+Run the [local review example](examples/review_link.py):
+`uv run python packages/linking/examples/review_link.py`.
+It records creation and validated approval by separate actors in a temporary
+local database, keeping publication draft and reference identity unchanged.

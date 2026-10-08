@@ -142,3 +142,20 @@ roundtrips/resolution and umbrella HTML extraction, native retrieval and sidecar
 roundtrip away from the checkout. Umbrella smoke installs only Pydantic/BeautifulSoup
 and their dependencies, not the full app stack. Existing Starlette/httpx warning
 remains. No push, deploy, merge, publication or database modifications.
+
+# Offline working-store and review follow-up
+
+Added SQLite working revisions outside the core: compare-and-swap transactions,
+actor/UTC-time/reason history, evidence retention, explicit target resolution and
+validated review transitions shared by automatic/manual references. Approval stays
+separate from publication. Fixtures cover persistence, stale/concurrent writers,
+review reopening, evidence, unresolved work exceptions, ambiguity/stale-selection
+rejection and audited citation-to-exact-target adoption.
+
+Verification: 949 passed, 34 skipped (87 linking tests), with the optional PDF extra.
+Ruff and mypy pass (112 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated installed environments verify core resolution
+and the umbrella local review example, preserving IDs and publication draft.
+Umbrella smoke provides Pydantic only, not the full app dependency stack. Existing
+Starlette/httpx warning remains. No push, merge, deploy, publishing or live database
+changes; SQLite files used for verification are local temporary fixtures.
