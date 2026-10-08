@@ -6,7 +6,10 @@ From the repository root:
 uv run python packages/linking/examples/client/server.py
 ```
 
-Open **http://127.0.0.1:8787**.
+Open **http://127.0.0.1:8787**. This address works on the computer running the server.
+If the server runs in a cloud workspace, your own browser cannot reach that
+localhost address without a supported forwarding connection. Run the demo on
+your computer to use this link.
 
 1. Click **Select the example passages**.
 2. Click **Preview selections**, then **Save link**.

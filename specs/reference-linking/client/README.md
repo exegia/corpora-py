@@ -27,7 +27,10 @@ From the repository root:
 uv run python packages/linking/examples/client/server.py
 ```
 
-Open **http://127.0.0.1:8787**. Click **Select the example passages**,
+Open **http://127.0.0.1:8787**. This address works on the computer running the server.
+If the server runs in a cloud workspace, your own browser cannot reach that
+localhost address without a supported forwarding connection. Run the demo on
+your computer to use this link. Click **Select the example passages**,
 then **Preview selections**, **Save link**, and **Open destination**.
 Choose Reviewer to test approval. **Test stale selection** checks that a changed
 version is rejected. The page uses temporary SQLite storage and synthetic demo
