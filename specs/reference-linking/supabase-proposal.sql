@@ -124,6 +124,22 @@ CREATE TABLE reference_working.publication_events (
         REFERENCES reference_working.revisions(space_id, reference_id, version)
 );
 
+CREATE TABLE reference_working.delivery_receipts (
+    space_id uuid NOT NULL,
+    authority_id text NOT NULL,
+    receipt_id uuid NOT NULL,
+    publication_event_id uuid NOT NULL,
+    record jsonb NOT NULL CHECK (jsonb_typeof(record) = 'object'),
+    PRIMARY KEY (space_id, receipt_id),
+    FOREIGN KEY (space_id, authority_id, publication_event_id)
+        REFERENCES reference_working.publication_events(space_id, authority_id, event_id)
+);
+CREATE INDEX publication_reference_history ON reference_working.publication_events
+    (space_id, reference_id, resulting_version DESC);
+CREATE INDEX delivery_publication_event ON reference_working.delivery_receipts
+    (space_id, authority_id, publication_event_id);
+ALTER TABLE reference_working.delivery_receipts ENABLE ROW LEVEL SECURITY;
+
 -- Deny client access, including accidental future schema exposure. No RPCs yet.
 ALTER TABLE reference_working.discovery_revisions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.discovery_events ENABLE ROW LEVEL SECURITY;
@@ -139,7 +155,7 @@ REVOKE ALL ON ALL TABLES IN SCHEMA reference_working FROM PUBLIC, anon, authenti
 GRANT USAGE ON SCHEMA reference_working TO service_role;
 GRANT SELECT ON ALL TABLES IN SCHEMA reference_working TO service_role;
 GRANT INSERT ON reference_working.discovery_revisions, reference_working.discovery_events, reference_working.heads, reference_working.revisions,
-    reference_working.conversion_events, reference_working.publication_events TO service_role;
+    reference_working.conversion_events, reference_working.publication_events, reference_working.delivery_receipts TO service_role;
 GRANT UPDATE (current_version) ON reference_working.heads TO service_role;
 -- PostgreSQL row locks require UPDATE privilege; server credential can mutate
 -- membership rows and must remain trusted. No client membership API is provided.

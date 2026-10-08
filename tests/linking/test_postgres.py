@@ -830,3 +830,446 @@ def test_postgres_discovery_selection_failure_rolls_back_reference(stores, datab
             db.execute(
                 "ALTER TABLE reference_working.discovery_revisions DROP CONSTRAINT fixture_discovery_failure"
             )
+
+
+def test_authenticated_http_manual_retrieval_review_and_publication(stores, database, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from corpora_py.linking_api import router
+    from corpora_py.linking_runtime import LinkingInventory, configure_linking
+
+    factory, space, _, creator, _ = stores
+    _, ref, resolver = reference_fixture(tmp_path)
+    app = FastAPI()
+    app.include_router(router)
+    store = factory()
+    configure_linking(
+        app,
+        dsn=store.dsn,
+        jwks_url="https://fixture.invalid/jwks",
+        audience="authenticated",
+        inventory=LinkingInventory(catalog=resolver.catalog.entries, snapshots=resolver.snapshots),
+    )
+    client = TestClient(app)
+    prefix = f"/linking/{space}"
+    creator_headers = {"Authorization": "Bearer creator"}
+    reviewer_headers = {"Authorization": "Bearer reviewer"}
+    body = {"reference": ref.model_dump(mode="json"), "reason": "manual"}
+    assert client.post(prefix + "/references", json=body).status_code == 401
+    response = client.post(prefix + "/references", json=body, headers=creator_headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["reference"]["provenance"]["agent_id"] == str(creator)
+    selected = client.post(
+        prefix + "/retrieve", json=ref.source.model_dump(mode="json"), headers=creator_headers
+    )
+    assert selected.status_code == 200 and selected.json()["text"] == "Quote"
+    decision = {"expected_version": 1, "reason": "reviewed"}
+    assert (
+        client.post(
+            prefix + f"/references/{ref.id}/approve", json=decision, headers=creator_headers
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            prefix + f"/references/{ref.id}/approve", json=decision, headers=reviewer_headers
+        ).status_code
+        == 200
+    )
+    exported = client.post(
+        prefix + "/export", json={"reference_ids": [str(ref.id)]}, headers=creator_headers
+    )
+    assert exported.status_code == 200
+    assert factory().get(ref.id).publication == "draft"
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'publish')", (space, creator)
+        )
+    ack = {
+        "expected_version": 2,
+        "reason": "distributed",
+        "event_id": str(uuid4()),
+        "snapshot": exported.text,
+    }
+    assert (
+        client.post(
+            prefix + f"/publication/{ref.id}/acknowledge", json=ack, headers=creator_headers
+        ).status_code
+        == 200
+    )
+    with psycopg.connect(database) as db:
+        db.execute("DELETE FROM auth.sessions WHERE user_id = %s", (creator,))
+    assert client.get(prefix + f"/references/{ref.id}", headers=creator_headers).status_code == 401
+
+
+def test_http_conversion_uses_server_asset_and_curated_detector_context(stores, database):
+    from corpora_linking import BibleBook, Endpoint
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from psycopg.types.json import Jsonb
+
+    from corpora_py.linking_access import endpoint_scope
+    from corpora_py.linking_api import router
+    from corpora_py.linking_pdf import sha256_revision
+    from corpora_py.linking_runtime import (
+        AssetRecord,
+        BibleDetectionContext,
+        LinkingInventory,
+        configure_linking,
+    )
+
+    factory, space, _, creator, _ = stores
+    data = b"<html><head></head><body><p>Compare John <em>3:16</em>.</p></body></html>"
+    original = Endpoint(
+        work_id="essay",
+        edition_id="e",
+        package_id="html",
+        revision=sha256_revision(data),
+        document_id="asset",
+    )
+    converted = Endpoint(
+        work_id="essay",
+        edition_id="e",
+        package_id="text",
+        revision=sha256_revision(b"Compare John 3:16.\n"),
+        document_id="body",
+    )
+    with psycopg.connect(database) as db:
+        for endpoint in (original, converted):
+            key, scope = endpoint_scope(endpoint)
+            db.execute(
+                "INSERT INTO reference_working.resource_access VALUES (%s, %s, %s, %s)",
+                (space, creator, key, Jsonb(scope)),
+            )
+    app = FastAPI()
+    app.include_router(router)
+    context = BibleDetectionContext(
+        books=(BibleBook(work_id="john", aliases=("John",)),),
+        profile="fixture",
+        scheme_id="fixture",
+        scheme_version="1",
+        detector_revision="1",
+    )
+    configure_linking(
+        app,
+        dsn=factory().dsn,
+        jwks_url="https://fixture.invalid/jwks",
+        audience="authenticated",
+        inventory=LinkingInventory(
+            bible=context, assets=(AssetRecord(endpoint=original, format="html", data=data),)
+        ),
+    )
+    client = TestClient(app)
+    body = {
+        "original": original.model_dump(mode="json"),
+        "converted": converted.model_dump(mode="json"),
+        "asset_id": "html",
+        "event_id": str(uuid4()),
+        "reason": "converted",
+    }
+    url = f"/linking/{space}/conversion-events"
+    headers = {"Authorization": "Bearer creator"}
+    first = client.post(url, json=body, headers=headers)
+    assert first.status_code == 200, first.text
+    assert len(first.json()["report"]["references"]) == 1
+    assert client.post(url, json=body, headers=headers).json() == first.json()
+
+
+def test_unconfigured_http_linking_is_unavailable():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from corpora_py.linking_api import router
+
+    app = FastAPI()
+    app.include_router(router)
+    response = TestClient(app).post(f"/linking/{uuid4()}/retrieve", json={"work_id": "book"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Reference linking is unavailable"
+
+
+def test_http_native_browser_and_unknown_scholarly_conversion_retry(stores, database):
+    from corpora_linking import Endpoint, ScholarlyCitationMention, TextLocator
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from psycopg.types.json import Jsonb
+
+    from corpora_py.linking_access import endpoint_scope
+    from corpora_py.linking_api import router
+    from corpora_py.linking_html_ranges import _stream
+    from corpora_py.linking_pdf import sha256_revision
+    from corpora_py.linking_runtime import AssetRecord, LinkingInventory, configure_linking
+
+    factory, space, _, creator, _ = stores
+    data = b"<html><head></head><body><p>Read <em>Unknown book</em>.</p></body></html>"
+    text, spans = _stream(data)
+    original = Endpoint(
+        work_id="essay",
+        edition_id="e",
+        package_id="html",
+        revision=sha256_revision(data),
+        document_id="asset",
+    )
+    converted = Endpoint(
+        work_id="essay",
+        edition_id="e",
+        package_id="text",
+        revision=sha256_revision(text.encode()),
+        document_id="body",
+    )
+    with psycopg.connect(database) as db:
+        for endpoint in (original, converted):
+            key, scope = endpoint_scope(endpoint)
+            db.execute(
+                "INSERT INTO reference_working.resource_access VALUES (%s, %s, %s, %s)",
+                (space, creator, key, Jsonb(scope)),
+            )
+
+    class Recognizer:
+        def recognize(self, snapshot):
+            start = snapshot.text.index("Unknown book")
+            return (
+                ScholarlyCitationMention(
+                    selection=TextLocator(
+                        stream_id="body", start=start, end=start + 12, exact="Unknown book"
+                    ),
+                    cited_name="Unknown book",
+                ),
+            )
+
+    app = FastAPI()
+    app.include_router(router)
+    configure_linking(
+        app,
+        dsn=factory().dsn,
+        jwks_url="https://fixture.invalid/jwks",
+        audience="authenticated",
+        inventory=LinkingInventory(
+            assets=(AssetRecord(endpoint=original, format="html", data=data),)
+        ),
+        scholarly_recognizer=Recognizer(),
+        scholarly_revision="fixture-v1",
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer creator"}
+    prefix = f"/linking/{space}"
+    body = {
+        "original": original.model_dump(mode="json"),
+        "converted": converted.model_dump(mode="json"),
+        "asset_id": "html",
+        "event_ids": [str(uuid4())],
+        "reason": "ingest",
+    }
+    first = client.post(prefix + "/scholarly-conversion-events", json=body, headers=headers)
+    assert first.status_code == 200, first.text
+    assert first.json()["discoveries"][0]["discovery"]["hypotheses"] == []
+    assert (
+        client.post(prefix + "/scholarly-conversion-events", json=body, headers=headers).json()
+        == first.json()
+    )
+    path, _, _, node = spans[1]
+    capture = {
+        "original": original.model_dump(mode="json"),
+        "asset_id": "html",
+        "captured_nodes": [(entry[0], entry[3]) for entry in spans],
+        "start_path": path,
+        "end_path": path,
+        "start_utf16": 0,
+        "end_utf16": len(node),
+    }
+    selected = client.post(prefix + "/browser-selection", json=capture, headers=headers)
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["text"] == "Unknown book"
+    capture["captured_nodes"] = []
+    assert (
+        client.post(prefix + "/browser-selection", json=capture, headers=headers).status_code == 422
+    )
+
+
+def test_http_import_requires_server_reconciliation_and_explicit_version(stores, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from corpora_py.linking_api import router
+    from corpora_py.linking_publication import SnapshotPublicationAdapter
+    from corpora_py.linking_runtime import LinkingInventory, configure_linking
+
+    factory, space, _, _, _ = stores
+    _, ref, _ = reference_fixture(tmp_path)
+    published = ref.model_copy(update={"review": "approved"})
+    snapshot = SnapshotPublicationAdapter("upstream").export((published,)).decode()
+    app = FastAPI()
+    app.include_router(router)
+    configure_linking(
+        app,
+        dsn=factory().dsn,
+        jwks_url="https://fixture.invalid/jwks",
+        audience="authenticated",
+        inventory=LinkingInventory(),
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer creator"}
+    url = f"/linking/{space}/import"
+    body = {"snapshot": snapshot, "reference_id": str(ref.id), "reason": "import"}
+    assert client.post(url, json=body, headers=headers).status_code == 200
+    assert factory().get(ref.id).review == "pending"
+    assert factory().get(ref.id).publication == "draft"
+    assert client.post(url, json=body, headers=headers).status_code == 409
+    body["expected_version"] = 1
+    assert client.post(url, json=body, headers=headers).status_code == 200
+
+
+def test_http_cusx_publication_validates_advertised_destination(stores, database):
+    import json
+
+    from corpora_linking import Provenance, Reference, StructuralLocator
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from psycopg.types.json import Jsonb
+    from test_cusx import fixture
+
+    from corpora_py.linking_access import endpoint_scope
+    from corpora_py.linking_api import router
+    from corpora_py.linking_cusx import AnchorBinding, bind_cusx_anchors
+    from corpora_py.linking_pdf import sha256_revision
+    from corpora_py.linking_publication import SnapshotPublicationAdapter
+    from corpora_py.linking_runtime import AssetRecord, LinkingInventory, configure_linking
+
+    factory, space, _, creator, _ = stores
+    data, snapshot, selection = fixture()
+    # Pinned package revision is opaque; inventory separately verifies file bytes.
+    data = bind_cusx_anchors(
+        data, snapshot, (AnchorBinding(selection=selection, anchor_id="verse"),)
+    )
+    ref = Reference(
+        source=selection,
+        target=snapshot.endpoint.model_copy(
+            update={"locators": (StructuralLocator(anchor_id="verse"),)}
+        ),
+        provenance=Provenance(origin="manual", agent_id=str(creator), method="selection"),
+        resolution="resolved",
+        review="approved",
+    )
+    with psycopg.connect(database) as db:
+        key, scope = endpoint_scope(snapshot.endpoint)
+        db.execute(
+            "INSERT INTO reference_working.resource_access VALUES (%s, %s, %s, %s)",
+            (space, creator, key, Jsonb(scope)),
+        )
+
+    # Use the existing validated review store contract; the HTTP publisher reads it.
+    class Resolver:
+        def resolve(self, request):
+            from corpora_linking import ResolutionResult
+
+            return ResolutionResult(status="resolved", candidates=(request,))
+
+    factory().save(
+        ref.model_copy(update={"review": "pending", "resolution": "unresolved"}),
+        expected_version=None,
+        reason="selection",
+    )
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'review')", (space, creator)
+        )
+    factory().approve(ref.id, expected_version=1, resolver=Resolver(), reason="verified fixture")
+    app = FastAPI()
+    app.include_router(router)
+    configure_linking(
+        app,
+        dsn=factory().dsn,
+        jwks_url="https://fixture.invalid/jwks",
+        audience="authenticated",
+        inventory=LinkingInventory(
+            snapshots=(snapshot,),
+            assets=(
+                AssetRecord(
+                    endpoint=snapshot.endpoint,
+                    format="cusx",
+                    data=data,
+                    checksum=sha256_revision(data),
+                ),
+            ),
+        ),
+    )
+    client = TestClient(app)
+    assert app.state.linking_runtime.resolver(factory()).retrieve(ref.target) == selection.locators[0].exact
+    body = {"source": snapshot.endpoint.model_dump(mode="json"), "reference_ids": [str(ref.id)]}
+    response = client.post(
+        f"/linking/{space}/export-cusx", json=body, headers={"Authorization": "Bearer creator"}
+    )
+    assert response.status_code == 200, response.text
+    assert f"urn:uuid:{ref.id}" in response.json()["cusx"]
+    assert response.json()["snapshot"]["entries"][0]["reference"]["id"] == str(ref.id)
+    assert factory().get(ref.id).publication == "draft"
+    assert (
+        SnapshotPublicationAdapter("test")
+        .plan_import(
+            json.dumps(response.json()["snapshot"]).encode(),
+            factory(),
+        )[0]
+        .outcome
+        == "unchanged"
+    )
+
+
+def test_delivery_receipts_are_separate_admin_provider_evidence(stores, database, tmp_path):
+    from corpora_py.linking_delivery import DeliveryEvidence, PostgreSQLDeliveryReceipts
+    from corpora_py.linking_postgres_events import PostgreSQLPublicationLedger
+
+    factory, space, _, creator, _ = stores
+    _, ref, resolver = reference_fixture(tmp_path)
+    factory().save(ref, expected_version=None)
+    factory("reviewer").approve(ref.id, expected_version=1, resolver=resolver, reason="review")
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'publish')", (space, creator)
+        )
+    ledger = PostgreSQLPublicationLedger(factory())
+    snapshot = ledger.export_current((ref.id,))
+    event = ledger.acknowledge_snapshot(
+        snapshot, ref.id, event_id=uuid4(), expected_version=2, reason="editorial acknowledgment"
+    )
+    receipts = PostgreSQLDeliveryReceipts(factory(), provider_id="fixture-delivery")
+    evidence = DeliveryEvidence(
+        receipt_id=uuid4(),
+        publication_event_id=event.event_id,
+        destination_id="fixture-bucket",
+        provider_id="fixture-delivery",
+        provider_receipt="opaque-provider-proof",
+        artifact_digest=event.artifact_digest,
+        status="delivered",
+    )
+    assert receipts.history(ref.id) == ()
+    with pytest.raises(PermissionError):
+        receipts.record(evidence)
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'admin')", (space, creator)
+        )
+    first = receipts.record(evidence)
+    assert receipts.record(evidence) == first
+    assert len(receipts.history(ref.id)) == 1
+    with pytest.raises(ValueError, match="different evidence"):
+        receipts.record(evidence.model_copy(update={"destination_id": "other"}))
+    with pytest.raises(ValueError, match="artifact"):
+        receipts.record(
+            evidence.model_copy(update={"receipt_id": uuid4(), "artifact_digest": "sha256:wrong"})
+        )
+    with pytest.raises(ValueError, match="contradicts"):
+        receipts.record(evidence.model_copy(update={"receipt_id": uuid4(), "status": "removed"}))
+    withdrawal = ledger.withdraw(ref.id, event_id=uuid4(), expected_version=3, reason="remove")
+    removal = receipts.record(
+        evidence.model_copy(
+            update={
+                "receipt_id": uuid4(),
+                "publication_event_id": withdrawal.event_id,
+                "status": "removed",
+                "provider_receipt": "removal-proof",
+            }
+        )
+    )
+    assert removal.publication.action == "withdraw"
+    assert len(receipts.history(ref.id)) == 2
