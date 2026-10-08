@@ -11,6 +11,12 @@ class Detector(Protocol):
     def detect(self, source: Endpoint, text: str) -> Iterable[Reference]: ...
 
 
+class Catalog(Protocol):
+    def identify(self, name: str) -> ResolutionResult:
+        """Identify works only; candidates must not imply passage coverage."""
+        ...
+
+
 class Resolver(Protocol):
     def resolve(self, request: Endpoint) -> ResolutionResult: ...
 

@@ -63,3 +63,17 @@ smoke uses `--no-deps` plus Pydantic and verifies the bundled linking surface;
 it does not claim full application dependency installation.
 
 No push, merge, deployment, publishing or database changes were performed.
+
+# Offline catalog and resolution follow-up
+
+Added Catalog identification and snapshot-backed Resolver adapters with separate
+work-only, verified text, ambiguous edition, unavailable revision and stale/conflict
+outcomes. Exact citation context is supplied by callers, not inferred authority.
+Detection-to-resolution example preserves reference identity and pending review.
+
+Verification: 910 tests passed, 34 skipped (48 linking tests); Ruff and mypy pass
+(105 source files). Existing Starlette/httpx deprecation remains. Graph conformance
+passes 7 tests/25 fixtures. Both wheels build. Fresh environments run the resolution
+example through each installed wheel under isolated Python away from the checkout.
+The umbrella check installs without application dependencies, adding Pydantic for
+the linking surface only. No push, merge, deploy, publishing or database changes.

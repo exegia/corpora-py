@@ -106,3 +106,13 @@ a prerequisite for the scaffold. PyMuPDF/pdfplumber/EbookLib are candidate adapt
 not new mandatory dependencies. See [plan](plan.md) for the next slice.
 
 See [adapter investigation](adapters.md) for source-library and CFI constraints.
+
+# Offline resolution slice
+
+The public Catalog port separates identifying a work from resolving its passage.
+SnapshotCatalog and SnapshotResolver provide dependency-light offline adapters,
+with caller-authoritative names, exact citation-context mappings and pinned text.
+They verify text selections and preserve ambiguous editions, unavailable snapshots
+and stale-anchor diagnostics. Checksums and catalog/versification authority are
+provider responsibilities; no fuzzy matching or numbering conversion is implied.
+See the package README and resolution example for supported boundaries.

@@ -58,3 +58,24 @@ reconciliation policy before repeated conversion is integrated.
 Run the [manual retrieval example](examples/manual_link.py):
 `uv run python packages/linking/examples/manual_link.py`.
 It verifies both selections and rejects changed revisions or quote/context mismatches.
+
+## Offline catalog and resolution adapters
+
+`Catalog.identify(name)` identifies works separately from `Resolver.resolve(endpoint)`.
+`SnapshotCatalog` matches caller-supplied names exactly and retains collisions.
+`SnapshotResolver` uses caller-authoritative `PassageEntry` mappings and immutable
+`TextSnapshot` streams. It verifies quote, context, normalization and pinned scope
+before returning targets. Work-only resolution proves catalog presence, not passage
+coverage. Missing mapped streams report unavailable; stale/conflicting streams
+report unresolved; multiple verified editions report ambiguous. Missing candidates
+never justify picking the remaining edition.
+
+These offline adapters implement no versification authority or citation parser:
+mapping keys include the exact citation spelling, profile, scheme/version and
+reading. Alternate spellings need explicit mappings. Snapshot providers must verify
+revision/checksum identity before supplying data. These adapters accept one text
+locator per passage; native and combined selectors require future adapters.
+
+Run the [detection-to-resolution example](examples/resolve_link.py) with
+`uv run python packages/linking/examples/resolve_link.py`. Updating a resolved
+reference preserves its ID and pending review; it does not approve or publish it.

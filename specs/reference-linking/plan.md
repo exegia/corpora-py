@@ -13,7 +13,8 @@ type: plan
    conversion mappings, legacy pinned TF seam and Corpora wheel integration.
 2. Implemented initial slice: a bounded Bible citation detector with an explicit registry/numbering
    context. Emit unresolved records against fixture text; alias collisions retain all
-   hypotheses. Catalog resolver fixtures and conversion integration remain next. Preserve original spelling
+   hypotheses. Offline catalog and snapshot resolver adapters now cover work-only, ambiguous,
+   unavailable and stale outcomes. Conversion integration remains next. Preserve original spelling
    and selection evidence; add no live database or UI dependency.
 3. Source adapters: PDF geometry/quads, EPUB native CFI and HTML selection mapping;
    conversion reports declare stream joins, normalization, OCR and fidelity.
