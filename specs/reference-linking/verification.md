@@ -211,3 +211,21 @@ and umbrella event retries preserving IDs and later review decisions. Umbrella s
 provides Pydantic only, not the full app dependency stack. Existing Starlette/httpx
 warning remains. No push, merge, deploy, external publication or live database
 changes; event/storage verification uses temporary local fixtures.
+
+# End-to-end local walkthrough follow-up
+
+Added a runnable actual-HTML fixture connecting extraction/mappings, automatic
+conversion-event detection and a manual sentence link, shared exact target resolution,
+review by separate actors, approved snapshot export/pending imports, retry ID
+preservation and withdrawal omission. It writes inspectable JSON/history and local
+SQLite artifacts to a selected empty directory; existing content is never overwritten.
+Source/catalog/scripture data are synthetic and no remote distribution is claimed.
+
+Verification: 982 passed, 34 skipped (120 linking tests), with optional PDF support.
+Ruff and mypy pass (117 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated installed environments verify core resolution
+and run the complete umbrella walkthrough away from the checkout with Pydantic/
+BeautifulSoup only. Output artifacts are available locally at
+`/tmp/reference-linking-end-to-end-demo` and
+`/tmp/reference-linking-installed-end-to-end-demo`. Existing Starlette/httpx warning
+remains. No push, merge, deploy, external publication or live database modifications.

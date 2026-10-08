@@ -205,3 +205,12 @@ Changed inputs, mapping evidence or detector outputs under the same event ID rej
 Distinct events never deduplicate by passage text. See the
 [event contract](../../specs/reference-linking/conversion-events.md) for configuration,
 ordering, concurrency and production job identity requirements.
+
+## End-to-end walkthrough
+
+Run `uv run python packages/linking/examples/end_to_end.py --output /tmp/reference-linking-demo`
+with a new or empty output directory. The [walkthrough](../../specs/reference-linking/end-to-end.md)
+connects actual HTML extraction, automatic and manual links, verified retrieval,
+review, versioned export/import, conversion retry and withdrawal. It produces
+inspectable JSON/history and local databases using synthetic fixtures; no external
+publication or production conversion job is triggered.

@@ -38,6 +38,14 @@ type: plan
    test standalone install, document adapters and establish a separate release
    process. Current root release/publish scripts intentionally remain unchanged.
 
+# Integrated walkthrough
+
+The [end-to-end example](end-to-end.md) connects HTML extraction, both creation
+workflows, exact resolution/review, snapshot import/export, idempotent conversion
+retry and withdrawal into inspectable local artifacts. Production parser hooks,
+full C-USX insertion, authoritative catalog/CFI adapters and remote storage/delivery
+remain explicitly staged above.
+
 # Verification
 
 Run `uv run ruff check .`, `uv run mypy .`, `uv run pytest`, independent
