@@ -36,7 +36,8 @@ identity and revision mappings, never equate package IDs and bundle IDs by spell
 Core UUID reference IDs must serialize as persistent `urn:uuid:` identifiers in
 a future graph adapter. Namespaced unknown graph extensions need explicit,
 lossless adapter support before claiming graph conformance; core v0.1 deliberately
-rejects unknown fields. No new CUSX XML grammar is established here.
+rejects unknown fields. The implemented umbrella adapter uses those existing CUSX boundary/jmp forms;
+see [production composition](production.md) for capabilities and limits.
 
 # Requirements and implemented constraints
 
@@ -56,8 +57,8 @@ rejects unknown fields. No new CUSX XML grammar is established here.
   Browser UTF-16 offsets must be translated before constructing locators.
 - PDF selections retain an asset, 1-based page and one or more rectangles in
   unrotated CropBox-relative top-left points. Crop/rotation transforms and page
-  bounds are adapter responsibilities. Quads and discontiguous multi-page
-  selections are staged, not implicitly approximated by a single rectangle.
+  bounds are adapter responsibilities. Typed convex quads and ordered multi-page fragments are supported by the optional
+  PyMuPDF adapter, never implicitly approximated by one enclosing rectangle.
 - EPUB selections retain asset, resource href and opaque native CFI.
   Resource-only evidence uses a separate epub-resource locator without a fabricated CFI. CFI syntax,
   resource existence and native offset conversion are adapter responsibilities.

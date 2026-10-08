@@ -386,3 +386,44 @@ registration/CAS; selection and pending working-reference creation commit togeth
 Tests cover concurrent retries/choices, capability denial, source revocation, tenant
 isolation and forced selection failure rolling back the working reference. Schema
 additions remain an unapplied proposal; no production database was modified.
+
+# Native adapters, application integration and extraction completion
+
+Implemented typed PDF quads/native quote selectors, optional PyMuPDF glyph extraction
+and crop/rotation transforms, bounded EPUB CFI generation/retrieval, multi-node HTML
+ranges and an explicit browser capture bridge. Added opt-in authenticated FastAPI
+composition over trusted inventory/catalog/entitlement inputs, conversion and scholarly
+recognizer hooks, manual review/retrieval, server-reconciled imports and approved
+exports. C-USX insertion preserves text/inline structure with matching UUID link IDs
+and advertised paired-boundary anchors; native structural retrieval checks range
+pairs. Separate admin/provider receipts retain per-destination delivery/removal
+claims without converting editorial acknowledgment into proof. Their table/indexes
+remain part of the unapplied schema proposal outside migrations.
+
+Final verification: **1047 passed, 34 skipped**, including **35 real PostgreSQL tests**
+against disposable loopback PostgreSQL 17. The subsequent schema index addition was
+verified by rerunning all 35 PostgreSQL tests. Ruff passes and mypy passes for 135
+source files. Existing Corpus Document conformance passes seven tests/25 indexed
+fixtures with JSON/XML round trips. Both core and umbrella wheels build. Browser
+capture JavaScript passes Node's syntax check; browser capture correspondence is
+exercised through the HTTP adapter with matching/mismatched tree fixtures, not a
+claim of end-to-end browser rendering coverage.
+
+A standalone source export builds both sdist and wheel independently. Its installed
+wheel passes the actual 38 detector/resolver/scholarly tests in a fresh environment
+away from the repository with Pydantic as the only library dependency (pytest is
+installed for verification). Isolated import confirms neither corpora_py nor psycopg
+is installed there. A fresh umbrella wheel installation with explicitly provided
+adapter/shared utility dependencies passes ten native/C-USX tests away from checkout
+and imports the HTTP runtime and receipt adapter. This is an adapter-focused smoke
+installation, not a verification of every umbrella dependency/application feature.
+
+Inspectible local artifacts: `/tmp/reference-linking-final-dist`,
+`/tmp/corpora-linking-source-final-dist`, `/tmp/corpora-linking-source-final-verified`
+and `/tmp/reference-linking-final-tests.txt`. Source extraction is reproducible via
+`bin/build/export_linking.py`. Version 0.1.0 remains provisional/unpublished; no new
+release automation was added. The existing Starlette/httpx deprecation warning
+remains. See [production capabilities/limits](production.md) for unsupported format
+variants and real inventory/policy/provider configuration required before rollout.
+No push, merge, deployment, PyPI publication, remote delivery or live Supabase
+modification occurred. The disposable database container was removed after checks.

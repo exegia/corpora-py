@@ -74,7 +74,7 @@ These offline adapters implement no versification authority or citation parser:
 mapping keys include the exact citation spelling, profile, scheme/version and
 reading. Alternate spellings need explicit mappings. Snapshot providers must verify
 revision/checksum identity before supplying data. These adapters accept one text
-locator per passage; native and combined selectors require future adapters.
+locator per passage; native selectors use optional umbrella adapters documented below.
 
 Run the [detection-to-resolution example](examples/resolve_link.py) with
 `uv run python packages/linking/examples/resolve_link.py`. Updating a resolved
@@ -92,8 +92,8 @@ location evidence. Missing mappings keep the reference with diagnostics.
 An enclosing PDF rectangle or EPUB CFI stays block-level evidence. The integration
 does not project citation offsets into exact native bounds, upgrade approximate
 fidelity, approve records or publish XML. Providers validate original assets,
-geometry and CFI and define extraction order/joins. No existing TF conversion job
-is automatically changed; C-USX serialization still needs an agreed adapter.
+geometry and CFI and define extraction order/joins. The opt-in authenticated conversion routes use these reports; existing TF jobs
+retain their contracts. C-USX range and link serialization is implemented outside the core.
 Run `uv run python packages/linking/examples/converted_link.py` for a fixture-backed
 EPUB-location example. This example requires the umbrella package.
 
@@ -111,8 +111,8 @@ empty pages and performing no Unicode normalization. Word rectangles use
 one-based pages and unrotated top-left points. Word-level geometry is marked
 approximate; citation substrings never acquire guessed native bounds. This
 initial adapter rejects rotated pages/glyphs, nontrivial CropBoxes and nonzero
-page origins. OCR, layout-aware reading order, transforms and quads remain future
-work. Tests run with `uv run --extra linking-pdf pytest tests/linking/test_pdf.py`.
+page origins. The separate optional `linking-pymupdf` adapter supports glyph quads and
+crop/rotation transforms; OCR and logical reading order are not guaranteed. Tests run with `uv run --extra linking-pdf pytest tests/linking/test_pdf.py`.
 The existing TF parser and conversion jobs remain unchanged.
 
 ## EPUB resource extraction
@@ -128,8 +128,8 @@ XHTML with a DOCTYPE. It does not claim rendered layout or CSS visibility fideli
 
 The public `EpubResourceLocator` stores asset and resource href without a CFI.
 Existing `EpubLocator` still requires a supplied native CFI. Resource evidence
-never proves exact native citation bounds; DOM-aware CFI generation/resolution
-and UTF-16 conversion remain future work. The adapter changes no existing EPUB
+never proves exact native citation bounds; A separate DOM-aware CFI adapter now generates and verifies bounded native ranges
+with explicit UTF-16 conversion; see the production capabilities below. The adapter changes no existing EPUB
 parser or conversion job. Tests: `uv run pytest tests/linking/test_epub.py`.
 
 ## HTML extraction and native text retrieval
@@ -152,8 +152,8 @@ never searched for or relocated. Paths require no HTML IDs or sentence numbering
 
 Mappings are exact for individual parser text nodes, not rendered layout. A
 citation spanning nodes retains all overlapping mappings; no single native range
-is invented. Browser DOM translation, multi-node native range selection, CSS
-visibility and layout remain adapter work. Parser-version changes require explicit
+is invented. Multi-node ranges and browser capture translation now have explicit adapters; CSS
+visibility and rendered layout remain outside their guarantees. Parser-version changes require explicit
 re-extraction and review. Existing HTML/TF conversion jobs remain unchanged.
 Tests: `uv run pytest tests/linking/test_html.py`.
 
@@ -180,8 +180,8 @@ snapshots without changing working state. `plan_import` reports new, identical o
 conflicting IDs; explicit application creates pending drafts or checks an unchanged
 local version. Conflicts never overwrite records or confer imported approval.
 `render_cusx_jump` supports existing anchored USX links for resolved structural or
-document targets; arbitrary selectors remain lossless in the sidecar until their
-C-USX embedding is agreed. See [publication contract](../../specs/reference-linking/publication.md).
+document targets; arbitrary text selectors use explicit paired boundary anchor bindings in
+`linking_cusx`, retaining lossless original evidence in the sidecar. See [publication contract](../../specs/reference-linking/publication.md).
 
 Run `uv run python packages/linking/examples/publication_roundtrip.py` for a local
 export/import roundtrip preserving IDs and requiring new review after import.
@@ -223,11 +223,23 @@ all catalog hypotheses and leaves passage resolution separate. Unknown works rem
 portable `CitationDiscovery` records with stable IDs rather than guessed work IDs.
 Run `uv run python packages/linking/examples/scholarly_link.py` for synthetic intake
 and exact retrieval. See [scholarly intake](../../specs/reference-linking/scholarly.md)
-for the pending recognizer and discovery-storage integrations.
+for recognizer ports and implemented discovery-storage integrations.
 
 `corpora_py.linking_discoveries.SQLiteDiscoveryStore` now persists unknown discoveries
 and registration events in the local working database. Explicit catalog refresh and
 work choice append versioned history; choosing a work creates a pending Reference,
 with passage resolution/review still required. Run
 `uv run python packages/linking/examples/discovery_review.py` for the offline walkthrough.
-PostgreSQL discovery support and production authorization remain staged.
+PostgreSQL discovery storage and opt-in authenticated application integration are implemented.
+
+## Native adapters, application integration and extraction
+
+See [production composition](../../specs/reference-linking/production.md) for
+PyMuPDF quads, EPUB CFI ranges, multi-node/browser HTML selection, authenticated
+HTTP workflows, trusted inventory/entitlement configuration, C-USX insertion and
+per-destination delivery evidence. These adapters remain outside the reusable core.
+
+Export a standalone source tree with
+`uv run python bin/build/export_linking.py /tmp/new-linking-source`. The export
+contains portable instructions, examples and core tests, builds a wheel and sdist,
+and has no publishing automation.

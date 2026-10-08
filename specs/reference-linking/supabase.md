@@ -296,3 +296,12 @@ Tests run only on disposable local PostgreSQL, including concurrent retries/work
 choices, capability denial, source revocation, tenant isolation and atomic rollback
 after reference creation fails to append its selection decision. Production routes,
 converter orchestration and authoritative provider/catalog wiring remain separate.
+
+# Completed application composition
+
+The opt-in authenticated HTTP service, trusted inventory/entitlement configuration,
+PostgreSQL discovery management and separate admin/provider delivery receipts are
+implemented and exercised locally. The proposal now includes `delivery_receipts`
+with deny-client RLS and append-only server grants. See [production composition](production.md)
+for API operations and remaining operational prerequisites. No live schema rollout
+or production database operation has been performed.

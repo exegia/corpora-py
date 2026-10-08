@@ -16,3 +16,9 @@ coverage for changed invariants and run Ruff, mypy, tests, both wheel builds and
 clean install/import checks. Preserve existing graph/scoped-reference contracts.
 Do not publish, deploy, migrate production databases, merge or push without
 explicit authorization. No credentials are needed for this scaffold.
+
+For integration changes read [production composition](../../specs/reference-linking/production.md).
+Keep native asset checks and explicit stream/offset conventions intact. C-USX
+bindings require verified advertised targets; editorial acknowledgments are not
+delivery receipts. Standalone exports must keep portable instructions and run the
+actual core tests against the installed wheel away from the monorepo.

@@ -6,54 +6,29 @@ status: in-progress
 type: plan
 ---
 
-# Stages
+# Completed local stages
 
-1. Implemented: independently buildable MIT core, public typed values/protocols,
-   JSON validation/round trips, conservative scalar-anchor verification, explicit
-   conversion mappings, legacy pinned TF seam and Corpora wheel integration.
-2. Implemented initial slice: a bounded Bible citation detector with an explicit registry/numbering
-   context. Emit unresolved records against fixture text; alias collisions retain all
-   hypotheses. Offline catalog and snapshot resolver adapters now cover work-only, ambiguous,
-   unavailable and stale outcomes. Opt-in umbrella conversion sidecars now retain location mappings and validate
-   converted citation anchors. Atomic conversion-event registration now reuses
-   original IDs on retries and rejects changed event inputs. Scholarly recognizer intake now preserves exact spans, unknown discovery records
-   and ambiguous work hypotheses while keeping passage resolution separate. Production converter
-   hooks remain pending. Offline scholarly discovery storage now retains unknowns,
-   registration retry IDs, catalog refresh and explicit work-selection history.
-   PostgreSQL discovery persistence now has session/capability/resource checks and
-   local transaction tests. Production converter orchestration remains pending. Preserve original spelling
-   and selection evidence; add no live database or UI dependency.
-3. Initial mapping integration and bounded pdfplumber extraction implemented;
-   optional PDF extra verifies byte/text digests and emits approximate word geometry.
-   EPUB resource extraction now verifies archive/text digests and retains approximate
-   spine resource mappings without invented CFIs.
-   HTML text-node extraction and pinned native quote retrieval are implemented.
-   Remaining source adapters and geometry support: PDF geometry/quads, EPUB native CFI and browser/multi-node HTML selection mapping;
-   conversion reports declare stream joins, normalization, OCR and fidelity.
-   Validate package revisions/checksums and exact endpoint boundaries.
-4. Offline SQLite working store/history and validated review transitions implemented.
-   Approved JSON snapshot export/import reconciliation and bounded existing USX jmp
-   rendering now preserve IDs with conflict/idempotence tests. Next: agreed
-   whole-document C-USX selector embedding remains pending. Local acknowledgment/
-   withdrawal events and version-checked reopening are now implemented; remaining
-   publication work includes authenticated multi-destination delivery/removal receipts. Offline [Supabase schema and authorization proposal](supabase.md) now defines
-   private tables, server authorization and transaction contracts. A bounded PostgreSQL working-store adapter and local runtime permission/CAS tests
-   are implemented. PostgreSQL conversion-event registration and publication ledger/export adapters
-   now have local atomicity/retry tests. Exact resource grants now protect reads/writes and all retained endpoint evidence.
-   Admin-only entitlement snapshot synchronization and per-operation auth.sessions
-   checks are implemented locally. Production entitlement-provider wiring, HTTP integration,
-   delivery receipts and deployment remain pending and separately scoped.
-5. Extraction: select public naming/version policy, preserve license and fixtures,
-   test standalone install, document adapters and establish a separate release
-   process. Current root release/publish scripts intentionally remain unchanged.
+1. Independent MIT/Pydantic core, stable reference identity, typed selectors,
+   conservative retrieval, bounded Bible detection, scholarly recognizer ports,
+   unknown discoveries and explicit catalog/passage authority.
+2. PDF/EPUB/HTML conversion sidecars and retry-safe persistence; both reader and
+   ingest workflows share reference values, review and retrieval.
+3. Optional pdfplumber and PyMuPDF glyph-quads, crop/rotation transforms, EPUB native
+   CFI ranges and multi-node HTML/browser capture adapters. Unsupported format
+   variants reject explicitly; see [capabilities and limits](production.md).
+4. SQLite and PostgreSQL working history, exact resource grants, admin entitlement
+   synchronization, session/capability checks, discovery management, authenticated
+   opt-in HTTP integration, approved snapshot reconciliation, C-USX range/link
+   insertion and distinct per-destination delivery receipts.
+5. Standalone source export, portable instructions/examples/tests, wheel and sdist
+   builds and clean installed-wheel tests. Root release scripts remain unchanged.
 
-# Integrated walkthrough
-
-The [end-to-end example](end-to-end.md) connects HTML extraction, both creation
-workflows, exact resolution/review, snapshot import/export, idempotent conversion
-retry and withdrawal into inspectable local artifacts. Production parser hooks,
-full C-USX insertion, authoritative catalog/CFI adapters and remote storage/delivery
-remain explicitly staged above.
+[Production composition](production.md) records configuration, API workflows,
+format boundaries and extraction commands. The [walkthrough](end-to-end.md) remains
+an offline executable example. Implementation is complete for the documented
+bounded adapters. Live schema rollout, authoritative production inventory/policy,
+provider transport, broader format variants and any public package release require
+separate operational work; no deployment or external publication was authorized.
 
 # Verification
 

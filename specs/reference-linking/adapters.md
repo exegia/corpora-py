@@ -75,3 +75,10 @@ not inferred. Inserted separators have no original node mapping. Exact mapping
 fidelity is limited to individual text-node correspondence, not CSS rendering or
 cross-node citation bounds. Fixtures cover split inline citations, Unicode,
 entities, repeated text, digest/path/parser failures and partial manual selection.
+
+# Completed native adapters
+
+The subsequent PyMuPDF, native CFI and multi-node/browser HTML implementations
+now cover the staged geometry/offset work described above. Their exact stream,
+coordinate and unsupported-input contracts are in [production composition](production.md).
+Earlier extraction slices remain available and retain their original fidelity.
