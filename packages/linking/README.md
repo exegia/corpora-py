@@ -185,3 +185,13 @@ C-USX embedding is agreed. See [publication contract](../../specs/reference-link
 
 Run `uv run python packages/linking/examples/publication_roundtrip.py` for a local
 export/import roundtrip preserving IDs and requiring new review after import.
+
+## Publication acknowledgment and withdrawal history
+
+The umbrella `PublicationLedger` records local, version-checked acknowledgment
+and withdrawal events atomically with working history. Events pin artifact digests
+and approved versions; retries are idempotent and stale events reject. It performs
+no distribution. Withdrawn references are omitted from its next prepared export;
+removal tombstones preserve older artifact evidence. Explicit reopening requires
+new review. See the [ledger contract](../../specs/reference-linking/publication.md)
+for authority assumptions and the initial single-active-artifact limit.

@@ -28,7 +28,7 @@ class WorkingRevision(Value):
     actor_id: NonEmpty
     reason: NonEmpty
     recorded_at: datetime
-    action: Literal["edit", "resolve", "approve", "reject"]
+    action: Literal["edit", "resolve", "approve", "reject", "publish", "withdraw", "reopen"]
     reference: Reference
     validation: ValidationReport | None = None
     conversion: ConvertedReference | None = None
@@ -38,8 +38,8 @@ class SQLiteReferenceStore:
     """Append-only working revisions with compare-and-swap and audited review.
 
     Use a local file path; caller identity is supplied by the trusted integration.
-    This offline adapter implements no authentication, RLS or publication status
-    changes. Approval is a reviewed working snapshot, not a deployment/export.
+    This offline adapter implements no authentication or RLS. Publication
+    acknowledgments use the separate local ledger. Approval is a reviewed working snapshot, not a deployment/export.
     """
 
     def __init__(self, path: str | Path, *, actor_id: str):
@@ -163,13 +163,24 @@ class SQLiteReferenceStore:
             updated, expected_version=expected_version, reason=reason, action="reject"
         )
 
+    def reopen(self, reference_id: UUID, *, expected_version: int, reason: str) -> int:
+        current = self._current(reference_id, expected_version)
+        if current.publication != "withdrawn":
+            raise ValueError("reopening requires a withdrawn reference")
+        updated = Reference.model_validate(
+            {**current.model_dump(), "review": "pending", "publication": "draft"}
+        )
+        return self._write(
+            updated, expected_version=expected_version, reason=reason, action="reopen"
+        )
+
     def _write(
         self,
         reference: Reference,
         *,
         expected_version: int | None,
         reason: str,
-        action: Literal["edit", "resolve", "approve", "reject"],
+        action: Literal["edit", "resolve", "approve", "reject", "publish", "withdraw", "reopen"],
         validation: ValidationReport | None = None,
         conversion: ConvertedReference | None = None,
     ) -> int:
@@ -193,7 +204,9 @@ class SQLiteReferenceStore:
                 previous = previous_revision.reference
                 if conversion is None and previous.source == reference.source:
                     conversion = previous_revision.conversion
-                if previous.publication != "draft":
+                if previous.publication != "draft" and not (
+                    action == "reopen" and previous.publication == "withdrawn"
+                ):
                     raise ValueError(
                         "published snapshot requires a publication reconciliation adapter"
                     )

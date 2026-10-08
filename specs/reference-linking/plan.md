@@ -27,8 +27,10 @@ type: plan
    Validate package revisions/checksums and exact endpoint boundaries.
 4. Offline SQLite working store/history and validated review transitions implemented.
    Approved JSON snapshot export/import reconciliation and bounded existing USX jmp
-   rendering now preserve IDs with conflict/idempotence tests. Next: publication
-   acknowledgment/withdrawal history and agreed whole-document C-USX selector embedding. Design
+   rendering now preserve IDs with conflict/idempotence tests. Next: agreed
+   whole-document C-USX selector embedding remains pending. Local acknowledgment/
+   withdrawal events and version-checked reopening are now implemented; remaining
+   publication work includes authenticated multi-destination delivery/removal receipts. Design
    Supabase tables/RLS offline, then require separate authorization for deployment.
 5. Extraction: select public naming/version policy, preserve license and fixtures,
    test standalone install, document adapters and establish a separate release

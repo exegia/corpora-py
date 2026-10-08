@@ -66,8 +66,42 @@ unchanged; this helper does not claim complete C-USX or graph conformance.
 
 # Remaining lifecycle work
 
-Publication/withdrawal acknowledgments, distribution history, approved artifact
-removal on withdrawal, import conflict resolution UI, authenticated review and
+Remote delivery/removal receipts, multi-destination distribution history, import conflict resolution UI, authenticated review and
 production database adapters remain pending. Conversion rerun idempotency requires
 explicit event identity; these rules do not invent one from quote text. No live
 Supabase schema or records were changed for this slice.
+
+# Offline acknowledgment and withdrawal ledger
+
+`PublicationLedger(store, authority_id=...)` now atomically appends a publication
+or withdrawal event and the matching working revision in the same local SQLite
+transaction. `acknowledge_snapshot` requires the exact current audited approval,
+a versioned matching snapshot, the configured authority and an explicit event ID.
+It records the artifact byte digest, approved snapshot version, actor/time/reason
+and resulting local version. It does not distribute files or verify remote delivery.
+An acknowledgment is a trusted caller's assertion, not an authenticated receipt.
+
+Retries with the same event ID and command are idempotent even after subsequent
+state changes. Reusing that event ID for different content, actor, authority or
+reason rejects. New events with stale expected versions do not write either
+history. Only one acknowledgment can win a concurrent version check.
+
+`withdraw` requires an acknowledged published reference, preserves its artifact
+and approval-version evidence, and records publication withdrawn without changing
+review/resolution. `export_current(ids)` omits withdrawn references from the next
+prepared snapshot while retaining approved active records and stable IDs.
+`pending_removals()` returns withdrawal tombstones naming old artifacts; distribution
+adapters must actually remove/update artifacts and acknowledge removal separately.
+No old artifact bytes are edited automatically. Earlier exported snapshots remain
+historical immutable evidence, not the current authoritative working state.
+
+Published records cannot be edited or re-reviewed directly. After withdrawal,
+`store.reopen` explicitly creates a pending draft requiring fresh review; prior
+validation and publication history remain available in earlier revisions.
+
+This initial ledger permits one active acknowledged artifact per reference per
+review cycle. Retrying its original event is supported; recording independent
+copies/repackaged artifacts across multiple destinations requires a future
+multi-destination distribution ledger. Prepared exports are not automatically
+acknowledged. Raw payload archive storage, authenticated actors, remote delivery/
+removal receipts and whole-document C-USX embedding remain production work.

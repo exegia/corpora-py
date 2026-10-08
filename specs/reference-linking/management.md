@@ -50,8 +50,8 @@ this store does not make a successful resolver trustworthy by itself.
 # Remaining production integration
 
 The working database remains authoritative; approved C-USX export is a separate
-snapshot operation preserving reference IDs, not a store mutation. The current
-adapter changes no publication status and performs no XML export/import. A future
+snapshot operation preserving reference IDs, not a store mutation. The local ledger records publication acknowledgments/withdrawals; the store
+performs no distribution or full XML export/import. A future
 production adapter needs authenticated actor/ownership checks, RLS, transactional
 compare-and-swap/history writes, conversion-report storage and review permissions.
 It must use the same conflict/validation tests. Deployments remain separately
@@ -62,8 +62,8 @@ and per-reference application. The synchronization contract is: match stable IDs
 versions; identical snapshots are idempotent, conflicting/newer working snapshots
 require reconciliation, and imports never confer approval. Rerun conversion must
 use an explicit event/idempotency identity rather than deduplicating passage text
-or conflating different creators. Publication and withdrawal history and approved
-export/import conformance tests are the next management slice.
+or conflating different creators. Local publication/withdrawal history and approved snapshot reconciliation are
+implemented. Remote distribution receipts and full XML embedding remain future work.
 
 The [runnable review example](../../packages/linking/examples/review_link.py)
 uses separate creator/reviewer adapters against one temporary database. `save`

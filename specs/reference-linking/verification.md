@@ -176,3 +176,21 @@ and the umbrella snapshot roundtrip, preserving IDs and requiring review after
 import. Umbrella smoke provides Pydantic only, not the full app dependency stack.
 Existing Starlette/httpx warning remains. No push, merge, deploy, external
 publication or live database changes; generated snapshots are local fixture data.
+
+# Offline publication acknowledgment and withdrawal follow-up
+
+Added atomic local ledger/working-history updates bound to exact artifact digests,
+current audited versions and explicit event IDs. Retries are idempotent; collisions,
+stale acknowledgments and unsupported transitions reject. Withdrawal retains artifact
+history, next prepared exports omit withdrawn references, and explicit reopening
+requires new review. The initial ledger supports one active artifact per review cycle;
+it records trusted local assertions and performs no distribution/removal itself.
+
+Verification: 968 passed, 34 skipped (106 linking tests), with optional PDF support.
+Ruff and mypy pass (115 source files); graph conformance passes 7 tests/25 fixtures.
+Both wheels build. Fresh isolated installed environments verify core resolution
+and umbrella acknowledgment/withdrawal/reopening with a temporary local database.
+Concurrency and forced event-insert failure fixtures verify atomic CAS and rollback.
+Umbrella smoke provides Pydantic only, not the full app dependency stack. Existing
+Starlette/httpx warning remains. No push, merge, deploy, external publication or
+live database changes; ledger events are local fixture data only.
