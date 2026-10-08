@@ -116,3 +116,14 @@ They verify text selections and preserve ambiguous editions, unavailable snapsho
 and stale-anchor diagnostics. Checksums and catalog/versification authority are
 provider responsibilities; no fuzzy matching or numbering conversion is implied.
 See the package README and resolution example for supported boundaries.
+
+# Conversion integration slice
+
+The opt-in `corpora_py.linking_conversion` seam accepts pinned text plus supplied
+conversion mappings, validates converted anchors, and detects citations into a
+working JSON sidecar. The report retains every input mapping, associates all
+mapping overlaps with detected references, and reports missing, approximate or
+unverified native evidence. Enclosing blocks never imply exact native citation
+bounds. Original identity and geometry/CFI validation remain provider duties.
+This is outside the reusable core and changes no existing TF jobs or C-USX schema.
+Actual extraction adapters, converter hooks and approved XML export remain pending.

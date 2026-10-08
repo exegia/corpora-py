@@ -14,9 +14,10 @@ type: plan
 2. Implemented initial slice: a bounded Bible citation detector with an explicit registry/numbering
    context. Emit unresolved records against fixture text; alias collisions retain all
    hypotheses. Offline catalog and snapshot resolver adapters now cover work-only, ambiguous,
-   unavailable and stale outcomes. Conversion integration remains next. Preserve original spelling
+   unavailable and stale outcomes. Opt-in umbrella conversion sidecars now retain location mappings and validate
+   converted citation anchors. Production converter hooks remain pending. Preserve original spelling
    and selection evidence; add no live database or UI dependency.
-3. Source adapters: PDF geometry/quads, EPUB native CFI and HTML selection mapping;
+3. Initial mapping integration implemented; source adapters remain: PDF geometry/quads, EPUB native CFI and HTML selection mapping;
    conversion reports declare stream joins, normalization, OCR and fidelity.
    Validate package revisions/checksums and exact endpoint boundaries.
 4. Management: versioned working store/history, review transitions and approved

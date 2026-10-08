@@ -77,3 +77,19 @@ passes 7 tests/25 fixtures. Both wheels build. Fresh environments run the resolu
 example through each installed wheel under isolated Python away from the checkout.
 The umbrella check installs without application dependencies, adding Pydantic for
 the linking surface only. No push, merge, deploy, publishing or database changes.
+
+# Conversion mapping integration follow-up
+
+Added opt-in umbrella conversion sidecars with converted stream/anchor validation,
+all input mappings and overlap evidence for detected citations. PDF/EPUB fixtures
+retain native selectors and fidelity without projecting exact native citation bounds.
+Missing evidence remains diagnostic; stale mappings and detector anchors reject.
+This does not hook existing TF jobs or implement C-USX XML serialization.
+
+Verification: 918 passed, 34 skipped (56 linking tests); Ruff and mypy pass (107
+source files); graph conformance passes 7 tests/25 fixtures. Both wheels build.
+Fresh environments import installed packages away from the checkout under isolated
+Python: independent core resolution smoke and umbrella conversion example with
+JSON roundtrip pass. Umbrella smoke provides only Pydantic, not full app dependencies.
+The existing Starlette/httpx warning remains. No push, deploy, merge, publication
+or live database changes.

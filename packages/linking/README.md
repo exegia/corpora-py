@@ -79,3 +79,20 @@ locator per passage; native and combined selectors require future adapters.
 Run the [detection-to-resolution example](examples/resolve_link.py) with
 `uv run python packages/linking/examples/resolve_link.py`. Updating a resolved
 reference preserves its ID and pending review; it does not approve or publish it.
+
+## Corpora conversion integration
+
+`corpora_py.linking_conversion` is an opt-in umbrella integration outside this
+core. Supply a pinned converted `TextSnapshot`, original-to-converted
+`ConversionMapping` records and a detector to `detect_converted_references`.
+It validates converted quotes, scope, revision and stream, then returns a JSON
+sidecar with unchanged references, all conversion mappings and overlapping native
+location evidence. Missing mappings keep the reference with diagnostics.
+
+An enclosing PDF rectangle or EPUB CFI stays block-level evidence. The integration
+does not project citation offsets into exact native bounds, upgrade approximate
+fidelity, approve records or publish XML. Providers validate original assets,
+geometry and CFI and define extraction order/joins. No existing TF conversion job
+is automatically changed; C-USX serialization still needs an agreed adapter.
+Run `uv run python packages/linking/examples/converted_link.py` for a fixture-backed
+EPUB-location example. This example requires the umbrella package.
