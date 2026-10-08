@@ -214,3 +214,13 @@ connects actual HTML extraction, automatic and manual links, verified retrieval,
 review, versioned export/import, conversion retry and withdrawal. It produces
 inspectable JSON/history and local databases using synthetic fixtures; no external
 publication or production conversion job is triggered.
+
+## Scholarly citation intake
+
+Pluggable `ScholarlyCitationRecognizer` implementations supply exact spans and
+bibliographic names. `identify_scholarly_citation` verifies source anchors, retains
+all catalog hypotheses and leaves passage resolution separate. Unknown works remain
+portable `CitationDiscovery` records with stable IDs rather than guessed work IDs.
+Run `uv run python packages/linking/examples/scholarly_link.py` for synthetic intake
+and exact retrieval. See [scholarly intake](../../specs/reference-linking/scholarly.md)
+for the pending recognizer and discovery-storage integrations.

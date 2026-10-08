@@ -16,8 +16,9 @@ type: plan
    hypotheses. Offline catalog and snapshot resolver adapters now cover work-only, ambiguous,
    unavailable and stale outcomes. Opt-in umbrella conversion sidecars now retain location mappings and validate
    converted citation anchors. Atomic conversion-event registration now reuses
-   original IDs on retries and rejects changed event inputs. Production converter
-   hooks remain pending. Preserve original spelling
+   original IDs on retries and rejects changed event inputs. Scholarly recognizer intake now preserves exact spans, unknown discovery records
+   and ambiguous work hypotheses while keeping passage resolution separate. Production converter
+   hooks and scholarly discovery storage remain pending. Preserve original spelling
    and selection evidence; add no live database or UI dependency.
 3. Initial mapping integration and bounded pdfplumber extraction implemented;
    optional PDF extra verifies byte/text digests and emits approximate word geometry.

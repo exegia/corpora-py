@@ -329,3 +329,26 @@ Supabase session documentation was consulted; tests use fixture auth tables, not
 project. No push, merge, deployment or production migration occurred. Session checks
 operate at request start; GoTrue refresh/inactivity/single-session policy evaluation
 and a production verified entitlement provider remain outside this bounded slice.
+
+# Scholarly citation intake follow-up
+
+Added a lightweight scholarly recognizer protocol, exact mention model, portable
+CitationDiscovery records and catalog intake preserving unknown/unavailable/ambiguous
+work outcomes. Identified hypotheses use ordinary unresolved pending References;
+exact passage retrieval remains a separate Resolver operation. No scholarly parser,
+network dependency, guessed work identity or discovery database integration is claimed.
+The synthetic example emits intact unknown/ambiguous records and verifies a mapped
+passage through the existing snapshot resolver.
+
+Verification: 1017 passed, 34 skipped (11 new scholarly tests; 24 real PostgreSQL
+integration tests still pass). New tests cover unknown/ambiguous/unavailable catalog
+outcomes, Unicode spans, stale quote/context/stream/normalization rejection, catalog
+passage-identity contract violations, wire attempts to self-approve/invent hypotheses,
+JSON identity preservation and actual example retrieval. Ruff passes; mypy passes for
+123 files; graph conformance passes seven tests/25 fixtures. Both wheels build.
+Standalone actual-wheel example execution away from checkout passes with Pydantic
+only and no psycopg; umbrella actual-wheel imports pass. Example JSON is available
+at `/tmp/reference-linking-scholarly-demo.json`. The disposable PostgreSQL container
+was removed. Existing Starlette/httpx warning remains. No push, merge, deployment,
+external publication or live database changes occurred. Unknown discovery persistence
+and retry/review integration remain staged explicitly in scholarly.md.

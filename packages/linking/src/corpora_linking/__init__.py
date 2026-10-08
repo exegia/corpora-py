@@ -21,6 +21,10 @@ from .models import (
 )
 
 __all__ = [
+    "CitationDiscovery",
+    "ScholarlyCitationMention",
+    "ScholarlyCitationRecognizer",
+    "identify_scholarly_citation",
     "Catalog",
     "CatalogEntry",
     "PassageEntry",
@@ -52,3 +56,9 @@ __all__ = [
 ]
 
 from .resolution import CatalogEntry, PassageEntry, SnapshotCatalog, SnapshotResolver, TextSnapshot
+from .scholarly import (
+    CitationDiscovery,
+    ScholarlyCitationMention,
+    ScholarlyCitationRecognizer,
+    identify_scholarly_citation,
+)
