@@ -66,12 +66,14 @@ class PostgreSQLConversionEventRegistry:
 
     def get(self, event_id: UUID) -> ConversionEvent | None:
         with psycopg.connect(self.store.dsn) as db:
-            self.store._authorize(db, None)
+            actor = self.store._authorize(db, None)
             row = db.execute(
                 "SELECT record FROM reference_working.conversion_events WHERE space_id = %s AND authority_id = %s AND event_id = %s",
                 (self.store.space_id, _authority(db, self.store), event_id),
             ).fetchone()
-            return ConversionEvent.model_validate(row[0]) if row else None
+            event = ConversionEvent.model_validate(row[0]) if row else None
+            self.store._check_access(db, actor, event)
+            return event
 
     def register(
         self,
@@ -88,6 +90,7 @@ class PostgreSQLConversionEventRegistry:
         try:
             with psycopg.connect(self.store.dsn) as db:
                 actor = self.store._authorize(db, "contribute")
+                self.store._check_access(db, actor, report)
                 authority = _authority(db, self.store)
                 _lock_event(db, self.store, "conversion", event_id)
                 row = db.execute(
@@ -96,6 +99,7 @@ class PostgreSQLConversionEventRegistry:
                 ).fetchone()
                 if row:
                     prior = ConversionEvent.model_validate(row[0])
+                    self.store._check_access(db, actor, prior)
                     if prior.input_digest != digest:
                         raise VersionConflictError(
                             "conversion event identity reused with changed input, detector or output"
@@ -162,26 +166,32 @@ class PostgreSQLPublicationLedger(PublicationLedger):
 
     def history(self, reference_id: UUID) -> tuple[PublicationEvent, ...]:
         with psycopg.connect(self.store.dsn) as db:
-            self.store._authorize(db, None)
+            actor = self.store._authorize(db, None)
             rows = db.execute(
                 "SELECT record FROM reference_working.publication_events WHERE space_id = %s AND reference_id = %s ORDER BY resulting_version",
                 (self.store.space_id, reference_id),
             ).fetchall()
-            return tuple(PublicationEvent.model_validate(row[0]) for row in rows)
+            events = tuple(PublicationEvent.model_validate(row[0]) for row in rows)
+            for event in events:
+                self.store._check_history_access(db, actor, event.reference_id)
+            return events
 
     def pending_removals(self) -> tuple[PublicationEvent, ...]:
         with psycopg.connect(self.store.dsn) as db:
-            self.store._authorize(db, None)
+            actor = self.store._authorize(db, None)
             rows = db.execute(
                 "SELECT record FROM reference_working.publication_events WHERE space_id = %s AND action = 'withdraw' ORDER BY resulting_version, event_id",
                 (self.store.space_id,),
             ).fetchall()
-            return tuple(PublicationEvent.model_validate(row[0]) for row in rows)
+            events = tuple(PublicationEvent.model_validate(row[0]) for row in rows)
+            for event in events:
+                self.store._check_history_access(db, actor, event.reference_id)
+            return events
 
     def export_current(self, reference_ids: Iterable[UUID]) -> bytes:
         with psycopg.connect(self.store.dsn) as db:
             db.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-            self.store._authorize(db, None)
+            actor = self.store._authorize(db, None)
             authority = _authority(db, self.store)
             references, versions = [], {}
             for reference_id in reference_ids:
@@ -192,6 +202,7 @@ class PostgreSQLPublicationLedger(PublicationLedger):
                 if row is None:
                     raise ValueError("working reference not found")
                 latest = self.store._decode(row)
+                self.store._check_access(db, actor, latest)
                 if latest.reference.publication == "withdrawn":
                     continue
                 if latest.action not in ("approve", "publish") or latest.validation is None:
@@ -218,6 +229,7 @@ class PostgreSQLPublicationLedger(PublicationLedger):
             authority = _authority(db, self.store)
             if authority != self.authority_id:
                 raise ValueError("ledger authority changed")
+            self.store._check_history_access(db, actor, reference_id)
             _lock_event(db, self.store, "publication", event_id)
             row = db.execute(
                 "SELECT record FROM reference_working.publication_events WHERE space_id = %s AND authority_id = %s AND event_id = %s",
@@ -236,6 +248,7 @@ class PostgreSQLPublicationLedger(PublicationLedger):
                     raise ValueError("event ID already belongs to another acknowledgment")
                 return event
             current = _current(db, self.store, reference_id)
+            self.store._check_access(db, actor, current)
             if current is None or current.version != expected_version:
                 raise VersionConflictError("working reference changed before acknowledgment")
             if action == "publish":

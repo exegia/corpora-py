@@ -8,6 +8,7 @@ from common.utils.jwt_auth import AuthError, verify_jwt
 from corpora_linking import Reference
 from psycopg.types.json import Jsonb
 
+from .linking_access import endpoint_scope, evidence_endpoints
 from .linking_conversion import ConvertedReference
 from .linking_store import (
     SQLiteReferenceStore,
@@ -62,14 +63,16 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
 
     def history(self, reference_id: UUID) -> tuple[WorkingRevision, ...]:
         with psycopg.connect(self.dsn) as db:
-            self._authorize(db, None)
+            actor = self._authorize(db, None)
             rows = db.execute(
                 "SELECT version, actor_id, recorded_at, reason, action, reference, validation, conversion "
                 "FROM reference_working.revisions WHERE space_id = %s AND reference_id = %s "
                 "ORDER BY version",
                 (self.space_id, reference_id),
             ).fetchall()
-            return tuple(self._decode(row) for row in rows)
+            revisions = tuple(self._decode(row) for row in rows)
+            self._check_access(db, actor, revisions)
+            return revisions
 
     @staticmethod
     def _decode(row: tuple) -> WorkingRevision:
@@ -112,6 +115,7 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
         try:
             with psycopg.connect(self.dsn) as db:
                 actor = self._authorize(db, capability)
+                self._check_access(db, actor, (reference, validation, conversion))
                 row = db.execute(
                     "SELECT current_version FROM reference_working.heads "
                     "WHERE space_id = %s AND reference_id = %s FOR UPDATE",
@@ -131,6 +135,7 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
                     if record is None:
                         raise ValueError("working head has no revision")
                     previous = self._decode(record)
+                    self._check_access(db, actor, previous)
                 revision = prepare_revision(
                     reference,
                     previous_revision=previous,
@@ -140,6 +145,7 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
                     validation=validation,
                     conversion=conversion,
                 )
+                self._check_access(db, actor, revision)
                 if previous is not None and revision.version == previous.version:
                     return revision.version
                 if row is None:
@@ -176,3 +182,27 @@ class PostgreSQLReferenceStore(SQLiteReferenceStore):
                 Jsonb(revision.conversion.model_dump(mode="json")) if revision.conversion else None,
             ),
         )
+
+    def _check_access(self, db: psycopg.Connection, actor: UUID, value: object) -> None:
+        scopes = {
+            endpoint_scope(endpoint)[0]: endpoint_scope(endpoint)[1]
+            for endpoint in evidence_endpoints(value)
+        }
+        for key in sorted(scopes):
+            row = db.execute(
+                "SELECT scope FROM reference_working.resource_access "
+                "WHERE space_id = %s AND user_id = %s AND resource_key = %s FOR SHARE",
+                (self.space_id, actor, key),
+            ).fetchone()
+            if row is None or row[0] != scopes[key]:
+                raise PermissionError("reference resource access required")
+
+    def _check_history_access(
+        self, db: psycopg.Connection, actor: UUID, reference_id: UUID
+    ) -> None:
+        rows = db.execute(
+            "SELECT version, actor_id, recorded_at, reason, action, reference, validation, conversion "
+            "FROM reference_working.revisions WHERE space_id = %s AND reference_id = %s ORDER BY version",
+            (self.space_id, reference_id),
+        ).fetchall()
+        self._check_access(db, actor, tuple(self._decode(row) for row in rows))

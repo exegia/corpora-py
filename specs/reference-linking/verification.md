@@ -282,3 +282,25 @@ installation. Umbrella import verification supplies existing auth/common depende
 not the complete application stack. Existing Starlette/httpx warning remains.
 Disposable loopback PostgreSQL fixtures/container were removed. No production schema,
 Supabase project, remote delivery, push, merge or deployment was modified.
+
+# Exact resource authorization follow-up
+
+PostgreSQL adapters now require explicit per-user exact endpoint-scope grants in
+addition to space capabilities. They check retained history, resolver candidates,
+original/converted mappings and event reports before returning data or committing
+writes; event replays and exports recheck grants. Grant rows remain locked until
+commit so ordinary revocation serializes with authorized operations. No wildcard
+work grants, implicit admin bypass or production entitlement provisioning is added.
+
+Verification: 999 passed, 34 skipped, including 17 real PostgreSQL tests. Six new tests
+cover grant revocation across reads/writes/review/events/export, work grants failing
+to authorize private document versions, denied resolver candidates, separately
+protected original mappings, rollback on denied conversion and grant locking versus
+revocation. Ruff passes; mypy passes for 120 files; graph conformance passes seven
+tests/25 fixtures. Both wheels build and actual-wheel isolated imports away from
+the checkout pass; the core remains independent of psycopg. The umbrella smoke
+checks exact resource scope distinctions with existing auth import dependencies;
+it does not install the full application stack. Existing Starlette/httpx warning
+remains. Disposable local PostgreSQL was removed. No live Supabase project, deployment,
+push, merge or production migration was touched. Production entitlement synchronization,
+JWT session revocation and HTTP integration remain staged.

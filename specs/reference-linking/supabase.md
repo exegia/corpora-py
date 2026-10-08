@@ -30,6 +30,7 @@ as a user's claim to another authority.
 | Table | Responsibility |
 | --- | --- |
 | spaces / memberships | Server-managed boundary and independent capabilities |
+| resource_access | Explicit per-user exact resource scopes; independent of space capabilities |
 | heads | Current version pointer, with a deferred foreign key to its snapshot |
 | revisions | Immutable-by-adapter reference JSON, actor, reason, action, validation and conversion evidence |
 | conversion_events | Explicit authority/event identity, detector revision, canonical fingerprint and original report |
@@ -46,14 +47,14 @@ deletion; membership removal immediately removes future access.
 The schema grants history/event INSERT and head-pointer UPDATE to the server
 role. Membership UPDATE and space authority UPDATE are also required for FOR SHARE row
 locking; the privileged server credential can therefore mutate these values and must
-remain trusted. It does not make logs tamper resistant against database owners, ensure contiguous
+remain trusted. Resource grant rows likewise require server UPDATE privilege for locks. It does not make logs tamper resistant against database owners, ensure contiguous
 versions by itself, or implement transitions without the adapter. Snapshot bytes and
 external delivery/removal receipts are future artifact storage work; the ledger digest
 alone is not proof that C-USX was delivered or removed.
 
 # Authorization contract
 
-Keep `reference_working` outside exposed API schemas. All six tables enable RLS with
+Keep `reference_working` outside exposed API schemas. All seven tables enable RLS with
 no client policies, and schema/table grants deny `anon` and `authenticated` access.
 Read and write requests go through the server adapter; no browser service key, direct
 client mutation, or SECURITY DEFINER RPC is introduced by this proposal.
@@ -71,8 +72,8 @@ all spaces. Space/member creation and removal need a separate privileged adminis
 
 Lock the matching membership rows with FOR SHARE for the transaction, so concurrent
 revocation serializes with the authorized operation. Membership administration must
-use ordinary transactional row mutations. Server checks also reject cross-space IDs
-and unavailable source/target documents. If direct client reads are introduced later,
+use ordinary transactional row mutations. Server checks reject cross-space IDs and resources without explicit access grants.
+A grant is authorization, not proof that the document exists or its anchor resolves. If direct client reads are introduced later,
 add reviewed membership-based SELECT policies and grants, plus tenant-isolation tests;
 do not simply expose this schema.
 
@@ -146,14 +147,14 @@ again for each read/write, derives the UUID subject, and checks database members
 inside each transaction. Do not construct it from untrusted connection/authentication
 configuration. It never creates schemas or provisions memberships. The repository
 JWKS verifier's existing validation behavior applies; immediate session revocation
-and production document-access enforcement still require an application boundary.
+and production grant provisioning still require an application boundary.
 
 Creation, history, get, save, target resolution, approval/rejection and withdrawn-record
 reopening reuse the SQLite adapter's public lifecycle methods and a shared pure revision
 builder. PostgreSQL owns CAS, head locking, membership locking and atomic append.
 The separate event adapters now implement conversion-event registration, publication
-acknowledgment/withdrawal and repeatable-read export. HTTP routes, production document
-access enforcement and connection pooling remain pending. Do not substitute
+acknowledgment/withdrawal and repeatable-read export. HTTP routes, production resource
+grant provisioning and connection pooling remain pending. Do not substitute
 per-reference reads for a coherent production export transaction.
 
 Tests require the optional extra and `LINKING_TEST_POSTGRES_DSN` pointing to an explicitly
@@ -183,3 +184,40 @@ version/digest and leave tombstones for a future delivery adapter. Export reads 
 heads in one repeatable-read transaction and omits withdrawn references. A concurrent
 conflicting transaction may require a caller retry; the adapter does not guess a new
 expected version. The single-active-artifact limitation remains.
+
+# Exact resource access
+
+Every PostgreSQL operation now requires resource grants independently of space
+capabilities, including administrators. `resource_access` keys space, verified user
+and SHA-256 of canonical endpoint scope JSON. The scope includes work, edition,
+package, exact revision and document, preserving null fields. Only locators are
+excluded, so passages in one pinned resource share a grant. Stored JSON must also
+equal the requested scope; matching a hash alone does not authorize another scope.
+Work-only or edition-only grants authorize exactly that scope, never its documents
+or later versions. No implicit public-work or wildcard access exists.
+
+Reads check all endpoints before returning typed data. Working history checks every
+revision, including old sources/targets and resolver candidates. Writes check both
+previous and replacement snapshots and retained validation/conversion evidence.
+Original-file mappings require their own grant as well as converted text. Conversion
+event reads/retries check the whole saved report, including empty reports' source
+snapshot. Ledger reads/replays check associated working history; exports check all
+evidence in the exported current revision, including withdrawn entries before
+omission. Any denied resource rejects the operation; no partial quotes, candidates
+or snapshot are returned. A caller needs grants for old evidence to read history,
+even if the current reference now points elsewhere.
+
+Grant rows lock FOR SHARE until transaction end, serializing revocation through
+ordinary row deletion/update. This does not retract data already returned to an
+authorized caller. PostgreSQL can abort concurrent operations with deadlock or
+serialization errors; callers may retry the same operation and expected version,
+never silently advance CAS. Administrative credentials remain trusted.
+
+The adapter does not provision or infer grants. A future application boundary must
+map Corpora's corpus/document entitlements to these exact scopes using a trusted
+inventory, and must provision original and converted scopes explicitly. Unresolved
+cited works require their own work-scope grant; approval exceptions cannot bypass
+authorization. Deleting a document does not automatically invalidate a grant; inventory
+availability and exact resolver verification remain distinct responsibilities. JWT
+session revocation, entitlement synchronization and HTTP wiring remain staged. No
+production account model or live database has been changed.

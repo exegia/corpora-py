@@ -35,8 +35,9 @@ type: plan
    publication work includes authenticated multi-destination delivery/removal receipts. Offline [Supabase schema and authorization proposal](supabase.md) now defines
    private tables, server authorization and transaction contracts. A bounded PostgreSQL working-store adapter and local runtime permission/CAS tests
    are implemented. PostgreSQL conversion-event registration and publication ledger/export adapters
-   now have local atomicity/retry tests. Production document authorization, HTTP
-   integration, delivery receipts and deployment remain pending and separately scoped.
+   now have local atomicity/retry tests. Exact resource grants now protect reads/writes and all retained endpoint evidence.
+   Production entitlement/grant provisioning, session revocation, HTTP integration,
+   delivery receipts and deployment remain pending and separately scoped.
 5. Extraction: select public naming/version policy, preserve license and fixtures,
    test standalone install, document adapters and establish a separate release
    process. Current root release/publish scripts intentionally remain unchanged.

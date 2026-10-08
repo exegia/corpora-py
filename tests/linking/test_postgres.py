@@ -36,7 +36,7 @@ def database():
 
 
 @pytest.fixture
-def stores(database, monkeypatch):
+def stores(database, monkeypatch, tmp_path):
     space, other_space, creator, reviewer = (uuid4() for _ in range(4))
     with psycopg.connect(database) as db:
         db.execute("INSERT INTO auth.users VALUES (%s), (%s)", (creator, reviewer))
@@ -48,6 +48,27 @@ def stores(database, monkeypatch):
             "INSERT INTO reference_working.memberships VALUES (%s, %s, 'contribute'), (%s, %s, 'review')",
             (space, creator, space, reviewer),
         )
+    from psycopg.types.json import Jsonb
+    from test_events import fixture as event_fixture
+
+    from corpora_py.linking_access import endpoint_scope, evidence_endpoints
+
+    _, ref, resolver = reference_fixture(tmp_path)
+    _, _, conversion, detector = event_fixture(tmp_path)
+    from corpora_py.linking_events import prepare_conversion
+
+    report, _ = prepare_conversion(conversion, detector, detector_revision="1", reason="fixture")
+    scopes = {
+        endpoint_scope(e)[0]: endpoint_scope(e)[1]
+        for e in evidence_endpoints((ref, resolver.snapshots, report))
+    }
+    with psycopg.connect(database) as db:
+        for actor in (creator, reviewer):
+            for key, scope in scopes.items():
+                db.execute(
+                    "INSERT INTO reference_working.resource_access VALUES (%s, %s, %s, %s)",
+                    (space, actor, key, Jsonb(scope)),
+                )
     subjects = {"creator": creator, "reviewer": reviewer}
 
     def verify(token, **kwargs):
@@ -348,3 +369,160 @@ def test_publication_event_failure_rolls_back_working_state(stores, database, tm
             db.execute(
                 "ALTER TABLE reference_working.publication_events DROP CONSTRAINT fixture_publication_failure"
             )
+
+
+def revoke_resource(database, space, actor, endpoint):
+    from corpora_py.linking_access import endpoint_scope
+
+    with psycopg.connect(database) as db:
+        db.execute(
+            "DELETE FROM reference_working.resource_access WHERE space_id = %s AND user_id = %s AND resource_key = %s",
+            (space, actor, endpoint_scope(endpoint)[0]),
+        )
+
+
+def test_resource_revocation_blocks_history_writes_and_review(stores, database, tmp_path):
+    factory, space, _, creator, subjects = stores
+    _, ref, resolver = reference_fixture(tmp_path)
+    factory().save(ref, expected_version=None)
+    revoke_resource(database, space, creator, ref.source)
+    with pytest.raises(PermissionError, match="resource access"):
+        factory().history(ref.id)
+    with pytest.raises(PermissionError, match="resource access"):
+        factory().save(ref, expected_version=1)
+    revoke_resource(database, space, subjects["reviewer"], ref.target)
+    with pytest.raises(PermissionError, match="resource access"):
+        factory("reviewer").approve(ref.id, expected_version=1, resolver=resolver, reason="denied")
+    with psycopg.connect(database) as db:
+        assert (
+            db.execute(
+                "SELECT count(*) FROM reference_working.revisions WHERE space_id = %s", (space,)
+            ).fetchone()[0]
+            == 1
+        )
+
+
+def test_work_grant_does_not_allow_other_document_versions_or_resolver_candidates(stores, tmp_path):
+    from corpora_linking import Endpoint, ResolutionResult
+
+    factory, _, _, _, _ = stores
+    _, ref, resolver = reference_fixture(tmp_path)
+    hidden = Endpoint(
+        work_id="book", edition_id="e", package_id="secret", revision="2", document_id="private"
+    )
+    with pytest.raises(PermissionError):
+        factory().save(ref.model_copy(update={"target": hidden}), expected_version=None)
+    factory().save(ref, expected_version=None)
+
+    class HiddenResolver:
+        def resolve(self, endpoint):
+            if endpoint == ref.target:
+                return ResolutionResult(status="resolved", candidates=(hidden,))
+            return resolver.resolve(endpoint)
+
+    with pytest.raises(PermissionError):
+        factory().resolve_target(
+            ref.id, expected_version=1, resolver=HiddenResolver(), reason="denied candidate"
+        )
+    assert len(factory().history(ref.id)) == 1
+
+
+def test_conversion_original_mapping_requires_its_own_access(stores, database):
+    from psycopg.types.json import Jsonb
+    from test_conversion import fixture as conversion_fixture
+
+    from corpora_py.linking_access import endpoint_scope
+    from corpora_py.linking_conversion import ConversionInput
+    from corpora_py.linking_postgres_events import PostgreSQLConversionEventRegistry
+
+    factory, space, _, creator, _ = stores
+    snapshot, mapping, detector = conversion_fixture()
+    key, scope = endpoint_scope(snapshot.endpoint)
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.resource_access VALUES (%s, %s, %s, %s)",
+            (space, creator, key, Jsonb(scope)),
+        )
+    registry = PostgreSQLConversionEventRegistry(factory())
+    with pytest.raises(PermissionError):
+        registry.register(
+            ConversionInput(converted=snapshot, mappings=(mapping,)),
+            detector,
+            event_id=uuid4(),
+            detector_revision="1",
+            reason="denied original",
+        )
+    with psycopg.connect(database) as db:
+        assert (
+            db.execute(
+                "SELECT count(*) FROM reference_working.heads WHERE space_id = %s", (space,)
+            ).fetchone()[0]
+            == 0
+        )
+
+
+def test_resource_revocation_blocks_conversion_get_and_retry(stores, database, tmp_path):
+    from test_events import fixture as event_fixture
+
+    from corpora_py.linking_postgres_events import PostgreSQLConversionEventRegistry
+
+    factory, space, _, creator, _ = stores
+    _, _, conversion, detector = event_fixture(tmp_path)
+    registry = PostgreSQLConversionEventRegistry(factory())
+    event_id = uuid4()
+    registry.register(
+        conversion, detector, event_id=event_id, detector_revision="1", reason="conversion"
+    )
+    revoke_resource(database, space, creator, conversion.converted.endpoint)
+    with pytest.raises(PermissionError):
+        registry.get(event_id)
+    with pytest.raises(PermissionError):
+        registry.register(
+            conversion, detector, event_id=event_id, detector_revision="1", reason="retry"
+        )
+
+
+def test_resource_revocation_blocks_publication_export_and_event_replay(stores, database, tmp_path):
+    from corpora_py.linking_postgres_events import PostgreSQLPublicationLedger
+
+    factory, space, _, creator, _ = stores
+    _, ref, resolver = reference_fixture(tmp_path)
+    factory().save(ref, expected_version=None)
+    factory("reviewer").approve(ref.id, expected_version=1, resolver=resolver, reason="verified")
+    with psycopg.connect(database) as db:
+        db.execute(
+            "INSERT INTO reference_working.memberships VALUES (%s, %s, 'publish')", (space, creator)
+        )
+    ledger = PostgreSQLPublicationLedger(factory())
+    payload = ledger.export_current([ref.id])
+    event_id = uuid4()
+    ledger.acknowledge_snapshot(
+        payload, ref.id, event_id=event_id, expected_version=2, reason="ack"
+    )
+    revoke_resource(database, space, creator, ref.source)
+    for operation in (
+        lambda: ledger.export_current([ref.id]),
+        lambda: ledger.history(ref.id),
+        lambda: ledger.acknowledge_snapshot(
+            payload, ref.id, event_id=event_id, expected_version=2, reason="ack"
+        ),
+        lambda: ledger.withdraw(ref.id, event_id=uuid4(), expected_version=3, reason="denied"),
+    ):
+        with pytest.raises(PermissionError):
+            operation()
+
+
+def test_resource_lock_serializes_revocation(stores, database, tmp_path):
+    factory, space, _, creator, _ = stores
+    _, ref, _ = reference_fixture(tmp_path)
+    with psycopg.connect(database) as authorized:
+        authorized.execute("SET ROLE service_role")
+        actor = factory()._authorize(authorized, "contribute")
+        factory()._check_access(authorized, actor, ref)
+        with psycopg.connect(database) as revoker:
+            revoker.execute("SET LOCAL lock_timeout = '100ms'")
+            with pytest.raises(psycopg.errors.LockNotAvailable):
+                revoker.execute(
+                    "DELETE FROM reference_working.resource_access WHERE space_id = %s AND user_id = %s",
+                    (space, creator),
+                )

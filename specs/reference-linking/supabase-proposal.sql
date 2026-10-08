@@ -17,6 +17,14 @@ CREATE TABLE reference_working.memberships (
 );
 CREATE INDEX memberships_user_space ON reference_working.memberships(user_id, space_id);
 
+-- Explicit exact-resource read grants. No wildcard or admin bypass.
+CREATE TABLE reference_working.resource_access (
+    space_id uuid NOT NULL REFERENCES reference_working.spaces(id),
+    user_id uuid NOT NULL REFERENCES auth.users(id),
+    resource_key text NOT NULL CHECK (resource_key ~ '^[0-9a-f]{64}$'),
+    scope jsonb NOT NULL CHECK (jsonb_typeof(scope) = 'object'),
+    PRIMARY KEY (space_id, user_id, resource_key)
+);
 CREATE TABLE reference_working.heads (
     space_id uuid NOT NULL REFERENCES reference_working.spaces(id),
     reference_id uuid NOT NULL,
@@ -88,6 +96,7 @@ CREATE TABLE reference_working.publication_events (
 );
 
 -- Deny client access, including accidental future schema exposure. No RPCs yet.
+ALTER TABLE reference_working.resource_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.spaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reference_working.heads ENABLE ROW LEVEL SECURITY;
@@ -103,6 +112,8 @@ GRANT UPDATE (current_version) ON reference_working.heads TO service_role;
 -- PostgreSQL row locks require UPDATE privilege; server credential can mutate
 -- membership rows and must remain trusted. No client membership API is provided.
 GRANT UPDATE ON reference_working.memberships TO service_role;
+-- Locking grant rows requires UPDATE privilege; provisioning is server administration.
+GRANT UPDATE ON reference_working.resource_access TO service_role;
 -- Row locking also freezes authority while recording/exporting events.
 GRANT UPDATE (authority_id) ON reference_working.spaces TO service_role;
 -- Space/member creation and removal have no service-role grant here.
