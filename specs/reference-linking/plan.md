@@ -32,8 +32,9 @@ type: plan
    rendering now preserve IDs with conflict/idempotence tests. Next: agreed
    whole-document C-USX selector embedding remains pending. Local acknowledgment/
    withdrawal events and version-checked reopening are now implemented; remaining
-   publication work includes authenticated multi-destination delivery/removal receipts. Design
-   Supabase tables/RLS offline, then require separate authorization for deployment.
+   publication work includes authenticated multi-destination delivery/removal receipts. Offline [Supabase schema and authorization proposal](supabase.md) now defines
+   private tables, server authorization and transaction contracts. The PostgreSQL adapter,
+   runtime permission tests and deployment remain pending and separately scoped.
 5. Extraction: select public naming/version policy, preserve license and fixtures,
    test standalone install, document adapters and establish a separate release
    process. Current root release/publish scripts intentionally remain unchanged.

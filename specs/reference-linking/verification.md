@@ -229,3 +229,14 @@ BeautifulSoup only. Output artifacts are available locally at
 `/tmp/reference-linking-end-to-end-demo` and
 `/tmp/reference-linking-installed-end-to-end-demo`. Existing Starlette/httpx warning
 remains. No push, merge, deploy, external publication or live database modifications.
+
+# Offline Supabase proposal follow-up
+
+Added private-schema SQL and authorization/transaction contracts matching the local
+working store, conversion registry and publication ledger. PostgreSQL syntax parsing
+with `pglast` succeeds for all 23 statements; `git diff --check` passes. The SQL is
+outside migration directories and was not executed. Runtime constraint/RLS tests
+and a production adapter remain pending. Public Supabase documentation was consulted;
+the changelog endpoint returned HTTP 403. No live project access or modification,
+push or deployment occurred. Library code and dependency lockfile are unchanged;
+previous wheel and application test results remain applicable.

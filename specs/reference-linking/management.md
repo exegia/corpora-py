@@ -70,3 +70,6 @@ uses separate creator/reviewer adapters against one temporary database. `save`
 validates model structure, not external source/target truth; authority comes from
 resolver evidence recorded during explicit resolution and approval. Production
 clients must not treat unreviewed asserted resolution fields as validation proof.
+
+The [offline Supabase proposal](supabase.md) specifies private storage and server-side
+authorization/transaction contracts. Its SQL is a design artifact, not an applied migration.
