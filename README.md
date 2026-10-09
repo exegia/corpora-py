@@ -238,5 +238,5 @@ works, ambiguous passages and stale anchors. Its only runtime dependency is Pyda
 Optional umbrella adapters cover PDF, EPUB CFI, HTML/browser ranges, C-USX publication
 and authenticated working-reference management. See [application composition and
 limits](specs/reference-linking/production.md). Linking is disabled by default; its
-database schema remains an unapplied proposal. A standalone source exporter supports
-independent wheel/sdist builds without adding publication automation.
+database schema remains an unapplied proposal. The core is installed from PyPI;
+its independent repository owns core source, builds and publication.

@@ -427,3 +427,23 @@ remains. See [production capabilities/limits](production.md) for unsupported for
 variants and real inventory/policy/provider configuration required before rollout.
 No push, merge, deployment, PyPI publication, remote delivery or live Supabase
 modification occurred. The disposable database container was removed after checks.
+
+## Published-core dependency migration
+
+The integration branch consumes corpora-linking>=0.1.0,<0.2 from PyPI, removes
+the duplicate source/workspace package and standalone exporter, and preserves
+the existing graph and TF contracts. The core import is in site-packages, with
+only corpora-linking owning that namespace. Local umbrella version 5.0.0 is a
+dev-lane verification artifact; a real release must use a new version.
+
+- Ruff and mypy: passed (128 source files).
+- Full suite: 1,013 passed, 68 skipped.
+- Disposable loopback PostgreSQL reference suite: all 35 tests passed.
+- Wheel and sdist: built; no corpora_linking files in umbrella wheel.
+- Fresh installed umbrella/CLI wheels with PyPI core: 93 portable tests passed.
+- Installed app imports; uninstalling/reinstalling umbrella retains the core.
+- CLI: all 67 tests and lint/format pass with PyPI core, without skipped core tests.
+
+No live database schema/grants, production deployment or announcement was made.
+The proposed DDL stays outside migrations. Homebrew audit/install/test requires
+the tap's macOS CI because brew is unavailable locally.
