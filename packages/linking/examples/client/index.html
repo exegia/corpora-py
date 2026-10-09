@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference linking playground</title>
+<style>
+body{font:17px/1.5 system-ui,sans-serif;background:#f4f6f8;color:#172331;margin:0}main{max-width:840px;margin:36px auto;padding:24px}h1{font-size:32px;margin-bottom:4px}section{background:white;border:1px solid #d7dfe6;border-radius:12px;padding:22px;margin:20px 0}label{display:block;font-weight:600;margin-bottom:8px}textarea{box-sizing:border-box;width:100%;min-height:110px;font:18px/1.6 system-ui;padding:12px;border:1px solid #8191a0;border-radius:6px}button,select{font:inherit;padding:9px 14px;border:1px solid #667b90;border-radius:6px;background:white;cursor:pointer;margin:6px 6px 6px 0}button.primary{background:#214f7c;color:white}button:disabled{opacity:.45;cursor:default}output{display:block;white-space:pre-wrap;padding:12px;background:#edf3f8;border-radius:6px;min-height:26px}small{color:#4b5e70}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.row label{margin:0}#status{font-weight:600}pre{font:13px/1.5 monospace;overflow:auto}a{color:#214f7c}
+</style>
+</head>
+<body><main>
+<small>LOCAL TEST • Sample documents • Temporary storage</small>
+<h1>Link two passages</h1>
+<p>Select words in each box. Save the link. Open its destination.</p>
+<section><h2>1. Pick both ends</h2>
+<label for="source">From these words</label><textarea id="source" readonly></textarea>
+<label for="target">To these words</label><textarea id="target" readonly></textarea>
+<button id="sample">Select the example passages</button><button id="preview">Preview selections</button>
+<output id="previewText" aria-live="polite">Your selected words will appear here.</output>
+</section>
+<section><h2>2. Save and open</h2>
+<button id="save" class="primary">Save link</button><button id="open" disabled>Open destination</button>
+<output id="destination" aria-live="polite">No destination opened yet.</output>
+<p id="status" role="status">Choose your passages above.</p>
+<small id="states">Resolution: — · Review: — · Publication: —</small>
+</section>
+<section><h2>3. Try the checks</h2>
+<div class="row"><label for="actor">Demo role</label><select id="actor"><option value="demo-reader">Reader</option><option value="demo-reviewer">Reviewer</option></select></div>
+<button id="approve" disabled>Approve link</button><button id="stale" disabled>Test stale selection</button>
+<p><small>Reader approval should fail. Reviewer approval should succeed. A changed version must reject retrieval.</small></p>
+<details><summary>See the saved reference</summary><pre id="record">Save a link first.</pre></details>
+</section>
+<p><small>This page uses the real Python linking models, resolver and SQLite history. Demo roles are synthetic and are not production sign-in. Restarting the server clears all demo links.</small></p>
+</main><script type="module" src="./app.js"></script></body></html>

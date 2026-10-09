@@ -16,8 +16,8 @@ and publish automatic and manual links, retaining them in CUSX and Supabase.
 Paragraph IDs are optional, never prerequisites for a selection.
 
 This scoped scaffold starts implementation without asserting production
-conversion, detection or management support. [Package code](../../packages/linking/src/corpora_linking/models.py)
-implements transport-neutral values; [ports](../../packages/linking/src/corpora_linking/interfaces.py)
+conversion, detection or management support. [Package code](https://github.com/exegia/corpora-linking/blob/v0.1.0/src/corpora_linking/models.py)
+implements transport-neutral values; [ports](https://github.com/exegia/corpora-linking/blob/v0.1.0/src/corpora_linking/interfaces.py)
 define future adapters. The [TF seam](../../src/corpora_py/linking.py) validates
 existing pinned requests, but does not resolve or convert them into CUSX IDs.
 
@@ -36,7 +36,8 @@ identity and revision mappings, never equate package IDs and bundle IDs by spell
 Core UUID reference IDs must serialize as persistent `urn:uuid:` identifiers in
 a future graph adapter. Namespaced unknown graph extensions need explicit,
 lossless adapter support before claiming graph conformance; core v0.1 deliberately
-rejects unknown fields. No new CUSX XML grammar is established here.
+rejects unknown fields. The implemented umbrella adapter uses those existing CUSX boundary/jmp forms;
+see [production composition](production.md) for capabilities and limits.
 
 # Requirements and implemented constraints
 
@@ -56,13 +57,18 @@ rejects unknown fields. No new CUSX XML grammar is established here.
   Browser UTF-16 offsets must be translated before constructing locators.
 - PDF selections retain an asset, 1-based page and one or more rectangles in
   unrotated CropBox-relative top-left points. Crop/rotation transforms and page
-  bounds are adapter responsibilities. Quads and discontiguous multi-page
-  selections are staged, not implicitly approximated by a single rectangle.
-- EPUB selections retain asset, resource href and opaque native CFI. CFI syntax,
+  bounds are adapter responsibilities. Typed convex quads and ordered multi-page fragments are supported by the optional
+  PyMuPDF adapter, never implicitly approximated by one enclosing rectangle.
+- EPUB selections retain asset, resource href and opaque native CFI.
+  Resource-only evidence uses a separate epub-resource locator without a fabricated CFI. CFI syntax,
   resource existence and native offset conversion are adapter responsibilities.
+- HTML text-node selectors retain asset, parser convention/runtime version, child
+  path and a node-scoped text locator. Paths require no element IDs; browser DOM
+  and UTF-16 offsets need an explicit adapter translation.
 - Structural anchors and citation requests are optional typed locators. A canonical
   citation retains profile, scheme ID/version and optional reading; display text
-  is never exact-location authority. This core does not parse citation grammar.
+  is never exact-location authority. The bounded Bible detector recognizes explicit alias chapter:verse ranges;
+  catalog validation and exact passage resolution remain external.
 - Explicit conversion mappings preserve original and converted endpoints,
   method and exact/approximate/unverified fidelity. Approximate OCR or layout
   mappings never authorize exact target claims.
@@ -71,7 +77,7 @@ rejects unknown fields. No new CUSX XML grammar is established here.
   Ambiguity is represented by resolver results with multiple candidates.
   Vector search is optional discovery and never exact-location authority.
 
-# Proposed lifecycle and synchronization (not implemented)
+# Working lifecycle and proposed publication synchronization
 
 Supabase will be authoritative for working records and append-only lifecycle
 history with actor, time, reason and optimistic version checks. A future adapter
@@ -103,3 +109,32 @@ define discontinuous and multi-page selection representations and PDF transforms
 then design Supabase tables/history/RLS and XML snapshot conflict rules. None is
 a prerequisite for the scaffold. PyMuPDF/pdfplumber/EbookLib are candidate adapters,
 not new mandatory dependencies. See [plan](plan.md) for the next slice.
+
+See [adapter investigation](adapters.md) for source-library and CFI constraints.
+
+# Offline resolution slice
+
+The public Catalog port separates identifying a work from resolving its passage.
+SnapshotCatalog and SnapshotResolver provide dependency-light offline adapters,
+with caller-authoritative names, exact citation-context mappings and pinned text.
+They verify text selections and preserve ambiguous editions, unavailable snapshots
+and stale-anchor diagnostics. Checksums and catalog/versification authority are
+provider responsibilities; no fuzzy matching or numbering conversion is implied.
+See the package README and resolution example for supported boundaries.
+
+# Conversion integration slice
+
+The opt-in `corpora_py.linking_conversion` seam accepts pinned text plus supplied
+conversion mappings, validates converted anchors, and detects citations into a
+working JSON sidecar. The report retains every input mapping, associates all
+mapping overlaps with detected references, and reports missing, approximate or
+unverified native evidence. Enclosing blocks never imply exact native citation
+bounds. Original identity and geometry/CFI validation remain provider duties.
+This is outside the reusable core and changes no existing TF jobs or C-USX schema.
+Actual extraction adapters, converter hooks and approved XML export remain pending.
+
+The [offline management adapter](management.md) now implements versioned local
+storage, audited resolution and validated review. Local publication acknowledgments/withdrawals now have atomic audit history.
+Production storage, remote distribution receipts and full C-USX document
+synchronization remain pending. Approved JSON snapshot sidecars and conservative
+ID reconciliation are implemented in the [publication adapter](publication.md).
