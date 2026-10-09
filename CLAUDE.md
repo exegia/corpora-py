@@ -28,7 +28,6 @@ make help
 uv build --package corpora-common --wheel --out-dir dist/
 uv build --package corpora-mcp    --wheel --out-dir dist/
 uv build --package corpora-admin  --wheel --out-dir dist/
-uv build --package corpora-linking --wheel --out-dir dist/
 
 # Build all workspace wheels at once into dist/
 make build-wheel
@@ -174,14 +173,15 @@ vercel deploy --prod   # manual production deploy
 ## Architecture
 
 This is a **uv workspace** of independently buildable Python packages plus an umbrella package.
-The new linking core has an independent version; the root wheel remains the only automated PyPI publication:
+The linking core is independently published from exegia/corpora-linking; this
+repository publishes the umbrella distribution:
 
 | Package  | PyPI name        | Source                          | Purpose                                                                                 |
 |----------|------------------|---------------------------------|-----------------------------------------------------------------------------------------|
 | Common   | `corpora-common` | `packages/common/src/common/`   | Settings, logging, shared utilities                                                     |
 | MCP      | `corpora-mcp`    | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI                                                           |
 | Admin    | `corpora-admin`  | `packages/admin/src/admin/`     | EPUB/HTML/PDF/TEI → Text-Fabric converters + conversion HTTP API                        |
-| Linking | `corpora-linking` | `packages/linking/src/corpora_linking/` | Isolated reference/selection values and adapter ports |
+| Linking | `corpora-linking` | `exegia/corpora-linking` (PyPI dependency) | Isolated reference/selection values and adapter ports |
 | Umbrella | `corpora-py`     | `src/corpora_py/`               | Depends on all three; combined FastAPI app (`corpora-api` CLI); used by sidecar/example |
 
 - **Install everything** (dev / example / sidecar): `uv sync` or install `corpora-py`
@@ -454,8 +454,10 @@ bunx shadcn@latest add <component-name>     # not `shadcn-ui`, which is the old 
 
 ## Reference linking scaffold
 
-`packages/linking` is the isolated `corpora-linking` core, bundled in the root
-wheel and independently buildable. Read its [agent instructions](packages/linking/AGENTS.md)
+`corpora-linking>=0.1.0,<0.2` is installed from PyPI and maintained in
+[exegia/corpora-linking](https://github.com/exegia/corpora-linking).
+`packages/linking` keeps Corpora-specific examples and integration guidance;
+the root wheel never bundles the core namespace. Read its [agent instructions](packages/linking/AGENTS.md)
 and [implementation specification](specs/reference-linking/spec.md). Detection,
 CUSX/Supabase adapters and management UI remain staged. It does not replace the
 v0.4 corpus-document contract or the scoped CUSX reference proposal.
