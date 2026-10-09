@@ -1,0 +1,50 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+version: 1
+
+site:
+  title: corpora-py
+  structure:
+    - type: section
+      key: section-documentation
+      title: Documentation
+      path: documentation
+      default: true
+      children:
+        - type: space
+          key: space-architecture
+          title: Architecture
+          path: architecture
+          default: true
+          content:
+            directory: ./docs/architecture
+        - type: space
+          key: space-lessons
+          title: Lessons
+          path: lessons
+          content:
+            directory: ./docs/lessons
+
+    - type: section
+      key: section-developer-guides
+      title: Developer Guides
+      path: developers
+      children:
+        - type: space
+          key: space-corpora-admin
+          title: corpora-admin
+          path: corpora-admin
+          default: true
+          content:
+            directory: ./packages/admin
+        - type: space
+          key: space-example
+          title: Corpora Example App
+          path: example
+          content:
+            directory: ./example
+        - type: space
+          key: space-tf-reference-id
+          title: Text-Fabric reference identifiers
+          path: tf-reference-id
+          content:
+            directory: ./skills/tf-reference-id
