@@ -24,8 +24,10 @@ performed as part of this investigation.
 - The tap installs its own CLI-tag tarball from Formula/cli.rb; pip resolves
   `corpora-py>=2.2.0`. The formula currently points at v1.2.1, while the inspected
   dev lane is the released v2.1.0 tree. That existing formula lag is separate from
-  this unreleased linking feature. Do not replace its checksum without validating
-  the intended release tarball and triggering the agreed release process.
+  this unreleased linking feature. A separate local fix/cli-formula-v2-1-0 worktree
+  now points at the real v2.1.0 tarball after verifying its VERSION and SHA-256
+  df5d9a0fb21689fe5f3e823c66db195eff6a1e78977a590ec3d73e6ce87bdae3.
+  It is prepared for review, not pushed or applied to the public tap.
 - PyPI's latest corpora-py is 5.0.0. Inspecting that actual wheel shows no
   `corpora_linking` package and no `corpora_py/linking_api.py`. The local feature
   wheel also labels itself 5.0.0, so version equality does not prove availability.
@@ -171,3 +173,15 @@ Draft, contingent on that release:
 - [react-py API and worker lifecycle](https://elilambnz.github.io/react-py/docs/introduction/api-reference)
 - [react-py project](https://github.com/elilambnz/react-py)
 - [Core extraction and current production integration](production.md)
+
+# Local verification
+
+The Homebrew CLI feature branch passes all 67 Python tests, including nine
+reference command tests. Ruff lint/format checks pass; the CLI wheel builds and
+its installed code retrieves the exact selection and rejects a changed revision
+when executed away from checkout with the local linking-enabled dependencies.
+The real v2.1.0 release tarball and its VERSION/checksum were verified for the
+separate formula fix. Homebrew/macOS audit and install tests could not run because
+brew and Ruby are unavailable in this workspace. The corpora-py repository's
+Ruff/mypy checks pass; no corpora-web application code was modified during this
+investigation. No release, announcement, deployment or remote write occurred.
