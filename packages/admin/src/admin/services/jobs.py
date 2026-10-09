@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Literal
 
 from common.utils.config import settings
 
@@ -83,7 +83,7 @@ def snapshot_label(label: str) -> str | None:
     return None
 
 
-def snapshot_key_for(job_id: str, label: str) -> str | None:
+def snapshot_key_for(job_id: str, label: str, suffix: str = ".corpus") -> str | None:
     """Object key ``conversion-jobs/{job_id}/{label}.corpus``, or ``None``.
 
     Extra labels (v1.1, …) are for later mutation bumps (#149); convert
@@ -95,7 +95,9 @@ def snapshot_key_for(job_id: str, label: str) -> str | None:
         return None
     if not job_id or "/" in job_id or ".." in job_id or "\\" in job_id:
         return None
-    return f"conversion-jobs/{job_id}/{safe}.corpus"
+    if suffix not in (".corpus", ".cusx"):
+        return None
+    return f"conversion-jobs/{job_id}/{safe}{suffix}"
 
 
 def _slugify(name: str) -> str:
@@ -113,6 +115,7 @@ def result_filename_for(
     source_format: SourceFormat | str,
     *,
     job_id: str = "",
+    output_format: Literal["corpus", "cusx"] = "corpus",
 ) -> str:
     """The human-readable filename a client should store the result under.
 
@@ -124,9 +127,11 @@ def result_filename_for(
     `Content-Disposition` -- so a client that stores only this filename
     never persists the original source file as the library object.
     """
+    if output_format not in ("corpus", "cusx"):
+        raise ValueError("unsupported output format")
     slug = _slugify(name) or _slugify(job_id) or job_id
     if isinstance(source_format, SourceFormat):
-        return f"{slug}{_CORPUS_SUFFIX}"
+        return f"{slug}.{output_format}"
     return f"{slug}{_GRAPH_SUFFIX}"
 
 
@@ -253,7 +258,7 @@ class LocalResultStore(ResultStore):
         return None
 
     def save_snapshot(self, job_id: str, path: Path, label: str) -> str | None:
-        key = snapshot_key_for(job_id, label)
+        key = snapshot_key_for(job_id, label, path.suffix)
         if key is None:
             return None
         src = Path(path)
@@ -384,6 +389,9 @@ class ConversionJob:
                 self.display_name or self.name,
                 self.source_format,
                 job_id=self.id,
+                output_format="cusx"
+                if (self.result_key or "").endswith(".cusx")
+                else "corpus",
             )
         return {
             "id": self.id,
@@ -853,7 +861,11 @@ class JobManager:
                 if job.result_path is not None:
                     Path(job.result_path).unlink(missing_ok=True)
                 self._store.delete(job.id)
-                logger.debug("Reaped expired job %s (finished %.0fs ago)", job.id, now - job.finished_at)
+                logger.debug(
+                    "Reaped expired job %s (finished %.0fs ago)",
+                    job.id,
+                    now - job.finished_at,
+                )
 
     def shutdown(self, *, wait: bool = False) -> None:
         """Best-effort shutdown for use from an app lifespan.

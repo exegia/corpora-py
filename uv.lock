@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
@@ -385,6 +385,7 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "context-fabric" },
     { name = "corpora-common" },
+    { name = "corpora-linking" },
     { name = "docling-core" },
     { name = "ebooklib" },
     { name = "huggingface-hub" },
@@ -408,6 +409,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "context-fabric", specifier = ">=0.5.7" },
     { name = "corpora-common", editable = "packages/common" },
+    { name = "corpora-linking", specifier = ">=0.1.0,<0.2" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling-core", specifier = ">=2.30" },
     { name = "ebooklib", specifier = ">=0.20" },

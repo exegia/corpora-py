@@ -91,7 +91,7 @@ const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
         ...storageLines,
         {
           text: `Conversion complete`,
-          description: `${entry.corpusName ?? "archive"} is ready. Use “Save .corpus” to write it to disk.`,
+          description: `${entry.corpusName ?? "archive"} is ready. Use “Download” to write it to disk.`,
           tone: "success",
         },
       ]
@@ -262,8 +262,9 @@ export default function CorpusConvert() {
           </Badge>
         </h2>
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          Import a source document and package it as a Context-Fabric{" "}
-          <code>.corpus</code> archive.
+          Convert a document into a compressed C-USX <code>.cusx</code> archive.
+          Existing Text-Fabric and TEI dataset ZIPs use the <code>.corpus</code>{" "}
+          import path.
         </p>
       </div>
 
