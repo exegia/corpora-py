@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { getDefaultStore } from "jotai"
 import { uploadAtom, type UploadEntry } from "~/lib/atoms/upload-atom"
 import { API_URL } from "~/lib/types/socket"
-import { publishConversion, publishUpload } from "./manager"
+import {
+  deleteUpload,
+  publishConversion,
+  publishUpload,
+  uploadFile,
+} from "./manager"
 
 /**
  * The manual Hugging Face publish contract:
@@ -23,7 +28,10 @@ const stubFetch = (
   respond: () => Response | Promise<Response>
 ): RecordedRequest[] => {
   const requests: RecordedRequest[] = []
-  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (
+    url: string | URL | Request,
+    init?: RequestInit
+  ) => {
     requests.push({ url: String(url), init })
     return respond()
   }) as typeof fetch
@@ -211,4 +219,34 @@ describe("publishUpload", () => {
     await publishUpload("nope")
     expect(requests).toHaveLength(0)
   })
+})
+
+describe("conversion output choice", () => {
+  for (const [sourceFormat, outputFormat] of [
+    ["plain", "cusx"],
+    ["epub", "cusx"],
+    ["pdf", "cusx"],
+    ["tf_zip", "corpus"],
+    ["tei_zip", "corpus"],
+  ] as const) {
+    test(`${sourceFormat} requests ${outputFormat} without publishing`, async () => {
+      const requests = stubFetch(() =>
+        Response.json(
+          { detail: "test stops after submission" },
+          { status: 422 }
+        )
+      )
+      const id = uploadFile(new File(["text"], "fixture.txt"), { sourceFormat })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      try {
+        expect(requests).toHaveLength(1)
+        expect(requests[0].url).toBe(`${API_URL}/convert`)
+        const form = requests[0].init?.body as FormData
+        expect(form.get("source_format")).toBe(sourceFormat)
+        expect(form.get("output_format")).toBe(outputFormat)
+      } finally {
+        deleteUpload(id)
+      }
+    })
+  }
 })

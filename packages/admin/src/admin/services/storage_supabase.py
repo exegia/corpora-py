@@ -44,6 +44,7 @@ from common.utils.config import settings
 from common.utils.request_context import current_owner
 
 from .storage import (
+    _ARCHIVE_SUFFIXES,
     CorpusNotFoundError,
     ReadOnlyStorageError,
     StorageError,
@@ -165,7 +166,7 @@ class SupabaseCorpusStorage:
             name = entry.get("name", "")
             # Folder placeholders come back with a null id; skip them along
             # with anything that isn't a .corpus object.
-            if entry.get("id") is None or not name.endswith(_CORPUS_SUFFIX):
+            if entry.get("id") is None or not name.endswith(_ARCHIVE_SUFFIXES):
                 continue
             path = f"{prefix}/{name}" if prefix else name
             metadata = entry.get("metadata") or {}

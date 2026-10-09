@@ -69,9 +69,7 @@ class FakeBucketApi:
     def download_bucket_files(self, bucket_id, files, *, raise_on_missing_files=False):
         self.calls.append(("download_bucket_files", bucket_id, tuple(files)))
         for remote, _dest in files:
-            if raise_on_missing_files and not any(
-                e.path == remote for e in self.paths_info
-            ):
+            if raise_on_missing_files and not any(e.path == remote for e in self.paths_info):
                 raise EntryNotFoundError(f"no {remote}")
 
 
@@ -111,15 +109,30 @@ def test_list_filters_to_corpus_archives_and_skips_folders(storage, api):
     assert stored[0].size_bytes == 10
     assert stored[0].repo_id == "user/archives"
     # Bucket resolve URL: no dataset/ prefix, no /main/ branch segment.
-    assert stored[0].url == (
-        "https://huggingface.co/buckets/user/archives/resolve/BHSA.corpus"
-    )
+    assert stored[0].url == ("https://huggingface.co/buckets/user/archives/resolve/BHSA.corpus")
     assert ("list_bucket_tree", "user/archives") in api.calls
 
 
 def test_list_missing_bucket_is_empty_library(storage, api):
     api.tree = _hub_error(BucketNotFoundError, "nope")
     assert storage.list() == []
+
+
+def test_cusx_uses_existing_bucket_transport_and_filename(storage, api, tmp_path, monkeypatch):
+    from common.utils.config import settings
+
+    monkeypatch.setattr(settings, "hf_read_only", False)
+    path = tmp_path / "book.cusx"
+    path.write_bytes(b"test archive bytes")
+    uploaded = storage.upload(path)
+    assert uploaded.filename == "book.cusx"
+    assert uploaded.url == "https://huggingface.co/buckets/user/archives/resolve/book.cusx"
+    assert any(
+        call[0] == "batch_bucket_files" and call[2] == [(str(path), "book.cusx")]
+        for call in api.calls
+    )
+    api.tree = [_file("book.cusx", 10), _file("legacy.corpus", 10), _file("README.md", 1)]
+    assert [item.filename for item in storage.list()] == ["book.cusx", "legacy.corpus"]
 
 
 # ── info ──────────────────────────────────────────────────────────────────────
@@ -149,8 +162,7 @@ def test_upload_creates_bucket_and_returns_info(storage, api, tmp_path):
     assert stored.filename == "mini.corpus"
     assert ("create_bucket", "user/archives", True, True) in api.calls
     assert any(
-        c[0] == "batch_bucket_files" and c[2] == [(str(archive), "mini.corpus")]
-        for c in api.calls
+        c[0] == "batch_bucket_files" and c[2] == [(str(archive), "mini.corpus")] for c in api.calls
     )
 
 

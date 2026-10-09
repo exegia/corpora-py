@@ -139,6 +139,15 @@ async def validate(payload: ValidationRequest, request: Request) -> ValidationRe
     # run it off the event loop so the server stays responsive. A file is
     # treated as a packaged `.corpus` archive (whose shipped `.cfm` is checked
     # too); a directory as a raw Text-Fabric dataset.
+    if target_path.is_file() and target_path.suffix == ".cusx":
+        from ..converters.cusx import validate_cusx_archive
+
+        summary = await asyncio.to_thread(validate_cusx_archive, target_path)
+        return ValidationResponse(
+            corpus=name,
+            path=str(target_path),
+            **{key: summary[key] for key in ("valid", "stats", "reasons", "checks")},
+        )
     if target_path.is_file():
         result = await asyncio.to_thread(
             validate_corpus_archive, target_path, payload.corpus
