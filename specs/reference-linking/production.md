@@ -151,3 +151,10 @@ scholarly tests, adjusting only their example paths. Build both wheel and sdist
 from that tree and run tests against an installed wheel away from the checkout.
 Version 0.1.0 and package naming remain provisional until a separately authorized
 public release; the exporter adds no release automation and does not publish.
+
+# Distribution and runtime decision
+
+The Homebrew release dependency, proposed public-core repository split and API/
+sidecar/browser-Python comparison are investigated in [distribution decision](distribution.md).
+The recommended web path is the authenticated HTTP API, with native conversion
+work outside the core and no dual ownership of the corpora_linking namespace.
