@@ -172,13 +172,16 @@ vercel deploy --prod   # manual production deploy
 
 ## Architecture
 
-This is a **uv workspace** of three published Python packages plus an umbrella meta-package:
+This is a **uv workspace** of independently buildable Python packages plus an umbrella package.
+The linking core is independently published from exegia/corpora-linking; this
+repository publishes the umbrella distribution:
 
 | Package  | PyPI name        | Source                          | Purpose                                                                                 |
 |----------|------------------|---------------------------------|-----------------------------------------------------------------------------------------|
 | Common   | `corpora-common` | `packages/common/src/common/`   | Settings, logging, shared utilities                                                     |
 | MCP      | `corpora-mcp`    | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI                                                           |
 | Admin    | `corpora-admin`  | `packages/admin/src/admin/`     | EPUB/HTML/PDF/TEI → Text-Fabric converters + conversion HTTP API                        |
+| Linking | `corpora-linking` | `exegia/corpora-linking` (PyPI dependency) | Isolated reference/selection values and adapter ports |
 | Umbrella | `corpora-py`     | `src/corpora_py/`               | Depends on all three; combined FastAPI app (`corpora-api` CLI); used by sidecar/example |
 
 - **Install everything** (dev / example / sidecar): `uv sync` or install `corpora-py`
@@ -448,3 +451,13 @@ bunx shadcn@latest add <component-name>     # not `shadcn-ui`, which is the old 
 - Components land in `example/app/components/ui/` (ReUI ones in `components/reui/`)
 - Tailwind CSS 4 — **no `tailwind.config.ts`**; theme and imports live in `example/app/app.css`
 - Import via the alias: `import { Button } from "~/components/ui/button"`
+
+## Reference linking scaffold
+
+`corpora-linking>=0.1.0,<0.2` is installed from PyPI and maintained in
+[exegia/corpora-linking](https://github.com/exegia/corpora-linking).
+`packages/linking` keeps Corpora-specific examples and integration guidance;
+the root wheel never bundles the core namespace. Read its [agent instructions](packages/linking/AGENTS.md)
+and [implementation specification](specs/reference-linking/spec.md). Detection,
+CUSX/Supabase adapters and management UI remain staged. It does not replace the
+v0.4 corpus-document contract or the scoped CUSX reference proposal.

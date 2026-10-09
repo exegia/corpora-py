@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp.exceptions import ToolError
 
@@ -34,7 +34,44 @@ async def _mutation_call(fn, *args) -> dict:
 
 
 def register_curation_tools(mcp: Any) -> None:
-    from . import mutations
+    from . import drafts, mutations
+
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+    async def create_working_draft(job_id: str) -> dict:
+        """Copy an owned completed conversion into a private draft; retries reuse it.
+
+        Use the returned corpus identifier and version for AI scopes. The
+        archive_url downloads current HEAD without exposing a storage key.
+        """
+        return await _mutation_call(drafts.create, job_id)
+
+    @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
+    async def list_working_drafts(limit: int = 50, offset: int = 0) -> dict:
+        """List only the caller's working drafts, with bounded pagination."""
+        return await _mutation_call(drafts.list_drafts, limit, offset)
+
+    @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
+    async def read_working_draft(
+        draft_id: str,
+        view: Literal["manifest", "index", "sections", "content", "node", "versions"],
+        node: int | None = None,
+        ref: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> dict:
+        """Read an owned current draft snapshot, including its version and revision."""
+        if not 1 <= limit <= 200 or offset < 0 or (view == "node" and (node is None or node < 1)):
+            raise ToolError("Invalid node or pagination")
+        kwargs: dict[str, Any] = {}
+        if view == "node":
+            kwargs = {"node": node}
+        elif view in ("content", "sections"):
+            kwargs = {
+                "ref" if view == "content" else "parent": ref,
+                "offset": offset,
+                "limit": limit,
+            }
+        return await _mutation_call(lambda: drafts.read(draft_id, view, **kwargs))
 
     @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True})
     async def apply_node_fix(suggestion_id: str, confirmation_token: str | None = None) -> dict:
