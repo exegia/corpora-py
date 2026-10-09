@@ -21,7 +21,6 @@ resolution-markers = [
 members = [
     "corpora-admin",
     "corpora-common",
-    "corpora-linking",
     "corpora-mcp",
     "corpora-py",
 ]
@@ -450,13 +449,14 @@ requires-dist = [
 [[package]]
 name = "corpora-linking"
 version = "0.1.0"
-source = { editable = "packages/linking" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/e2/ef83f3cff5a718aef7049cd505ea430ce7eb428ade467fb62d36c043396c/corpora_linking-0.1.0.tar.gz", hash = "sha256:5c73905c5692997e40891e151a908fa02d8c6194b2b97ea8f3e1e53fe3d9fa6a", size = 56895, upload-time = "2026-10-09T03:55:30.802Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/a1/6dec9b1369cc395b3c5d7d6d82670d7e4b0fbf4104083b5a266be870aa49/corpora_linking-0.1.0-py3-none-any.whl", hash = "sha256:3c4af8ab00ab37176037371411b9ddf46b26b95a7ba148b697bf1a9945f8a98c", size = 14852, upload-time = "2026-10-09T03:55:29.933Z" },
+]
 
 [[package]]
 name = "corpora-mcp"
@@ -489,6 +489,7 @@ source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "context-fabric" },
+    { name = "corpora-linking" },
     { name = "cryptography" },
     { name = "docling-core", version = "2.78.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
     { name = "docling-core", version = "2.87.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
@@ -531,7 +532,6 @@ linking-pymupdf = [
 dev = [
     { name = "corpora-admin" },
     { name = "corpora-common" },
-    { name = "corpora-linking" },
     { name = "corpora-mcp" },
     { name = "httpx" },
     { name = "jsonschema" },
@@ -546,6 +546,7 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "context-fabric", specifier = ">=0.5.7" },
+    { name = "corpora-linking", specifier = ">=0.1.0,<0.2" },
     { name = "cryptography", specifier = ">=42.0.0" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling-core", specifier = ">=2.30" },
@@ -560,7 +561,7 @@ requires-dist = [
     { name = "pdfplumber", marker = "extra == 'linking-pdf'", specifier = ">=0.11.7,<0.12" },
     { name = "platformdirs", specifier = ">=4.10.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'linking-postgres'", specifier = ">=3.2,<4" },
-    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pyjwt", specifier = ">=2.13.0" },
     { name = "pymupdf", marker = "extra == 'linking-pymupdf'", specifier = ">=1.26,<2" },
@@ -577,7 +578,6 @@ provides-extras = ["docling", "linking-pymupdf", "linking-postgres", "linking-pd
 dev = [
     { name = "corpora-admin", editable = "packages/admin" },
     { name = "corpora-common", editable = "packages/common" },
-    { name = "corpora-linking", editable = "packages/linking" },
     { name = "corpora-mcp", editable = "packages/mcp" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "jsonschema", specifier = ">=4.26" },

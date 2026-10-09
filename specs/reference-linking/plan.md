@@ -20,20 +20,22 @@ type: plan
    synchronization, session/capability checks, discovery management, authenticated
    opt-in HTTP integration, approved snapshot reconciliation, C-USX range/link
    insertion and distinct per-destination delivery receipts.
-5. Standalone source export, portable instructions/examples/tests, wheel and sdist
-   builds and clean installed-wheel tests. Root release scripts remain unchanged.
+5. Independent public repository and verified PyPI release of corpora-linking
+   0.1.0. Corpora consumes the published package with one namespace owner;
+   Homebrew CLI offline commands depend on the released core directly.
 
 [Production composition](production.md) records configuration, API workflows,
 format boundaries and extraction commands. The [walkthrough](end-to-end.md) remains
 an offline executable example. Implementation is complete for the documented
 bounded adapters. Live schema rollout, authoritative production inventory/policy,
-provider transport, broader format variants and any public package release require
-separate operational work; no deployment or external publication was authorized.
+provider transport and broader format variants require further operational work.
+The core public release is complete; Corpora/CLI release lanes and production
+rollout remain separate. No live schema changes or deployment were performed.
 
 # Verification
 
-Run `uv run ruff check .`, `uv run mypy .`, `uv run pytest`, independent
-`uv build --package corpora-linking --wheel`, and root `uv build --wheel`.
+Run `uv run ruff check .`, `uv run mypy .`, `uv run pytest`, and root `uv build --wheel` against the published core. Build core artifacts
+in its independent repository.
 Install each actual wheel in an isolated environment and import away from the
 checkout. The core needs only Pydantic; a no-deps umbrella smoke installation
 must explicitly provide Pydantic for the seam. No network calls should occur

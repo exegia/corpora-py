@@ -2,21 +2,27 @@
 title: Reference linking distribution and runtime decision
 description: Homebrew release dependency, open-source repository boundary and web runtime recommendation.
 tags: [references, distribution, runtime]
-status: proposed
+status: implemented
 ---
 
 # Recommendation
 
-Publish the reusable MIT core from a separate `exegia/corpora-linking` repository
-when its release review is complete. Keep authenticated storage, entitlement policy,
-C-USX integration and heavyweight file adapters in Corpora. For `corpora-web`, use
-a typed TypeScript client calling the authenticated Python HTTP API. Vercel can
-host its short request operations; local Python is the CLI/desktop/offline path.
-Browser Python is an optional later experiment, not the working-reference authority.
-No repository creation, remote push, deployment, release or announcement has been
-performed as part of this investigation.
+The reusable MIT core is published as
+[`corpora-linking 0.1.0`](https://pypi.org/project/corpora-linking/0.1.0/) from
+[exegia/corpora-linking](https://github.com/exegia/corpora-linking). GitHub trusted
+publishing succeeded and a fresh PyPI install passed all 65 core tests and examples.
 
-# Evidence from the repositories
+This feature branch migrates Corpora to `corpora-linking>=0.1.0,<0.2`, removes
+the local core source/workspace package and excludes the core namespace from
+the umbrella wheel. Native adapters, authentication, review storage and C-USX
+remain in Corpora. The Homebrew CLI declares the same released dependency
+directly; its offline commands need no new umbrella version. Both lockfiles
+resolve real PyPI artifacts. The CLI/formula still need their normal release.
+
+For corpora-web, use a typed client of the authenticated Python HTTP API.
+No live database changes, production deployments or social-media posts were made.
+
+# Evidence before the dependency migration
 
 - GitHub resolves `exegia/corpora-cli` to repository ID 1346786320,
   `exegia/homebrew-corpora`. It is the canonical CLI source AND the Homebrew tap.
@@ -56,8 +62,8 @@ an MIT license, preserves stable reference IDs and retains unresolved evidence.
 It supports two creation workflows through one model, conservative exact selection
 verification, bounded Bible detection and scholarly recognizer/catalog/resolver
 ports. Other reading apps can use it without adopting Corpora's database or UI.
-The extraction tool already produces portable source, examples, instructions and
-38 core tests. A separate repository gives this public contract its own issues,
+The released package includes portable examples and 65 tests.
+The separate repository gives this public contract its own issues,
 version policy, documentation and release history.
 
 Keep these boundaries explicit:
@@ -78,21 +84,16 @@ Supabase rollout. The supported subsets and fail-closed behavior are documented.
 
 ## Avoid owning one Python namespace twice
 
-The current corpora-py wheel **bundles corpora_linking**. Installing an independent
-corpora-linking wheel beside it gives two distributions ownership of the same files;
-uninstalling/upgrading either can damage the other. Before independent consumption:
+The new umbrella wheel contains no `corpora_linking/` files. Exactly one
+distribution, `corpora-linking`, owns that namespace. Development imports use
+the same PyPI package as installed wheels; changes to core source belong in
+the independent repository. Integration examples/tests remain in Corpora.
 
-1. Extract/export the public core and validate its standalone wheel/sdist/tests.
-2. Choose the public repo/package name, maintainer ownership and compatibility policy.
-3. Prepare a coordinated Corpora release that removes the bundled core from its
-   Hatch wheel package list and depends on the separately released core version.
-4. Keep the workspace source for development, but test installed distributions with
-   exactly one owner of corpora_linking. Verify upgrades/uninstalls in clean envs.
-5. Update CLI dependency constraints against actual released artifacts and regenerate
-   locks; keep API/adapter/core versions demonstrably compatible.
-
-Until then, keep the existing bundled wheel path. No separate package should be
-silently added to Homebrew dependency resolution.
+The published corpora-py 5.0.0 has no linking source. Local feature artifacts
+still carry the dev-lane version for testing only; the release lane must assign
+a new version before publication. Never replace the existing PyPI 5.0.0.
+A root release merge also triggers production Vercel deployment and requires
+that deployment to be within the authorized scope.
 
 # Runtime comparison
 
@@ -150,19 +151,18 @@ Draft, contingent on that release:
 > revision-aware links between passages. Manual selections and detected citations
 > share the same model. Exact quote/context checks preserve stale, unknown and
 > ambiguous references instead of guessing. MIT core, runnable examples and tests.
-> [Public repository and installation links after release]
+> https://github.com/exegia/corpora-linking — pip install corpora-linking
 
 # Next implementation sequence
 
-1. Review the prepared Homebrew CLI changes and the namespace/repository decision.
-2. Prepare the public extraction/release transition without dual namespace ownership.
-3. Add corpora-web's app/lib/references client and seam tests using its existing
-   session/config conventions; do not rewrite its SPA deployment model.
-4. Connect an authorized document snapshot/link index provider. The current linking
-   API has no reference-list or document-download route; do not assume those exist.
-5. Add selection/preview/save/open UI, then separate review/publication states.
-6. Validate the deployment build's dependencies and controlled test database setup.
-7. Roll out/release/announce only through separately authorized release actions.
+1. Review the Corpora integration migration and CLI dependency changes.
+2. Release the CLI through its normal lanes and bump the formula to that
+   real tag/checksum. Complete macOS/Linuxbrew checks in CI.
+3. Prepare the new Corpora release without overwriting published 5.0.0.
+   Production deployment remains a separate operational step.
+4. Connect corpora-web through a typed authenticated references client, then
+   supply its authoritative document snapshot and reference index provider.
+5. Validate a controlled database and inventory rollout before enabling routes.
 
 # Primary design/runtime sources
 
@@ -176,12 +176,13 @@ Draft, contingent on that release:
 
 # Local verification
 
-The Homebrew CLI feature branch passes all 67 Python tests, including nine
-reference command tests. Ruff lint/format checks pass; the CLI wheel builds and
-its installed code retrieves the exact selection and rejects a changed revision
-when executed away from checkout with the local linking-enabled dependencies.
-The real v2.1.0 release tarball and its VERSION/checksum were verified for the
-separate formula fix. Homebrew/macOS audit and install tests could not run because
-brew and Ruby are unavailable in this workspace. The corpora-py repository's
-Ruff/mypy checks pass; no corpora-web application code was modified during this
-investigation. No release, announcement, deployment or remote write occurred.
+Against the published core, Corpora Ruff/mypy checks pass and the suite has
+1,013 passing tests with 68 skips. An additional disposable loopback PostgreSQL
+run passes all 35 reference authorization/history/API tests; no live service is
+used. The CLI passes all 67 tests without skipping its core tests.
+
+Built wheel/sdist inspection confirms no umbrella core files and a declared
+standalone runtime dependency. A fresh installed-wheel environment passes 93
+portable core/store/publication/CLI tests away from the source checkout.
+Uninstall/reinstall checks verify that removing the umbrella preserves the core.
+Homebrew tooling is unavailable locally; the tap's macOS CI must verify it.

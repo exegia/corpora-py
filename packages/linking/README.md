@@ -6,13 +6,11 @@ tags: [references, python]
 
 # Reference linking core
 
-`corpora-linking` (import `corpora_linking`) is an MIT-licensed uv workspace
-package with Pydantic as its only runtime dependency. It contains validated
-source/target values, typed selection locators, provenance, independent
-resolution/review/publication state, conversion mappings, JSON round trips,
-conservative text-anchor verification and adapter protocols. It performs no I/O.
-Its version is independent of Corpora releases; it is bundled in `corpora-py`
-and is not added to the repository's automatic PyPI publishing workflow.
+The MIT core `corpora-linking` (import `corpora_linking`) is published on
+[PyPI](https://pypi.org/project/corpora-linking/0.1.0/) and maintained in
+[exegia/corpora-linking](https://github.com/exegia/corpora-linking). Corpora
+depends on `corpora-linking>=0.1.0,<0.2`; this directory retains integration
+examples and documentation, without a second copy of the core source.
 
 ```python
 from corpora_linking import Endpoint, Provenance, Reference, TextLocator
@@ -36,7 +34,7 @@ Fields are immutable; changes use a new validated instance via
 Pydantic's unchecked `model_copy(update=...)` and `model_construct` are not
 validation APIs. Adapter code must validate untrusted records at every boundary.
 
-Build: `uv build --package corpora-linking --wheel --out-dir dist/`.
+Install: `uv sync` resolves the published core. Build the umbrella: `uv build`.
 Tests: `uv run pytest tests/linking`. See the
 [implementation specification](../../specs/reference-linking/spec.md) and
 [agent instructions](AGENTS.md) for constraints and staged work.
@@ -232,14 +230,7 @@ with passage resolution/review still required. Run
 `uv run python packages/linking/examples/discovery_review.py` for the offline walkthrough.
 PostgreSQL discovery storage and opt-in authenticated application integration are implemented.
 
-## Native adapters, application integration and extraction
+## Standalone core
 
-See [production composition](../../specs/reference-linking/production.md) for
-PyMuPDF quads, EPUB CFI ranges, multi-node/browser HTML selection, authenticated
-HTTP workflows, trusted inventory/entitlement configuration, C-USX insertion and
-per-destination delivery evidence. These adapters remain outside the reusable core.
-
-Export a standalone source tree with
-`uv run python bin/build/export_linking.py /tmp/new-linking-source`. The export
-contains portable instructions, examples and core tests, builds a wheel and sdist,
-and has no publishing automation.
+Use the public repository for core development, source exports and releases.
+Integration examples and tests remain in this repository.

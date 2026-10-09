@@ -232,7 +232,7 @@ MCP-only image: `dockerfiles/Dockerfile.client` · Compose:
 Building a reader app? Start with the [small-step client guide](specs/reference-linking/client/README.md)
 for copyable selection, save, retrieval and review examples.
 
-The independent [corpora-linking core](packages/linking/README.md) supports
+The independently released [corpora-linking core](https://github.com/exegia/corpora-linking) supports
 revision-pinned manual selections and automatic citation intake, preserving unknown
 works, ambiguous passages and stale anchors. Its only runtime dependency is Pydantic.
 Optional umbrella adapters cover PDF, EPUB CFI, HTML/browser ranges, C-USX publication

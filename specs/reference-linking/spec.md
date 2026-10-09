@@ -16,8 +16,8 @@ and publish automatic and manual links, retaining them in CUSX and Supabase.
 Paragraph IDs are optional, never prerequisites for a selection.
 
 This scoped scaffold starts implementation without asserting production
-conversion, detection or management support. [Package code](../../packages/linking/src/corpora_linking/models.py)
-implements transport-neutral values; [ports](../../packages/linking/src/corpora_linking/interfaces.py)
+conversion, detection or management support. [Package code](https://github.com/exegia/corpora-linking/blob/v0.1.0/src/corpora_linking/models.py)
+implements transport-neutral values; [ports](https://github.com/exegia/corpora-linking/blob/v0.1.0/src/corpora_linking/interfaces.py)
 define future adapters. The [TF seam](../../src/corpora_py/linking.py) validates
 existing pinned requests, but does not resolve or convert them into CUSX IDs.
 

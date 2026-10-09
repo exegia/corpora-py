@@ -144,13 +144,11 @@ The adapter sends nothing and provides no client endpoint for asserting delivery
 Actual transport and verification of a real provider's signed receipts belong to
 that configured provider. No remote publication/removal has been performed.
 
-Run `uv run python bin/build/export_linking.py /tmp/new-linking-source` with a
-nonexistent destination. It exports the independent project, MIT license, portable
-agent instructions, three core examples and the actual core detector/resolver/
-scholarly tests, adjusting only their example paths. Build both wheel and sdist
-from that tree and run tests against an installed wheel away from the checkout.
-Version 0.1.0 and package naming remain provisional until a separately authorized
-public release; the exporter adds no release automation and does not publish.
+The core is now published independently as `corpora-linking 0.1.0`.
+Use [the public repository](https://github.com/exegia/corpora-linking) for
+core source, builds and release instructions. Corpora installs the released
+core from PyPI and never bundles its namespace.
+
 
 # Distribution and runtime decision
 
