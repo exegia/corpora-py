@@ -1,16 +1,18 @@
 # Corpora Example App
 
 The reference client for the `corpora-py` API: convert documents into
-Text-Fabric corpora, browse and read what you've published, and chat with an
+compressed C-USX document packages, retain the existing corpus import workflow, and chat with an
 AI that queries the corpus through MCP tools. One codebase ships two ways —
 a native desktop app via Electrobun, and a static SPA on the web
 ([corpora-py-example.vercel.app](https://corpora-py-example.vercel.app)).
 
 ## Features
 
-- **Convert** — EPUB, HTML, XML, TEI, PDF and plain text → Text-Fabric `.corpus`
-  archives, with live job status over WebSocket (and polling fallback)
-- **Explore & publish** — browse the `.corpus` archives on the Hugging Face Hub
+- **Convert** — individual EPUB, HTML, XML, TEI, PDF and plain text → compressed
+  C-USX `.cusx` packages, with live job status over WebSocket (and polling fallback).
+  Text-Fabric/TEI dataset ZIPs retain the `.corpus` import path.
+- **Explore & publish** — browse both archive types on the Hugging Face Hub and
+  publish manually through the existing repo/bucket configuration
 - **Corpus detail & reader** — edit manifest metadata, browse the section index,
   read paginated passages (see [the flow](#corpus-detail-flow))
 - **Chat** — an in-browser agent that loads a published corpus and queries it
@@ -19,6 +21,13 @@ a native desktop app via Electrobun, and a static SPA on the web
 - **Capability-aware UI** — write affordances are *hidden*, not left to 403,
   when the backend reports a read-only Hub
 - **Dark mode** and **desktop-native** packaging (macOS/Windows/Linux)
+
+C-USX conversion requires the matching backend from this development change;
+released corpora-py v6.0.0 does not yet expose this output option. The package
+contains extended USX XML, a parsed document tree and a pinned linking snapshot.
+It does not grant reference approval or original-location mapping authority.
+The existing Text-Fabric detail reader and MCP graph queries remain for `.corpus`
+archives; a C-USX reader is separate work. See the [package contract](../docs/architecture/cusx-package.md).
 
 ## Quick Start
 

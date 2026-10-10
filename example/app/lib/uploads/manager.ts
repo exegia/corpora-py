@@ -323,7 +323,8 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
         // eviction, backend restart), which pollJobStatus treats as
         // terminal instead of retrying forever (issue #189).
         if (response.status === 404) throw new JobGoneError()
-        if (!response.ok) throw new Error(`Status check failed (${response.status})`)
+        if (!response.ok)
+          throw new Error(`Status check failed (${response.status})`)
         return (await response.json()) as JobStatusMessage
       },
       handleMessage,
@@ -332,7 +333,8 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
           const messages: Record<PollFailureReason, string> = {
             gone: "The conversion job no longer exists on the server. Try the upload again.",
             timeout: `Conversion timed out: no result after ${Math.round(POLL_DEFAULTS.deadlineMs / 60_000)} minutes. Try the upload again.`,
-            unreachable: "Lost contact with the server while tracking the conversion. Try the upload again.",
+            unreachable:
+              "Lost contact with the server while tracking the conversion. Try the upload again.",
           }
           updateEntry(id, (draft) => {
             draft.status = "error"
@@ -438,6 +440,13 @@ const performUpload = async (
     const formData = new FormData()
     formData.append("file", file)
     formData.append("source_format", sourceFormat)
+    // Existing dataset ZIPs retain their corpus import path. Documents use C-USX.
+    formData.append(
+      "output_format",
+      sourceFormat === "tf_zip" || sourceFormat === "tei_zip"
+        ? "corpus"
+        : "cusx"
+    )
     formData.append(
       "name",
       options.name?.trim() || file.name.replace(/\.[^./]+$/, "")

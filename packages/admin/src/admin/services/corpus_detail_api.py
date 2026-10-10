@@ -40,6 +40,7 @@ from .storage import (
     ReadOnlyStorageError,
     StorageError,
     StorageNotConfiguredError,
+    UnsupportedArchiveError,
 )
 from .storage_api import require_writable
 
@@ -63,6 +64,8 @@ async def _run[T](fn: Callable[[], T]) -> T:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except CorpusNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except UnsupportedArchiveError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except StorageError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
