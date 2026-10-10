@@ -343,7 +343,7 @@ class SupabaseResultStore(ResultStore):
         A missed snapshot is logged and returns ``None`` so the conversion
         can still succeed (issue #147). Extra labels are for #149.
         """
-        key = snapshot_key_for(job_id, label)
+        key = snapshot_key_for(job_id, label, path.suffix)
         if key is None:
             logger.warning(
                 "Snapshot skipped for job %s: invalid label %r", job_id, label

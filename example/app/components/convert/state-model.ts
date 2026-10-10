@@ -220,7 +220,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
   const storageLogs: LogLine[] = []
   if (storage) {
     storageLogs.push({
-      text: "Publishing to Hugging Face Hub — POST /storage (uploading the .corpus archive)…",
+      text: "Publishing to Hugging Face Hub — POST /storage (uploading the converted archive)…",
       tone: "info",
     })
   }
@@ -323,13 +323,13 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     },
     {
       id: "converting",
-      label: "Converting to .corpus",
+      label: "Compiling document archive",
       state: convertingState,
       logs: convertingLogs,
     },
     {
       id: "validation",
-      label: "Dataset validated",
+      label: "Archive validated",
       state: validationState,
       logs: validationLogs,
     },
