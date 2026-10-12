@@ -20,6 +20,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      reuse_run_id:
+        description: "Retry publishing verified bundles from this sidecar run (requires release_ref)"
+        required: false
+        type: string
+        default: ""
       release_ref:
         description: "Existing release tag to rebuild and publish (for example v6.1.0)"
         required: false
@@ -33,6 +38,11 @@ on:
 
   workflow_call:
     inputs:
+      reuse_run_id:
+        description: "Retry publishing verified bundles from this sidecar run"
+        required: false
+        type: string
+        default: ""
       release_ref:
         description: "Existing release tag to rebuild and publish; empty builds only"
         required: false
@@ -61,6 +71,7 @@ jobs:
   # ── 1. Build workspace wheel at once on a fast Linux runner ───────────────
   build-wheel:
     name: Build wheel
+    if: ${{ inputs.reuse_run_id == '' }}
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.source.outputs.release_tag }}
@@ -137,6 +148,7 @@ jobs:
   # ── 2. Bundle, sign, and archive per platform ─────────────────────────────────
   bundle:
     name: Bundle (${{ matrix.platform }})
+    if: ${{ inputs.reuse_run_id == '' }}
     needs: build-wheel
     outputs:
       artifact_prefix: corpora-py-sidecar-${{ github.run_id }}
@@ -243,14 +255,25 @@ jobs:
   publish:
     name: Publish release bundles
     needs: [build-wheel, bundle]
-    if: ${{ needs.build-wheel.outputs.release_tag != '' }}
+    if: >-
+      ${{ always() && !cancelled() &&
+          ((inputs.reuse_run_id != '' && inputs.release_ref != '') ||
+           (needs.build-wheel.result == 'success' && needs.bundle.result == 'success' &&
+            needs.build-wheel.outputs.release_tag != '')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v7
+
       - uses: actions/download-artifact@v8
         with:
-          pattern: corpora-py-sidecar-${{ github.run_id }}-*
+          pattern: corpora-py-sidecar-${{ inputs.reuse_run_id || github.run_id }}-*
+          run-id: ${{ inputs.reuse_run_id || github.run_id }}
+          github-token: ${{ github.token }}
           merge-multiple: true
           path: sidecars/
 
@@ -259,19 +282,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.build-wheel.outputs.release_tag }}
-          SKIP_SIGN: ${{ inputs.skip_sign == true }}
-        run: |
-          cd sidecars
-          test "$(find . -maxdepth 1 -name '*.zip' | wc -l)" -eq 3
-          test "$(find . -maxdepth 1 -name '*.json' | wc -l)" -eq 3
-          sha256sum corpora-py-*.zip corpora-py-*.json > corpora-py-sidecars-SHA256SUMS.txt
-          uploads=(corpora-py-*.json corpora-py-sidecars-SHA256SUMS.txt)
-          for archive in corpora-py-*.zip; do
-            label="Sidecar bundle: $archive"
-            if [[ "$SKIP_SIGN" == true ]]; then
-              label="Unsigned sidecar bundle: $archive"
-            fi
-            uploads+=("$archive#$label")
-          done
-          gh release upload "$RELEASE_TAG" "${uploads[@]}"
+          RELEASE_TAG: ${{ inputs.release_ref || needs.build-wheel.outputs.release_tag }}
+          ARTIFACT_RUN_ID: ${{ inputs.reuse_run_id || github.run_id }}
+        run: >-
+          uv run --no-project --python 3.13 python bin/build/publish.py "$RELEASE_TAG" sidecars

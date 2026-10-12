@@ -1,10 +1,15 @@
 """Regression checks for the shell sidecar build's runtime and archive contract."""
 
+import hashlib
+import json
 import os
+import runpy
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
+
+import pytest
 
 BUILD = Path(__file__).resolve().parents[1] / "bin/build"
 
@@ -76,3 +81,28 @@ def test_windows_archive_has_one_path_and_relative_members(tmp_path):
         assert packed.testzip() is None
         assert packed.read("python/source.txt").decode() == "ὁ λόγος"
         assert all(name.startswith("python/") for name in packed.namelist())
+
+
+def test_publishing_rejects_archive_or_source_provenance_tampering(tmp_path):
+    publisher = runpy.run_path(str(BUILD / "publish.py"))
+    for platform in publisher["PLATFORMS"]:
+        archive = tmp_path / f"corpora-py-{platform}.zip"
+        archive.write_bytes(platform.encode())
+        receipt = {
+            "platform": platform,
+            "version": "6.1.0",
+            "source_commit": "source-commit",
+            "workflow_run": "https://github.com/exegia/corpora-py/actions/runs/123",
+            "verification": sorted(publisher["CHECKS"]),
+            "signed": False,
+            "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+            "wheel_sha256": "same-source-wheel",
+        }
+        archive.with_suffix(".json").write_text(json.dumps(receipt), encoding="utf-8")
+    verify = publisher["verified_files"]
+    assert len(verify(tmp_path, "v6.1.0", "source-commit", "123", "exegia/corpora-py")) == 3
+    with pytest.raises(ValueError, match="provenance"):
+        verify(tmp_path, "v6.1.0", "another-commit", "123", "exegia/corpora-py")
+    (tmp_path / "corpora-py-windows-x64.zip").write_bytes(b"corrupted")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        verify(tmp_path, "v6.1.0", "source-commit", "123", "exegia/corpora-py")
