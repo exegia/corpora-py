@@ -354,3 +354,26 @@ def test_unreadable_ctei_zip_members_return_invalid(client, tmp_path, damage):
     assert response.status_code == 200
     assert response.json()["valid"] is False
     assert response.json()["reasons"]
+
+
+def test_ctei_accepts_runtime_zstandard_compression(client, tmp_path):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    compression = getattr(zipfile, "ZIP_ZSTANDARD", None)
+    if compression is None:
+        pytest.skip("Zstandard ZIP compression requires Python 3.14")
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    with zipfile.ZipFile(archive) as zf:
+        files = {name: zf.read(name) for name in zf.namelist() if not name.endswith("/")}
+    with zipfile.ZipFile(archive, "w", compression=compression) as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    response = client.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 200
+    assert response.json()["valid"] is True
