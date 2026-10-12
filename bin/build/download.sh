@@ -59,7 +59,8 @@ if [[ -f "$CACHED" ]]; then
   log "Using cached standalone Python: $TARBALL_NAME"
 else
   log "Downloading standalone Python ($PLATFORM_KEY)..."
-  run_cmd curl -L --progress-bar -o "$CACHED" "$URL"
+  run_cmd curl --fail --location --retry 3 --progress-bar -o "$CACHED.tmp" "$URL"
+  mv "$CACHED.tmp" "$CACHED"
 fi
 
 echo "$CACHED"

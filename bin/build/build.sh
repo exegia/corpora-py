@@ -11,7 +11,7 @@
 #   - sign (or unsigned) + archive
 #
 # Usage:
-#   ./scripts/build/build.sh [--platform <p>] [--out-dir <d>] [--dest-dir <d>] [--cache-dir <c>]
+#   ./bin/build/build.sh [--platform <p>] [--out-dir <d>] [--dest-dir <d>] [--cache-dir <c>]
 #                            [--skip-sign] [--skip-build]
 #
 
