@@ -23,17 +23,12 @@ DEMO_RESOURCES="$REPO_ROOT/example/build/lib/python"
 # For client opt-in downloads (override via env)
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-https://your-cdn.example.com/corpora-runtimes}"
 
-# STDLIB_TRIM — same list as env_vars.py
+# Keep functional stdlib modules: the API and installed dependencies use XML,
+# SQLite, Windows registry/asyncio support and Python's inspection utilities.
 STDLIB_TRIM=(
-  tkinter idlelib turtledemo "turtle.py" curses
-  test unittest
-  ensurepip lib2to3
-  pydoc_data "pydoc.py" "doctest.py"
-  "_pydecimal.py" mailbox.py imaplib.py nntplib.py poplib.py smtplib.py ftplib.py xmlrpc
-  "asyncio/windows_events.py" "asyncio/windows_utils.py"
-  distutils venv msilib winreg ossaudiodev spwd
+  tkinter idlelib turtledemo "turtle.py"
+  test ensurepip
   "ctypes/test" "sqlite3/test" "xml/sax/test" "email/test"
-  xml sqlite3 dbm shelve bdb cmd pdb profile cProfile timeit trace tracemalloc faulthandler symtable
 )
 
 # ── Platform helpers (no associative arrays for bash 3.2 compat) ──────────────
@@ -42,7 +37,7 @@ get_standalone_name() {
   case "$1" in
     macos-arm64) echo "aarch64-apple-darwin" ;;
     macos-x64)   echo "x86_64-apple-darwin" ;;
-    windows-x64) echo "x86_64-pc-windows-msvc-shared" ;;
+    windows-x64) echo "x86_64-pc-windows-msvc" ;;
     *) echo "ERROR: unknown platform $1" >&2; exit 1 ;;
   esac
 }
@@ -84,7 +79,7 @@ log_step() {
 run_cmd() {
   # Print and execute (like helpers.run); stderr so stdout stays machine-readable
   echo "  $ $*" >&2
-  "$@"
+  "$@" >&2
 }
 
 detect_platform() {
