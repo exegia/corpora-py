@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import importlib
 import json
-import lzma
 import mimetypes
 import os
 import shutil
 import tempfile
 import uuid
 import zipfile
-import zlib
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from threading import Lock
@@ -27,13 +25,20 @@ from .inputs import load_source, readable
 
 VERSION_DIR = "version_1.0.0"
 CTEI_NS = "urn:corpora:ctei:1"
-_ZIP_DECODE_ERRORS: tuple[type[Exception], ...] = (zlib.error, lzma.LZMAError)
-try:
-    _zstd = importlib.import_module("compression.zstd")
-except ModuleNotFoundError:
-    pass
-else:
-    _ZIP_DECODE_ERRORS += (_zstd.ZstdError,)
+def _native_zip_decoder_errors() -> tuple[type[Exception], ...]:
+    errors: tuple[type[Exception], ...] = ()
+    for module_name, error_name in (
+        ("zlib", "error"), ("lzma", "LZMAError"), ("compression.zstd", "ZstdError"),
+    ):
+        try:
+            decoder = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        errors += (getattr(decoder, error_name),)
+    return errors
+
+
+_ZIP_DECODE_ERRORS = _native_zip_decoder_errors()
 REQUIRED = {
     "manifest.yml",
     "toc.yml",
@@ -449,7 +454,7 @@ def validate_ctei_archive(path: Path) -> dict:
         schemas = validators()
     try:
         return _validate_ctei_archive(path, schemas)
-    except (ValueError, zipfile.BadZipFile, zlib.error, etree.XMLSyntaxError, yaml.YAMLError) as exc:
+    except (ValueError, zipfile.BadZipFile, etree.XMLSyntaxError, yaml.YAMLError) as exc:
         raise CTEIArchiveValidationError(str(exc)) from exc
     except (KeyError, TypeError, AttributeError, IndexError) as exc:
         raise CTEIArchiveValidationError("Invalid CTEI archive structure") from exc
