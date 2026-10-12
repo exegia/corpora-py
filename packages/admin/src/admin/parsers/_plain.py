@@ -34,7 +34,20 @@ class PlainTextParser(Parser):
 
     def iter_units(self, source: str) -> Iterator[Unit]:
         text = _load_text(source)
-        for index, paragraph in enumerate(text.split("\n\n")):
+        paragraphs = text.split("\n\n")
+        current = None
+        leading = ""
+        for index, paragraph in enumerate(paragraphs):
+            segment = paragraph + ("\n\n" if index < len(paragraphs) - 1 else "")
             if not paragraph.strip():
+                if current is not None:
+                    current.tokens[-1].after += segment
+                else:
+                    leading += segment
                 continue
-            yield Unit(type="paragraph", id=str(index), tokens=tokenize(paragraph))
+            if current is not None:
+                yield current
+            current = Unit(type="paragraph", id=str(index), tokens=tokenize(leading + segment))
+            leading = ""
+        if current is not None:
+            yield current

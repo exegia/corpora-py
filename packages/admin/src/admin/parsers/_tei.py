@@ -29,9 +29,17 @@ def _text(container: Tag, name: str) -> str | None:
 
 def _promote_head(unit: Unit) -> Unit:
     """Lift a TEI division's `<head>` child up into `Unit.label`."""
-    if unit.children and unit.children[0].type == "head":
-        head = unit.children.pop(0)
-        unit.label = " ".join(_flatten_tokens(head))
+    first = next(
+        (
+            i
+            for i, child in enumerate(unit.children)
+            if child.type != "text" or any(token.text.strip() for token in child.tokens)
+        ),
+        None,
+    )
+    if first is not None and unit.children[first].type == "head":
+        head = unit.children.pop(first)
+        unit.label = " ".join(word for word in _flatten_tokens(head) if word)
     return unit
 
 

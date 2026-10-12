@@ -1,0 +1,32 @@
+{
+  "profile": "corpora-independent-visual-ocr/1",
+  "packages": {
+    "surya-ocr": "0.22.1",
+    "pypdfium2": "5.14.0",
+    "pillow": "10.4.0",
+    "beautifulsoup4": "4.15.0"
+  },
+  "models": {
+    "repo": "datalab-to/surya-ocr-2-gguf",
+    "revision": "6a3a4c30e5e74446d4f8b6afd05b2f2da970f470",
+    "files": [
+      {
+        "file": "surya-2.gguf",
+        "bytes": 1266400864,
+        "sha256": "1f18abe17b1ed8b4e47ee9b1ad0e274c93daf5efbb6b29a04ff1712e37051e05"
+      },
+      {
+        "file": "surya-2-mmproj.gguf",
+        "bytes": 204986688,
+        "sha256": "98c0563673b1657ff6d021d1e5f04af06cbf61bb40c63ac613e8bb71b42fb2c0"
+      }
+    ]
+  },
+  "binary": {
+    "release": "b11534",
+    "bytes": 49984,
+    "sha256": "1bf5602a2be50097c44282a6ecc63234d94ee8f96d39fd45fed6eff4e74b6b41"
+  },
+  "render_dpi": 192,
+  "max_tokens": 8192
+}

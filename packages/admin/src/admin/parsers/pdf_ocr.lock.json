@@ -1,0 +1,95 @@
+{
+  "profile": "corpora-docling-forced-pdf-ocr/2",
+  "packages": {
+    "docling": "2.137.0",
+    "docling-core": "2.101.1",
+    "docling-ibm-models": "4.0.3",
+    "docling-parse": "7.22.2",
+    "tesserocr": "2.11.0"
+  },
+  "models": [
+    {
+      "repo": "docling-project/docling-models",
+      "revision": "fc0f2d45e2218ea24bce5045f58a389aed16dc23",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 3413,
+          "sha256": "d17f233378eff1240b623b36da76ee8b40afcca05d505949713bf03f7e00822a"
+        },
+        {
+          "path": "model_artifacts/tableformer/accurate/tableformer_accurate.safetensors",
+          "bytes": 212758388,
+          "sha256": "2a7d6c924b3cd12fb99a09280ca9c33a89c5d60b93253617d2e088c1a40374d9"
+        },
+        {
+          "path": "model_artifacts/tableformer/accurate/tm_config.json",
+          "bytes": 7060,
+          "sha256": "984e122ceb8ccf84d84c9d2882f6f2302a44b4f1e577babd6289892c36f3cffd"
+        }
+      ]
+    },
+    {
+      "repo": "docling-project/docling-layout-heron",
+      "revision": "8f39ad3c0b4c58e9c2d2c84a38465abf757272d8",
+      "files": [
+        {
+          "path": "model.safetensors",
+          "bytes": 171658996,
+          "sha256": "00333a43451945aaf89db8ca9c0a17e75d1537c17db60fdb91aa95f4c7929e0c"
+        },
+        {
+          "path": "config.json",
+          "bytes": 3268,
+          "sha256": "fdea30805ce2f5666b147fca941dcdd27ad468e27d6ed21902207d3da056a97d"
+        },
+        {
+          "path": "README.md",
+          "bytes": 3219,
+          "sha256": "175700839bc7808eac6af1d0c23e4f483606ab2276fe01122f4093e61a1a65b6"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "bytes": 444,
+          "sha256": "cd38cd59999e7a95d68e487fbe5132df3d4e5c32a0836add57e6126ba0c4eaf1"
+        }
+      ]
+    }
+  ],
+  "tessdata": {
+    "repo": "tesseract-ocr/tessdata_best",
+    "revision": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec",
+    "files": [
+      {
+        "file": "eng.traineddata",
+        "bytes": 15400601,
+        "sha256": "8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba",
+        "revision": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec"
+      },
+      {
+        "file": "heb.traineddata",
+        "bytes": 3704077,
+        "sha256": "dbaa827aea6bc21215638447f17783a1004987c2d0bf5573d111fee397abdae5",
+        "revision": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec"
+      },
+      {
+        "file": "grc.traineddata",
+        "bytes": 5168122,
+        "sha256": "dfc9bda286cd9d8755b1832e5731a5425d1cf0803393a5fa6dee078466178cf1",
+        "revision": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec"
+      },
+      {
+        "file": "LICENSE",
+        "bytes": 10173,
+        "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+        "revision": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec"
+      },
+      {
+        "file": "osd.traineddata",
+        "bytes": 10562727,
+        "sha256": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff",
+        "revision": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec"
+      }
+    ]
+  }
+}

@@ -6,6 +6,7 @@ from ._pdf import PdfParser
 from ._plain import PlainTextParser
 from ._tei import TeiParser
 from ._xml import XmlParser
+from .markdown_source import MarkdownParser
 from .schema import Document, DocumentMetadata, Parser, SourceFormat, Token, Unit
 
 PARSERS: dict[SourceFormat, Parser] = {
@@ -15,6 +16,7 @@ PARSERS: dict[SourceFormat, Parser] = {
     SourceFormat.TEI: TeiParser(),
     SourceFormat.PDF: PdfParser(),
     SourceFormat.PLAIN: PlainTextParser(),
+    SourceFormat.MARKDOWN: MarkdownParser(),
 }
 
 __all__ = [

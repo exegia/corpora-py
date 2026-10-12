@@ -33,6 +33,7 @@ class SourceFormat(StrEnum):
     TEI = "tei"
     PDF = "pdf"
     PLAIN = "plain"
+    MARKDOWN = "markdown"
     TF_ZIP = "tf_zip"
     TEI_ZIP = "tei_zip"
 
@@ -97,7 +98,10 @@ class Unit(BaseModel):
     type: str
     id: str | None = None
     label: str | None = None
+    namespace: str | None = None
+    namespaces: dict[str, str] = Field(default_factory=dict)
     attrs: dict[str, str] = Field(default_factory=dict)
+    source_attrs: dict[str, str] = Field(default_factory=dict)
     tokens: list[Token] = Field(default_factory=list)
     children: list[Unit] = Field(default_factory=list)
 
@@ -140,6 +144,11 @@ def tokenize(text: str | None) -> list[Token]:
         return []
     matches = list(_WORD_RE.finditer(text))
     tokens: list[Token] = []
+    # A spacer token retains leading/whitespace-only mixed-content runs without
+    # inventing a separate `before` field or attaching spacing to another node.
+    leading_end = matches[0].start() if matches else len(text)
+    if leading_end:
+        tokens.append(Token(text="", after=text[:leading_end]))
     for i, match in enumerate(matches):
         end = match.end()
         next_start = matches[i + 1].start() if i + 1 < len(matches) else len(text)

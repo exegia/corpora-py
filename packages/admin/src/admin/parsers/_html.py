@@ -9,7 +9,15 @@ re-implementing it.
 
 from collections.abc import Iterator
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import (
+    BeautifulSoup,
+    Comment,
+    Declaration,
+    Doctype,
+    NavigableString,
+    ProcessingInstruction,
+    Tag,
+)
 
 from .schema import DocumentMetadata, Parser, SourceFormat, Unit, read_source_bytes, tokenize
 
@@ -18,7 +26,7 @@ from .schema import DocumentMetadata, Parser, SourceFormat, Unit, read_source_by
 # HTML's own <head> lives outside <body> so it never reaches this walker, and
 # other formats (e.g. TEI's <head>, a heading) reuse the tag name for
 # something meaningful, so it must not be dropped here.
-SKIP_TAGS = {"script", "style", "noscript", "svg", "math"}
+SKIP_TAGS = {"script", "style", "noscript"}
 
 # Free-form `Unit.type` used for a run of text sitting alongside element
 # siblings (mixed content), e.g. the "and " in "<p>Hello <b>world</b> and me</p>".
@@ -60,7 +68,9 @@ def element_to_unit(tag: Tag) -> Unit:
             if node.name in SKIP_TAGS:
                 continue
             children.append(element_to_unit(node))
-        elif isinstance(node, NavigableString) and node.strip():
+        elif isinstance(node, NavigableString) and not isinstance(
+            node, (Comment, Declaration, Doctype, ProcessingInstruction)
+        ):
             children.append(Unit(type=TEXT_UNIT_TYPE, tokens=tokenize(str(node))))
 
     return Unit(type=tag.name, attrs=unit_attrs(tag), children=children)
@@ -68,11 +78,15 @@ def element_to_unit(tag: Tag) -> Unit:
 
 def top_level_units(container: Tag) -> list[Unit]:
     """Convert `container`'s direct element children into `Unit`s."""
-    return [
-        element_to_unit(child)
-        for child in container.contents
-        if isinstance(child, Tag) and child.name not in SKIP_TAGS
-    ]
+    units: list[Unit] = []
+    for child in container.contents:
+        if isinstance(child, Tag) and child.name not in SKIP_TAGS:
+            units.append(element_to_unit(child))
+        elif isinstance(child, NavigableString) and not isinstance(
+            child, (Comment, Declaration, Doctype, ProcessingInstruction)
+        ):
+            units.append(Unit(type=TEXT_UNIT_TYPE, tokens=tokenize(str(child))))
+    return units
 
 
 def _load(source: str) -> BeautifulSoup:
