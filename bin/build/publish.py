@@ -8,7 +8,6 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.parse import quote
 
 PLATFORMS = {"macos-arm64", "macos-x64", "windows-x64"}
 CHECKS = {
@@ -21,12 +20,23 @@ CHECKS = {
 }
 
 
-def api(path: str, *, optional: bool = False):
+def api(path: str):
     result = subprocess.run(["gh", "api", path], capture_output=True, text=True)
-    if optional and result.returncode and "HTTP 404" in result.stderr:
-        return None
     result.check_returncode()
     return json.loads(result.stdout)
+
+
+def find_release(repo: str, tag: str):
+    # The by-tag endpoint only finds published releases, not untagged drafts.
+    page = 1
+    while True:
+        releases = api(f"repos/{repo}/releases?per_page=100&page={page}")
+        for release in releases:
+            if release["tag_name"] == tag:
+                return release
+        if len(releases) < 100:
+            return None
+        page += 1
 
 
 def verified_files(root: Path, tag: str, source_sha: str, run_id: str, repo: str):
@@ -94,8 +104,7 @@ def publish(tag: str, root: Path) -> None:
     )
     files.append(checksums)
     target_tag = f"sidecars/{tag}" if source.get("immutable") else tag
-    target_path = f"repos/{repo}/releases/tags/{quote(target_tag, safe='')}"
-    target = api(target_path, optional=True)
+    target = find_release(repo, target_tag)
     unsigned = any(not receipt["signed"] for receipt in receipts.values())
     if target is None:
         notes = (
@@ -123,7 +132,9 @@ def publish(tag: str, root: Path) -> None:
             ],
             check=True,
         )
-        target = api(target_path)
+        target = find_release(repo, target_tag)
+    if target_tag != tag and target["target_commitish"] != source_sha:
+        raise ValueError("Companion release must point to the source release commit")
     existing = {asset["name"]: asset for asset in target["assets"]}
     uploads = []
     for path in files:
@@ -142,7 +153,7 @@ def publish(tag: str, root: Path) -> None:
         subprocess.run(
             ["gh", "release", "edit", target_tag, "--draft=false", "--latest=false"], check=True
         )
-    published = api(target_path)
+    published = api(f"repos/{repo}/releases/{target['id']}")
     if target_tag != tag and published["html_url"] not in (source["body"] or ""):
         notes = (
             (source["body"] or "")

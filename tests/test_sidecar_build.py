@@ -106,3 +106,19 @@ def test_publishing_rejects_archive_or_source_provenance_tampering(tmp_path):
     (tmp_path / "corpora-py-windows-x64.zip").write_bytes(b"corrupted")
     with pytest.raises(ValueError, match="checksum mismatch"):
         verify(tmp_path, "v6.1.0", "source-commit", "123", "exegia/corpora-py")
+
+
+def test_publishing_finds_existing_draft_before_upload(monkeypatch):
+    publisher = runpy.run_path(str(BUILD / "publish.py"))
+    find = publisher["find_release"]
+    draft = {"tag_name": "sidecars/v6.1.0", "draft": True, "id": 123}
+    paths = []
+
+    def fake_api(path):
+        paths.append(path)
+        return [draft]
+
+    monkeypatch.setitem(find.__globals__, "api", fake_api)
+    assert find("exegia/corpora-py", "sidecars/v6.1.0") == draft
+    assert paths == ["repos/exegia/corpora-py/releases?per_page=100&page=1"]
+    assert find("exegia/corpora-py", "sidecars/v5.0.0") is None
