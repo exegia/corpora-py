@@ -6,6 +6,7 @@ Native-format selections require reviewed conversion mappings before this step.
 """
 
 from collections.abc import Iterable
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from corpora_linking import Endpoint, StructuralLocator, TextLocator, TextSnapshot
@@ -16,6 +17,32 @@ from .linking_publication import PublicationSnapshot, SnapshotEntry, render_cusx
 
 CX = "urn:corpora:usx-extension:0.1"
 STREAM = "cusx-itertext/v1"
+
+
+def load_cusx_inventory(path: Path) -> dict[str, object]:
+    """Load verified chapter XML/snapshots; callers still supply access grants.
+
+    Conversion creates no entitlements, references or publication authority.
+    Existing inventory resolvers can retrieve each document's exact pinned
+    stream without interpreting the ZIP as if it were one XML document.
+    """
+    from admin.converters.cusx_package import read_package_documents
+
+    documents = read_package_documents(path)
+    # The operator can pass this to LinkingInventory.model_validate without
+    # forcing the optional PostgreSQL driver into local package inspection.
+    return {
+        "snapshots": tuple(snapshot for snapshot, _ in documents),
+        "assets": tuple(
+            {
+                "endpoint": snapshot.endpoint,
+                "format": "cusx",
+                "data": data,
+                "checksum": snapshot.endpoint.revision,
+            }
+            for snapshot, data in documents
+        ),
+    }
 
 
 class AnchorBinding(Value):

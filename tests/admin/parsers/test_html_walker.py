@@ -48,7 +48,10 @@ class TestElementToUnit:
         assert [c.type for c in unit.children] == [TEXT_UNIT_TYPE, "b", TEXT_UNIT_TYPE]
         assert [t.text for t in unit.children[0].tokens] == ["Hello"]
         assert [t.text for t in unit.children[1].tokens] == ["world"]
-        assert [t.text for t in unit.children[2].tokens] == ["and", "me"]
+        assert [t.text for t in unit.children[2].tokens] == ["", "and", "me"]
+        from admin.parsers.epub_structure import unit_text
+
+        assert unit_text(unit) == "Hello world and me"
 
     def test_skip_tags_dropped(self):
         unit = element_to_unit(
@@ -76,7 +79,7 @@ class TestTopLevelUnits:
             "html.parser",
         )
         units = top_level_units(soup.find("body"))
-        assert [u.type for u in units] == ["p", "div"]
+        assert [u.type for u in units] == ["text", "p", "div"]
 
 
 class TestHtmlParser:

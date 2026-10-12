@@ -35,7 +35,9 @@ dependencies = [
     "ebooklib>=0.20",
     "beautifulsoup4>=4.15.0",
     "lxml>=6.1.1",
+    "markdown-it-py>=4.0,<5",
     "pypdf>=6.14.2",
+    "PyMuPDF>=1.26,<2",
     "pdf-inspector>=1.17.0",
     "pyyaml>=6.0.3",
     "huggingface-hub>=1.0",
@@ -49,7 +51,7 @@ dependencies = [
 [project.optional-dependencies]
 # Full Docling converter for /ingest (admin.ingest) — heavy (torch). Enable
 # with `uv sync --extra docling` in dev, or install `corpora-py[docling]`.
-docling = ["docling>=2.0"]
+docling = ["docling==2.137.0", "docling-core==2.101.1", "docling-ibm-models==4.0.3", "docling-parse==7.22.2", "tesserocr==2.11.0"]
 linking-pymupdf = ["PyMuPDF>=1.26,<2"]
 linking-postgres = ["psycopg[binary]>=3.2,<4"]
 linking-pdf = [

@@ -43,6 +43,7 @@ class TestRegistries:
             SourceFormat.TEI,
             SourceFormat.TEI_ZIP,
             SourceFormat.PLAIN,
+            SourceFormat.MARKDOWN,
             SourceFormat.TF_ZIP,
         }
 

@@ -72,3 +72,4 @@ resources/python/
 # Reviewed, versioned application migrations.
 !packages/admin/sql/migrations/*.sql
 !packages/admin/sql/tests/*.sql
+.pyatlas/

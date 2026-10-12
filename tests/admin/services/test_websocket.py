@@ -53,3 +53,29 @@ class TestPush:
             snapshot = ws.receive_json()
             assert snapshot["status"] == "failed"
             assert "owner" not in snapshot
+
+
+def test_progress_push_continues_after_log_history_reaches_cap(client, manager):
+    from admin.services.jobs import _MAX_LOG_LINES
+    job = _submit(manager)
+    job.status = JobStatus.RUNNING
+    for index in range(_MAX_LOG_LINES):
+        manager.log(job.id, f"page {index}")
+    with client.websocket_connect(f"/convert/{job.id}/ws") as ws:
+        first = ws.receive_json()
+        manager.log(job.id, "new page after history cap")
+        second = ws.receive_json()
+        assert len(first["logs"]) == len(second["logs"]) == _MAX_LOG_LINES
+        assert second["last_log"] == "new page after history cap"
+
+
+def test_rest_status_preserves_confirmed_pdf_page_counts(client, manager):
+    from admin.parsers.pdf_progress import report_page, report_pdf_progress
+    job = _submit(manager, source_format=SourceFormat.PDF)
+    job.status = JobStatus.RUNNING
+    with report_pdf_progress(lambda line: manager.log(job.id, line)):
+        report_page(54, 232)
+    response = client.get(f"/convert/{job.id}")
+    assert response.status_code == 200
+    assert response.json()["progress"]["completed_pages"] == 54
+    assert response.json()["progress"]["total_pages"] == 232

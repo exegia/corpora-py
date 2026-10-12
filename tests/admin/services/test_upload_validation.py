@@ -116,6 +116,8 @@ class TestPdfClassification:
     def _validate(self, tmp_path, monkeypatch, classification):
         fake = SimpleNamespace(classify_pdf=lambda p: classification)
         monkeypatch.setitem(__import__("sys").modules, "pdf_inspector", fake)
+        from admin.parsers import pdf_ocr
+        monkeypatch.setattr(pdf_ocr, "inspect_pdf", lambda path: 3)
         path = _write(tmp_path, b"%PDF-1.4 body", name="doc.pdf")
         return uv.validate_upload(path, SourceFormat.PDF)
 
@@ -130,10 +132,10 @@ class TestPdfClassification:
         }
 
     @pytest.mark.parametrize("pdf_type", ["scanned", "image_based"])
-    def test_textless_pdf_rejected(self, tmp_path, monkeypatch, pdf_type):
+    def test_textless_pdf_accepted_for_forced_ocr(self, tmp_path, monkeypatch, pdf_type):
         report = self._validate(tmp_path, monkeypatch, _classification(pdf_type))
-        assert not report.convertible
-        assert "OCR" in report.reasons[0]
+        assert report.convertible
+        assert "OCR" in report.warnings[0]
         assert report.pdf["pdf_type"] == pdf_type
 
     def test_mixed_pdf_warns_with_one_based_pages(self, tmp_path, monkeypatch):
@@ -142,7 +144,7 @@ class TestPdfClassification:
         )
         assert report.convertible
         assert report.pdf["pages_needing_ocr"] == [1, 3]
-        assert "1, 3" in report.warnings[0]
+        assert "every page" in report.warnings[0]
 
     def test_unreadable_pdf_rejected(self, tmp_path, monkeypatch):
         def boom(path):
@@ -161,6 +163,8 @@ class TestPdfClassification:
 
         fake = SimpleNamespace(classify_pdf=boom)
         monkeypatch.setitem(__import__("sys").modules, "pdf_inspector", fake)
+        from admin.parsers import pdf_ocr
+        monkeypatch.setattr(pdf_ocr, "inspect_pdf", lambda path: 3)
         path = _write(tmp_path, b"%PDF-1.4 body", name="doc.pdf")
         report = uv.validate_upload(path, SourceFormat.PDF)
         assert report.convertible

@@ -176,9 +176,7 @@ def _section_walk(unit, section_features):
 def _node_features(cv, otype):
     """Features set on nodes (not slots) of the given otype, in walk order."""
     return [
-        c[2]
-        for c in cv.calls
-        if c[0] == "feature" and isinstance(c[1], tuple) and c[1][0] == otype
+        c[2] for c in cv.calls if c[0] == "feature" and isinstance(c[1], tuple) and c[1][0] == otype
     ]
 
 
@@ -307,3 +305,23 @@ class TestConvertDocumentsSections:
         self._convert(tmp_path, spec)
         label = (tmp_path / "tf" / "label.tf").read_text()
         assert "Tiny Bible" in label
+
+
+def test_crlf_source_compiles_without_extra_feature_nodes(tmp_path):
+    from admin.converters._text_to_tf import convert_text_to_tf
+    from admin.converters.convert_to_cfm import convert_to_cfm
+    from cfabric import Fabric
+
+    source = tmp_path / "notes.txt"
+    text = "  וְחַטָּאִ֑ים é 😀\r\n\r\n trailing \r\n "
+    source.write_bytes(text.encode())
+    dataset = convert_text_to_tf(str(source), tmp_path / "tf")
+    assert any("CR/CRLF" in warning for warning in dataset.warnings)
+    assert convert_to_cfm(dataset).is_dir()
+    api = Fabric(locations=str(dataset)).loadAll()
+    assert not isinstance(api, bool)
+    stream = "".join(
+        (api.F.text.v(n) or "") + (api.F.after.v(n) or "")
+        for n in range(1, api.F.otype.maxSlot + 1)
+    )
+    assert stream == text.replace("\r\n", "\n")

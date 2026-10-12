@@ -31,7 +31,7 @@ class TestTokenize:
         tokens = tokenize("word \n")
         assert tokens[-1].after == " \n"
 
-    @pytest.mark.parametrize("empty", [None, "", "   "])
+    @pytest.mark.parametrize("empty", [None, ""])
     def test_empty_or_blank_input(self, empty):
         if empty and empty.strip() == "":
             # whitespace-only: no \S+ matches
@@ -43,6 +43,10 @@ class TestTokenize:
         tokens = tokenize("Hello, world!")
         assert tokens[0].text == "Hello,"
         assert tokens[1].text == "world!"
+
+    @pytest.mark.parametrize("text", ["   ", "\n\t", "  Hebrew zeros", "\u00a0הָ\u00a0"])
+    def test_leading_and_whitespace_only_runs_round_trip(self, text):
+        assert "".join(t.text + t.after for t in tokenize(text)) == text
 
 
 class TestModels:

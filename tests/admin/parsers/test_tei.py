@@ -64,7 +64,7 @@ class TestIterUnits:
         assert [u.type for u in units] == ["div", "div"]
         assert units[0].label == "Chapter One"
         # the <head> child was consumed into the label
-        assert [c.type for c in units[0].children] == ["p"]
+        assert [c.type for c in units[0].children if c.type != "text"] == ["p"]
         assert units[1].label is None
 
 

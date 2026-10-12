@@ -839,3 +839,46 @@ class TestMakeBackends:
 
         assert isinstance(make_job_store(), SupabaseJobStore)
         assert isinstance(make_result_store(), SupabaseResultStore)
+
+
+def test_pdf_progress_extends_idle_watchdog_and_survives_shared_store(monkeypatch):
+    from admin.parsers.pdf_progress import report_page, report_pdf_progress
+    store = CopyingJobStore()
+    manager = make_manager(DeferredExecutor(), store=store, stall_timeout_seconds=10)
+    manager.submit(source_format=SourceFormat.PDF, name="book", fn=lambda: Path("x"), job_id="pdf")
+    job = store.get("pdf")
+    job.status = JobStatus.RUNNING
+    job.started_at = time.time() - 60
+    store.put(job)
+    with report_pdf_progress(lambda line: manager.log("pdf", line)):
+        report_page(3, 232)
+    other = make_manager(DeferredExecutor(), store=store, stall_timeout_seconds=10)
+    fetched = other.get("pdf")
+    assert fetched.status == JobStatus.RUNNING
+    assert fetched.to_dict()["progress"]["completed_pages"] == 3
+    assert fetched.to_dict()["progress"]["total_pages"] == 232
+    activity = fetched.to_dict()["progress"]["updated_at"]
+    monkeypatch.setattr(time, "time", lambda: activity + 11)
+    stalled = other.get("pdf")
+    assert stalled.status == JobStatus.FAILED
+    assert "without OCR page progress" in stalled.error
+
+
+@pytest.mark.parametrize("waiting", ["PDF OCR: waiting for worker", "PDF comparison: waiting for independent worker"])
+def test_pdf_waiting_for_ocr_slot_is_not_stalled(waiting):
+    manager = make_manager(DeferredExecutor(), stall_timeout_seconds=10)
+    job = manager.submit(source_format=SourceFormat.PDF, name="book", fn=lambda: Path("x"))
+    job.status = JobStatus.RUNNING
+    job.started_at = time.time() - 60
+    manager.log(job.id, waiting)
+    assert manager.get(job.id).status == JobStatus.RUNNING
+
+
+def test_pdf_archive_stage_progress_survives_page_log_trimming():
+    manager = make_manager(DeferredExecutor(), stall_timeout_seconds=10)
+    job = manager.submit(source_format=SourceFormat.PDF, name="book", fn=lambda: Path("x"))
+    job.status = JobStatus.RUNNING
+    job.started_at = time.time() - 60
+    for index in range(_MAX_LOG_LINES + 1):
+        manager.log(job.id, f"Source diagnostic: retained asset {index}")
+    assert manager.get(job.id).status == JobStatus.RUNNING
