@@ -22,15 +22,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import zipfile
 from pathlib import Path
 from typing import Any
 
-import yaml
 from corpora_mcp.corpus import corpus_manager
 from corpora_mcp.validate import validate_corpus, validate_corpus_archive
 from fastapi import APIRouter, HTTPException, Request
-from lxml import etree
 from pydantic import BaseModel, Field, model_validator
 
 from .jobs import JobStatus, job_manager
@@ -143,7 +140,7 @@ async def validate(payload: ValidationRequest, request: Request) -> ValidationRe
 
         try:
             summary = await asyncio.to_thread(validate_ctei_archive, target_path)
-        except (ValueError, zipfile.BadZipFile, etree.XMLSyntaxError, yaml.YAMLError) as exc:
+        except Exception as exc:
             return ValidationResponse(
                 corpus=name,
                 path=str(target_path),

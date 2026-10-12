@@ -264,3 +264,30 @@ def test_validate_corrupt_ctei_returns_invalid_verdict(client, tmp_path):
     assert resp.status_code == 200
     assert resp.json()["valid"] is False
     assert resp.json()["reasons"]
+
+
+@pytest.mark.parametrize("member,content", [
+    ("manifest.yml", "{}"), ("manifest.yml", "[]"),
+    ("manifest.yml", "null"), ("toc.yml", "null"),
+])
+def test_validate_malformed_ctei_metadata_returns_invalid(client, tmp_path, member, content):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    with zipfile.ZipFile(archive) as zf:
+        files = {name: zf.read(name) for name in zf.namelist() if not name.endswith("/")}
+    files[member] = content.encode()
+    with zipfile.ZipFile(archive, "w") as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+
+    resp = client.post("/validate", json={"path": str(archive)})
+    assert resp.status_code == 200
+    assert resp.json()["valid"] is False
+    assert resp.json()["reasons"]
