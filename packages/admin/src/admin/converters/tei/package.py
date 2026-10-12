@@ -452,10 +452,6 @@ def _validate_ctei_archive(path: Path, schemas: tuple) -> dict:
         infos = zf.infolist()
         if any(info.flag_bits & 1 for info in infos):
             raise ValueError("Encrypted CTEI ZIP members are not supported")
-        if any(info.compress_type not in {
-            zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED, zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA,
-        } for info in infos):
-            raise ValueError("Unsupported CTEI ZIP compression")
         names = [i.filename for i in infos]
         if (
             len(names) != len(set(names))
@@ -470,9 +466,12 @@ def _validate_ctei_archive(path: Path, schemas: tuple) -> dict:
                 or "\\" in name
             ):
                 raise ValueError("CTEI member escapes archive")
-        if not REQUIRED <= set(names) or zf.testzip() is not None:
-            raise ValueError("CTEI ZIP is incomplete or corrupt")
-        files = {n: zf.read(n) for n in names if not n.endswith("/")}
+        try:
+            if not REQUIRED <= set(names) or zf.testzip() is not None:
+                raise ValueError("CTEI ZIP is incomplete or corrupt")
+            files = {n: zf.read(n) for n in names if not n.endswith("/")}
+        except NotImplementedError as exc:
+            raise ValueError("Unsupported CTEI ZIP compression") from exc
     manifest = yaml.safe_load(files["manifest.yml"])
     toc = yaml.safe_load(files["toc.yml"])
     if (
