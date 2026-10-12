@@ -45,7 +45,7 @@ def test_real_upload_poll_download_manifest_and_versions(client, manager, claims
     assert client.get(f"/convert/{job_id}/content").status_code == 409
 
 
-@pytest.mark.parametrize("format", ["tei", "invalid", "cusx"])
+@pytest.mark.parametrize("format", ["tei", "invalid", "c-usx"])
 def test_output_format_enum_rejects_invalid_targets(client, format):
     response = client.post(
         "/convert",
@@ -88,7 +88,7 @@ def test_openapi_declares_ctei(client):
         for s in spec["components"]["schemas"].values()
         if "output_format" in s.get("properties", {}) and "file" in s["properties"]
     )
-    assert schema["properties"]["output_format"]["enum"] == ["corpus", "ctei"]
+    assert schema["properties"]["output_format"]["enum"] == ["corpus", "cusx", "ctei"]
 
 
 def test_malformed_ctei_history_returns_metadata_error(client, manager):

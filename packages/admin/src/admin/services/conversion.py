@@ -99,8 +99,7 @@ def extract_source_title(
         return parser.parse_metadata(str(source_path)).title
     except Exception:
         logger.warning(
-            "Metadata extraction failed for %s (%s) -- falling back to "
-            "request name",
+            "Metadata extraction failed for %s (%s) -- falling back to request name",
             source_path.name,
             source_format.value,
             exc_info=True,
@@ -156,6 +155,10 @@ def validate_archive(archive: Path) -> dict[str, Any]:
         from ..converters.tei import validate_ctei_archive
 
         return validate_ctei_archive(archive)
+    if archive.suffix == ".cusx":
+        from ..converters.cusx import validate_cusx_archive
+
+        return validate_cusx_archive(archive)
     from corpora_mcp.validate import validate_corpus_archive
 
     return validate_corpus_archive(archive).summary()
@@ -171,7 +174,7 @@ def run_conversion(
     work_dir: Path,
     source_format: SourceFormat,
     output_path_for: Callable[[str], Path],
-    output_format: Literal["corpus", "ctei"] = "corpus",
+    output_format: Literal["corpus", "cusx", "ctei"] = "corpus",
     name: str = "",
     description: str = "",
     category: CorpusCategory | None = None,
@@ -230,6 +233,34 @@ def run_conversion(
                 raise
             on_validation(summary)
             on_log(f"CTEI archive validated; {summary['stats']['review_items']} items require human review.")
+            return result
+        if output_format == "cusx":
+            from ..converters.cusx import convert_to_cusx
+
+            on_log(f"Parsing {source_format.value} source for C-USX...")
+            try:
+                result = convert_to_cusx(
+                    source_path,
+                    output_path_for(display_name),
+                    source_format=source_format,
+                    name=display_name,
+                    description=description,
+                    author_sub=author_sub,
+                    category=category.value if category else "",
+                )
+            except ValueError as exc:
+                message = str(exc).strip()
+                if message and not mentions_any_path(message, private_paths):
+                    raise ConversionError(message) from exc
+                raise
+            on_log("C-USX XML compiled and compressed. Validating package...")
+            summary = validate_archive(result)
+            on_validation(summary)
+            if not summary.get("valid"):
+                raise CorpusValidationError(
+                    "Converted C-USX package failed validation", summary
+                )
+            on_log("Conversion complete.")
             return result
         if output_format != "corpus":
             raise ConversionError("Unsupported conversion output format")

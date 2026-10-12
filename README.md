@@ -33,6 +33,19 @@ Auth is **on** by default and fails closed (401 without a Supabase JWT).
 
 ---
 
+## C-USX conversion direction
+
+The development API adds `output_format=cusx` to `POST /convert`: individual
+EPUB/PDF/HTML/XML/TEI/plain documents become compressed `.cusx` packages containing
+extended USX XML, the parsed tree and a pinned reference-linking text snapshot.
+The example app requests that format and uses the existing manual Hugging Face
+publication action. Bucket/repo settings and upload authentication are unchanged.
+
+This option is not yet in released v6.0.0. Existing API callers retain corpus
+output when the option is omitted; dataset ZIPs keep their corpus import path.
+No corpus workflow is removed or assigned a deprecation deadline. See the
+[C-USX package contract and consumer limits](docs/architecture/cusx-package.md).
+
 ## What you get
 
 ```mermaid
@@ -226,3 +239,17 @@ MCP-only image: `dockerfiles/Dockerfile.client` · Compose:
 ## License
 
 [MIT](LICENSE)
+
+## Reference linking library
+
+Building a reader app? Start with the [small-step client guide](specs/reference-linking/client/README.md)
+for copyable selection, save, retrieval and review examples.
+
+The independently released [corpora-linking core](https://github.com/exegia/corpora-linking) supports
+revision-pinned manual selections and automatic citation intake, preserving unknown
+works, ambiguous passages and stale anchors. Its only runtime dependency is Pydantic.
+Optional umbrella adapters cover PDF, EPUB CFI, HTML/browser ranges, C-USX publication
+and authenticated working-reference management. See [application composition and
+limits](specs/reference-linking/production.md). Linking is disabled by default; its
+database schema remains an unapplied proposal. The core is installed from PyPI;
+its independent repository owns core source, builds and publication.

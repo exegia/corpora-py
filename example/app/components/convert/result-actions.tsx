@@ -59,7 +59,7 @@ export function CompletedResult({
   // already-published archive still renders its link below.
   const capabilities = useCapabilities()
   const canPublish =
-    outputFormat === "corpus" && capabilities?.hubWritable === true
+    outputFormat !== "ctei" && capabilities?.hubWritable === true
   return (
     <div
       className={cn(

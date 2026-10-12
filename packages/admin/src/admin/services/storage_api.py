@@ -65,10 +65,12 @@ def require_writable() -> None:
             detail="This deployment is read-only; Hub writes are disabled.",
         )
 
+
 # Where `GET /storage/{filename}/download` materializes archives fetched from
 # the Hub before streaming them back. Like `_RESULTS_ROOT` (`api.py`) nothing
 # reaps this yet -- same TTL-cleanup gap, tracked in `packages/admin/CLAUDE.md`.
 _HUB_CACHE_ROOT = Path(tempfile.gettempdir()) / "corpora-admin-hub-cache"
+
 
 async def _run[T](fn: Callable[[], T]) -> T:
     """Run one blocking storage call off the event loop, mapping errors to HTTP.
@@ -159,7 +161,11 @@ def _resolve_upload_source(payload: UploadRequest, request: Request) -> tuple[Pa
             raise HTTPException(
                 status_code=409, detail=f"Job is {job.status.value}, not ready"
             )
-        return path, payload.filename or f"{job.name}.corpus"
+        return path, payload.filename or (
+            job.to_dict()["result_filename"]
+            if path.suffix == ".cusx"
+            else f"{job.name}.corpus"
+        )
 
     local = Path(payload.path).expanduser()  # type: ignore[arg-type]
     if not local.is_file():

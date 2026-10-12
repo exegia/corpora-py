@@ -10,6 +10,7 @@ import re
 import shutil
 from functools import cache
 from pathlib import Path
+from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from lxml import etree, isoschematron
@@ -86,7 +87,13 @@ def tei_text(n, *, notes=True):
 
 def ledger(nodes: list[dict]) -> dict:
     """Independent source projection before serialization, including mixed-content tails."""
-    result = {"blocks": [], "notes": [], "tables": [], "graphics": [], "abbreviations": []}
+    result: dict[str, list[Any]] = {
+        "blocks": [],
+        "notes": [],
+        "tables": [],
+        "graphics": [],
+        "abbreviations": [],
+    }
 
     def abbreviations(n, parent=None):
         if n["tag"] == "abbr":
@@ -134,7 +141,13 @@ def ledger(nodes: list[dict]) -> dict:
 
 def tei_ledger(roots) -> dict:
     """Separate XML-side projection. No pretty-print stripping or Unicode normalization."""
-    result = {"blocks": [], "notes": [], "tables": [], "graphics": [], "abbreviations": []}
+    result: dict[str, list[Any]] = {
+        "blocks": [],
+        "notes": [],
+        "tables": [],
+        "graphics": [],
+        "abbreviations": [],
+    }
 
     for root in roots:
         text = root.find(f"{{{NS}}}text")

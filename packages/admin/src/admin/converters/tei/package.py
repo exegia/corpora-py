@@ -196,7 +196,7 @@ def convert_to_ctei(
             ).text = message
 
         docs = []
-        presentations = {}
+        presentations: dict[str, list[str]] = {}
         for document in index["documents"]:
             path = VERSION_DIR + "/" + Path(document["path"]).name
             tei = xml((reading / document["path"]).read_bytes())
@@ -216,7 +216,11 @@ def convert_to_ctei(
                 if semantic:
                     if local == "head":
                         depth = len(element.xpath("ancestor::t:div", namespaces=T))
-                        semantic = "caption" if element.xpath("ancestor::t:figure|ancestor::t:table", namespaces=T) else "h" + str(min(max(depth, 1), 6))
+                        semantic = (
+                            "caption"
+                            if element.xpath("ancestor::t:figure|ancestor::t:table", namespaces=T)
+                            else "h" + str(min(max(depth, 1), 6))
+                        )
                     presentations.setdefault(semantic, []).append(target)
                 if local in {"gap", "unclear"}:
                     finding(
@@ -282,12 +286,12 @@ def convert_to_ctei(
                 styles, f"{{{CTEI_NS}}}style", semantic=semantic, targets=" ".join(targets)
             )
         registered = {e.get("path") for e in mapping}
-        for path in sorted(assets.rglob("*")):
-            if path.is_file() and path.relative_to(root).as_posix() not in registered:
+        for asset_path in sorted(assets.rglob("*")):
+            if asset_path.is_file() and asset_path.relative_to(root).as_posix() not in registered:
                 etree.SubElement(
                     mapping,
                     f"{{{CTEI_NS}}}asset",
-                    path=path.relative_to(root).as_posix(),
+                    path=asset_path.relative_to(root).as_posix(),
                     placement="supplementary",
                 )
         for supplemental in ("assets/mapping.xml", "assets/conversion/receipt.json"):
@@ -385,8 +389,8 @@ def convert_to_ctei(
         )
         archive = temporary / "result.ctei"
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
-            for path in sorted(root.rglob("*")):
-                zf.write(path, path.relative_to(root).as_posix())
+            for member_path in sorted(root.rglob("*")):
+                zf.write(member_path, member_path.relative_to(root).as_posix())
         validate_ctei_archive(archive)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if output_path.exists():
@@ -522,7 +526,21 @@ def validate_ctei_archive(path: Path) -> dict:
     for style in roots["presentations/styles.xml"]:
         if set(style.attrib) != {"semantic", "targets"} or style.tag != f"{{{CTEI_NS}}}style":
             raise ValueError("CTEI presentations must contain semantic roles only")
-        if style.get("semantic") not in {"h1", "h2", "h3", "h4", "h5", "h6", "paragraph", "table", "note", "figure", "caption", "list", "poetry"}:
+        if style.get("semantic") not in {
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "paragraph",
+            "table",
+            "note",
+            "figure",
+            "caption",
+            "list",
+            "poetry",
+        }:
             raise ValueError("CTEI presentations contain an unsupported semantic role")
         for target in style.get("targets", "").split():
             local_target(target)

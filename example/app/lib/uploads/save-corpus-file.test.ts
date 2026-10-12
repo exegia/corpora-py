@@ -7,7 +7,7 @@ afterEach(() => {
   else globalThis.window = originalWindow
 })
 
-for (const extension of ["ctei", "corpus"]) {
+for (const extension of ["ctei", "corpus", "cusx"]) {
   test(`native save uses the .${extension} filename and file filter`, async () => {
     let options: unknown
     let written: Blob | undefined
@@ -15,18 +15,34 @@ for (const extension of ["ctei", "corpus"]) {
     globalThis.window = {
       showSaveFilePicker: async (value: unknown) => {
         options = value
-        return { createWritable: async () => ({
-          write: async (blob: Blob) => { written = blob },
-          close: async () => { closed = true },
-        }) }
+        return {
+          createWritable: async () => ({
+            write: async (blob: Blob) => {
+              written = blob
+            },
+            close: async () => {
+              closed = true
+            },
+          }),
+        }
       },
     } as unknown as Window & typeof globalThis
     const blob = new Blob(["fixture bytes"], { type: "application/zip" })
     await saveCorpusFile(`book.${extension}`, blob)
-    expect(options).toEqual({ suggestedName: `book.${extension}`, types: [{
-      description: extension === "ctei" ? "TEI archive" : "Corpus archive",
-      accept: { "application/zip": [`.${extension}`] },
-    }] })
+    expect(options).toEqual({
+      suggestedName: `book.${extension}`,
+      types: [
+        {
+          description:
+            extension === "ctei"
+              ? "TEI archive"
+              : extension === "cusx"
+                ? "C-USX archive"
+                : "Corpus archive",
+          accept: { "application/zip": [`.${extension}`] },
+        },
+      ],
+    })
     expect(written).toBe(blob)
     expect(closed).toBe(true)
   })

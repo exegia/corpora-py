@@ -220,9 +220,9 @@ export default function CorpusConvert() {
         return
       case "tf":
       case "fallback":
-        if (selectedFormat === "ctei") {
+        if (selectedFormat !== "corpus") {
           reject(
-            ".ctei conversion accepts a ZIP containing one source document. Upload an EPUB, HTML, TEI/XML, PDF or text file directly instead of a Text-Fabric dataset."
+            `.${selectedFormat} conversion accepts a ZIP containing one source document. Upload an EPUB, HTML, TEI/XML, PDF or text file directly instead of a Text-Fabric dataset.`
           )
           return
         }
@@ -235,9 +235,9 @@ export default function CorpusConvert() {
         )
         return
       case "tei":
-        if (selectedFormat === "ctei") {
+        if (selectedFormat !== "corpus") {
           reject(
-            "For .ctei conversion, upload one TEI document or an EPUB. ZIP archives containing multiple TEI documents are supported for .corpus conversion."
+            `For .${selectedFormat} conversion, upload one TEI document or an EPUB. ZIP archives containing multiple TEI documents are supported for .corpus conversion.`
           )
           return
         }
@@ -290,7 +290,9 @@ export default function CorpusConvert() {
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
           {activeFormat === "ctei"
             ? "Package your source document as TEI, with metadata, references, assets and a separate review file."
-            : "Package your source document as a Context-Fabric .corpus archive."}
+            : activeFormat === "cusx"
+              ? "Package your source document as a compressed C-USX .cusx archive."
+              : "Package your source document as a Context-Fabric .corpus archive."}
         </p>
       </div>
 
@@ -309,6 +311,7 @@ export default function CorpusConvert() {
           className="rounded-md border border-border bg-background px-3 py-2 text-sm disabled:opacity-60"
         >
           <option value="corpus">.corpus — Context-Fabric</option>
+          <option value="cusx">.cusx — C-USX archive</option>
           <option value="ctei">.ctei — TEI archive</option>
         </select>
         {activeFormat === "ctei" && (

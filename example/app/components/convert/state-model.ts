@@ -163,7 +163,9 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     validationLogs.push({
       text: tei
         ? "Checking TEI archive validation returned by the conversion service…"
-        : "Checking dataset validation from the conversion service (full .tf → .cfm load cycle)…",
+        : outputFormat === "cusx"
+          ? "Checking C-USX archive validation from the conversion service…"
+          : "Checking dataset validation from the conversion service (full .tf → .cfm load cycle)…",
       tone: "info",
     })
   }
@@ -187,6 +189,15 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
             tone: "warning",
           })
         }
+        break
+      }
+      if (outputFormat === "cusx") {
+        validationLogs.push({
+          text: stats
+            ? `C-USX archive validated — ${stats.documents ?? 0} documents, ${stats.units ?? 0} units, ${stats.characters ?? 0} characters.`
+            : "C-USX archive validated.",
+          tone: "success",
+        })
         break
       }
       validationLogs.push({
@@ -357,7 +368,11 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     },
     {
       id: "validation",
-      label: tei ? "TEI archive validated" : "Dataset validated",
+      label: tei
+        ? "TEI archive validated"
+        : outputFormat === "cusx"
+          ? "C-USX archive validated"
+          : "Dataset validated",
       state: validationState,
       logs: validationLogs,
     },

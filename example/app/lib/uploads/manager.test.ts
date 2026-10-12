@@ -68,11 +68,13 @@ describe("conversion output selection", () => {
     deleteUpload(retried)
   })
 
-  test("defaults existing callers to .corpus", async () => {
+  test("sends the selected .corpus output", async () => {
     const requests = stubFetch(() =>
       Response.json({ detail: "Fixture" }, { status: 503 })
     )
-    const id = uploadFile(new File(["Text"], "book.txt"))
+    const id = uploadFile(new File(["Text"], "book.txt"), {
+      outputFormat: "corpus",
+    })
     await Bun.sleep(0)
     expect((requests[0]!.init!.body as FormData).get("output_format")).toBe(
       "corpus"
@@ -320,4 +322,34 @@ describe("publishUpload", () => {
     await publishUpload("nope")
     expect(requests).toHaveLength(0)
   })
+})
+
+describe("conversion output choice", () => {
+  for (const [sourceFormat, outputFormat] of [
+    ["plain", "cusx"],
+    ["epub", "cusx"],
+    ["pdf", "cusx"],
+    ["tf_zip", "corpus"],
+    ["tei_zip", "corpus"],
+  ] as const) {
+    test(`${sourceFormat} requests ${outputFormat} without publishing`, async () => {
+      const requests = stubFetch(() =>
+        Response.json(
+          { detail: "test stops after submission" },
+          { status: 422 }
+        )
+      )
+      const id = uploadFile(new File(["text"], "fixture.txt"), { sourceFormat })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      try {
+        expect(requests).toHaveLength(1)
+        expect(requests[0].url).toBe(`${API_URL}/convert`)
+        const form = requests[0].init?.body as FormData
+        expect(form.get("source_format")).toBe(sourceFormat)
+        expect(form.get("output_format")).toBe(outputFormat)
+      } finally {
+        deleteUpload(id)
+      }
+    })
+  }
 })

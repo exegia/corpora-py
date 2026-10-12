@@ -63,7 +63,7 @@ _MAX_LOG_LINES = 50
 # suffix, so a client never persists the original source filename as the
 # library object (see issue #108).
 _CORPUS_SUFFIX = ".corpus"
-_ARCHIVE_SUFFIXES = {".corpus", ".ctei"}
+_ARCHIVE_SUFFIXES = {".corpus", ".cusx", ".ctei"}
 _GRAPH_SUFFIX = ".graph.json"
 
 # One or more non-alphanumeric characters collapsed to a single dash. Used
@@ -126,6 +126,8 @@ def result_filename_for(
     `Content-Disposition` -- so a client that stores only this filename
     never persists the original source file as the library object.
     """
+    if output_format not in ("corpus", "cusx", "ctei"):
+        raise ValueError("unsupported output format")
     slug = _slugify(name) or _slugify(job_id) or job_id
     if isinstance(source_format, SourceFormat):
         suffix = "." + output_format
@@ -376,6 +378,9 @@ class ConversionJob:
     completion: Future[None] | None = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> dict[str, Any]:
+        # Older rows predate output_format; the stored result suffix remains authoritative.
+        suffix = Path(self.result_key or self.result_path or "").suffix
+        output_format = suffix[1:] if suffix in _ARCHIVE_SUFFIXES else self.output_format
         # The on-disk `result_path.name` (e.g. `job-abc123.corpus`) is a
         # server-internal unique id, not a useful library filename. The
         # `result_filename` we expose is derived from the display name (or
@@ -393,14 +398,14 @@ class ConversionJob:
                 self.display_name or self.name,
                 self.source_format,
                 job_id=self.id,
-                output_format=self.output_format,
+                output_format=output_format,
             )
         return {
             "id": self.id,
             "source_format": self.source_format.value
             if isinstance(self.source_format, SourceFormat)
             else self.source_format,
-            "output_format": self.output_format,
+            "output_format": output_format,
             "name": self.name,
             "display_name": self.display_name,
             "status": self.status.value,
@@ -868,7 +873,11 @@ class JobManager:
                 if job.result_path is not None:
                     Path(job.result_path).unlink(missing_ok=True)
                 self._store.delete(job.id)
-                logger.debug("Reaped expired job %s (finished %.0fs ago)", job.id, now - job.finished_at)
+                logger.debug(
+                    "Reaped expired job %s (finished %.0fs ago)",
+                    job.id,
+                    now - job.finished_at,
+                )
 
     def shutdown(self, *, wait: bool = False) -> None:
         """Best-effort shutdown for use from an app lifespan.

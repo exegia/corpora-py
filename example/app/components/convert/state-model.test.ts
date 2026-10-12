@@ -39,6 +39,22 @@ const STORED: StorageOutcome = {
   sizeBytes: 57609,
 }
 
+test("keeps C-USX validation statistics and publishing after output selection", () => {
+  const entry = baseEntry({
+    corpusName: "book.cusx",
+    validation: {
+      status: "valid",
+      stats: { documents: 1, units: 3, characters: 45 },
+    },
+  })
+  const validation = stageById(entry, "validation")
+  expect(validation.label).toBe("C-USX archive validated")
+  expect(validation.logs.map((line) => line.text).join("\n")).toContain(
+    "1 documents, 3 units, 45 characters"
+  )
+  expect(stageById(entry, "storage").state).toBe("pending")
+})
+
 describe("TEI archive stages", () => {
   const entry = baseEntry({
     outputFormat: "ctei",

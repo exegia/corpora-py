@@ -97,6 +97,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp.utilities.lifespan import combine_lifespans
 
+from corpora_py.linking_api import router as linking_router
+from corpora_py.linking_bootstrap import configure_from_environment
+
 from .ai import router as ai_router
 from .ai.mcp import register_curation_tools
 from .auth import AuthMiddleware
@@ -172,6 +175,11 @@ app.include_router(validation_router)
 app.include_router(storage_router)
 app.include_router(corpus_detail_router)
 app.include_router(reference_router)
+# Optional linking surface: remains unavailable until trusted startup composition.
+
+app.include_router(linking_router)
+# No optional drivers are imported unless the operator explicitly enables linking.
+configure_from_environment(app)
 # AI curation: providers + authorized validation are live; chat/write/thread
 # routes keep their frozen contract and answer 501 while #214 is implemented.
 app.include_router(ai_router)

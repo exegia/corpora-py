@@ -21,6 +21,7 @@ import { detectSourceFormat } from "./source-format"
 import { saveCorpusFile } from "./save-corpus-file"
 import {
   outputFormatForEntry,
+  defaultOutputFormat,
   supportsOutputFormat,
   type OutputFormat,
 } from "./output-format"
@@ -450,7 +451,11 @@ export const uploadFile = (file: File, options: UploadOptions = {}): string => {
       lastModified: file.lastModified || undefined,
       uploadedAt: Date.now(),
       inspection: options.inspection,
-      outputFormat: options.outputFormat ?? "corpus",
+      outputFormat:
+        options.outputFormat ??
+        defaultOutputFormat(
+          options.sourceFormat ?? detectSourceFormat(file.name)
+        ),
       logs: [],
     }
   })
@@ -466,7 +471,8 @@ const performUpload = async (
 ): Promise<void> => {
   try {
     const sourceFormat = options.sourceFormat ?? detectSourceFormat(file.name)
-    const outputFormat = options.outputFormat ?? "corpus"
+    const outputFormat =
+      options.outputFormat ?? defaultOutputFormat(sourceFormat)
     if (!supportsOutputFormat(sourceFormat, outputFormat)) {
       throw new Error(
         ".ctei conversion requires an individual source document. Upload an EPUB, HTML, TEI/XML, PDF or text file, or a ZIP containing one document."

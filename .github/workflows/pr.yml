@@ -73,6 +73,34 @@ jobs:
         env:
           CORPORA_AI_TEST_POSTGRES: ${{ job.services.postgres.id }}
 
+  # Exercise optional native adapters and reference authorization against a
+  # separate disposable database. The general check job uses another service
+  # for AI tests; reference fixtures own their roles/schema in this one.
+  linking:
+    name: linking
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: reference-ci-disposable
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: uv sync --frozen --extra linking-postgres --extra linking-pdf --extra linking-pymupdf
+      - name: Validate native adapters and reference authorization
+        env:
+          LINKING_TEST_POSTGRES_DSN: postgresql://postgres:reference-ci-disposable@127.0.0.1:${{ job.services.postgres.ports[5432] }}/postgres
+        run: uv run --no-sync pytest tests/linking
+
   # The release PR's third gate is the publishable artifact itself: corpora-py
   # ships as one self-contained wheel that bundles every workspace member's
   # source, and the tag pushed after this merge is what triggers the PyPI
@@ -82,7 +110,7 @@ jobs:
     name: package
     # See the guard job for why this is not `github.base_ref`.
     if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'main' }}
-    needs: check
+    needs: [check, linking]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
