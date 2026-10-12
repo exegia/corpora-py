@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react"
 import { type MetaDescriptor } from "react-router"
 import { Card, CardContent } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
+import { Button } from "~/components/ui/button"
 import { GithubRepoInput } from "~/components/convert/github-repo-input"
 import { UploadDropzone } from "~/components/convert/upload-dropzone"
 import { FileSummary } from "~/components/convert/file-summary"
+import { PdfReliabilityResult } from "~/components/convert/pdf-reliability-result"
 import { ProcessingStages } from "~/components/convert/processing-stages"
 import {
   LogConsole,
@@ -42,9 +44,8 @@ const ACCEPTED_EXTENSIONS = Object.keys(EXTENSION_TO_FORMAT)
 // (see deriveStages).
 const buildCompletionLines = (entry: UploadEntry | undefined): LogLine[] => {
   if (!entry) return []
-  // A failed validation never blocks download/save (see manager.ts), so the
-  // completion block carries the caveat alongside the success message rather
-  // than replacing it.
+  // Other formats can retain a validation caveat. PDF source acceptance is
+  // enforced before the entry becomes ready (see manager.ts).
   const validationCaveat: LogLine[] =
     entry.validation?.status === "invalid"
       ? [
@@ -114,8 +115,7 @@ const STATUS_TEXT: Record<UploadEntry["status"], string> = {
   uploading: "Uploading file to the conversion service…",
   queued: "Queued — waiting for the conversion worker…",
   converting: "Converting — this can take a while for large documents.",
-  validating:
-    "Validating — checking the dataset loads through the .tf → .cfm cycle…",
+  validating: "Validating — checking the converted archive…",
   ready: "Conversion completed. Archive ready to save.",
   success: "Conversion completed and saved to disk.",
   error: "Conversion failed. See the failed step above.",
@@ -129,6 +129,7 @@ const buildCopyText = (stages: Stage[], completion: LogLine[]): string =>
 export default function CorpusConvert() {
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
   const [rejection, setRejection] = useState<string | null>(null)
+  const [outputFormat, setOutputFormat] = useState<"corpus" | "cusx">("cusx")
   const {
     uploads,
     uploadFile,
@@ -139,6 +140,15 @@ export default function CorpusConvert() {
   } = useUpload()
 
   const entry = currentUploadId ? uploads[currentUploadId] : undefined
+
+  // A refresh must resume the active conversion card as well as its tracker.
+  useEffect(() => {
+    if (currentUploadId) return
+    const active = Object.values(uploads)
+      .filter((upload) => ["queued", "converting", "validating"].includes(upload.status))
+      .sort((a, b) => (b.uploadedAt ?? 0) - (a.uploadedAt ?? 0))[0]
+    if (active) setCurrentUploadId(active.id)
+  }, [uploads, currentUploadId])
 
   // Play a cue on meaningful status transitions of the tracked upload. A ref
   // keyed by (id, status) makes each transition fire exactly once, even
@@ -202,7 +212,7 @@ export default function CorpusConvert() {
     setCurrentUploadId(null)
 
     if (!file.name.toLowerCase().endsWith(".zip")) {
-      setCurrentUploadId(uploadFile(file))
+      setCurrentUploadId(uploadFile(file, { outputFormat }))
       return
     }
 
@@ -213,17 +223,31 @@ export default function CorpusConvert() {
         return
       case "tf":
       case "fallback":
+        if (outputFormat === "cusx") {
+          reject(
+            "Dataset ZIPs use Corpus (.corpus). Choose Corpus before uploading this archive."
+          )
+          return
+        }
         setCurrentUploadId(
           uploadFile(file, {
             sourceFormat: "tf_zip",
+            outputFormat,
             inspection: result.notes,
           })
         )
         return
       case "tei":
+        if (outputFormat === "cusx") {
+          reject(
+            "TEI dataset ZIPs use Corpus (.corpus). Choose Corpus before uploading this archive."
+          )
+          return
+        }
         setCurrentUploadId(
           uploadFile(file, {
             sourceFormat: "tei_zip",
+            outputFormat,
             inspection: result.notes,
           })
         )
@@ -236,7 +260,9 @@ export default function CorpusConvert() {
           )
           return
         }
-        setCurrentUploadId(uploadFile(extracted, { inspection: result.notes }))
+        setCurrentUploadId(
+          uploadFile(extracted, { outputFormat, inspection: result.notes })
+        )
       }
     }
   }
@@ -258,15 +284,59 @@ export default function CorpusConvert() {
         <h2 className="text-2xl font-semibold">
           Convert to{" "}
           <Badge variant="secondary" className="py-1.5 text-xl">
-            .corpus
+            {outputFormat === "cusx" ? ".cusx" : ".corpus"}
           </Badge>
         </h2>
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          Convert a document into a compressed C-USX <code>.cusx</code> archive.
-          Existing Text-Fabric and TEI dataset ZIPs use the <code>.corpus</code>{" "}
-          import path.
+          {outputFormat === "cusx"
+            ? "Package document text, source hierarchy and available resources as C-USX."
+            : "Build a Corpus archive with Text-Fabric and Context-Fabric for corpus readers and graph queries."}
         </p>
+        <div
+          className="mt-3 flex flex-wrap gap-2"
+          role="group"
+          aria-label="Conversion output"
+        >
+          <Button
+            variant={outputFormat === "corpus" ? "default" : "outline"}
+            aria-pressed={outputFormat === "corpus"}
+            disabled={view !== "empty"}
+            onClick={() => {
+              setOutputFormat("corpus")
+              setRejection(null)
+            }}
+          >
+            Corpus (.corpus)
+          </Button>
+          <Button
+            variant={outputFormat === "cusx" ? "default" : "outline"}
+            aria-pressed={outputFormat === "cusx"}
+            disabled={view !== "empty"}
+            onClick={() => {
+              setOutputFormat("cusx")
+              setRejection(null)
+            }}
+          >
+            C-USX (.cusx)
+          </Button>
+        </div>
       </div>
+
+      {view === "empty" && (
+        <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
+          <p className="font-medium">PDFs use forced OCR on every page</p>
+          <p className="mt-1 text-muted-foreground">
+            Docling 2.137.0 converts the PDF and records its snapshot and hashes.
+            Independent visual OCR then compares every original PDF page with the result.
+            The agreement estimate applies these thresholds: below 50% is a loss,
+            50–90% needs review and manual editing, and above 90% passes.
+          </p>
+          <p className="mt-2 text-muted-foreground">
+            Scores include word order and Hebrew/Greek marks. Review mismatches
+            before using the result; agreement between OCR engines can share errors.
+          </p>
+        </div>
+      )}
 
       <Card>
         <CardContent
@@ -278,7 +348,9 @@ export default function CorpusConvert() {
           <div className="flex flex-col gap-4">
             {view === "empty" ? (
               <>
-                <GithubRepoInput onFile={(file) => void handleFile(file)} />
+                {outputFormat === "corpus" && (
+                  <GithubRepoInput onFile={(file) => void handleFile(file)} />
+                )}
                 <h2 className="mt-4 ml-3 text-xl font-medium">
                   Upload from your computer
                 </h2>
@@ -299,6 +371,9 @@ export default function CorpusConvert() {
                     onRemove={handleReset}
                     onReplace={handleReset}
                   />
+                  {entry.sourceFormat === "pdf" && entry.validation?.sourceReliability && (
+                    <PdfReliabilityResult report={entry.validation.sourceReliability} />
+                  )}
                   {view === "completed" && entry.corpusName && (
                     <CompletedResult
                       displayName={entry.displayName}

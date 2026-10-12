@@ -49,6 +49,8 @@ export function FileSummary({ entry, onRemove, onReplace, className }: FileSumma
     ["Size", entry.size ? formatBytes(entry.size) : null],
     ["Type", entry.type || (extension ? `.${extension}` : null)],
     ["Source format", entry.sourceFormat ?? null],
+    ["OCR pages", entry.sourceFormat === "pdf" && entry.status === "converting" && entry.ocrProgress?.total_pages
+      ? `${entry.ocrProgress.completed_pages} / ${entry.ocrProgress.total_pages}` : null],
     ["Last modified", formatDate(entry.lastModified)],
     ["Uploaded", formatDate(entry.uploadedAt)]
   ]

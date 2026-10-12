@@ -28,7 +28,7 @@ export const useUpload = () => {
 
   // Idempotent; runs client-side only (never during SSR/prerender). First
   // mount anywhere in the app hydrates history and resumes job tracking.
-  useEffect(initUploadManager, [])
+  useEffect(initUploadManager, [initUploadManager])
 
   return {
     uploads,

@@ -73,7 +73,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
   const done = status === "ready" || status === "success"
   // "validating" means the server-side conversion already succeeded -- the
   // stages before validation should render as completed, not stuck.
-  const conversionDone = done || status === "validating"
+  const conversionDone = done || status === "validating" || Boolean(validation?.sourceReliability)
   const serverLogs = logs ?? []
   const serverLogsHaveWarning = serverLogs.some((line) =>
     WARNING_PATTERN.test(line)
@@ -107,7 +107,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
         : "completed"
 
   const convertingState: StageState =
-    failed && jobId
+    failed && jobId && !conversionDone
       ? "failed"
       : status === "converting"
         ? serverLogsHaveWarning
@@ -123,7 +123,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     text: line,
     tone: serverLineTone(line),
   }))
-  if (failed && jobId) {
+  if (failed && jobId && !conversionDone) {
     convertingLogs.push(
       { text: `Error: ${error ?? "Conversion failed"}`, tone: "error" },
       {
@@ -133,16 +133,15 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     )
   }
 
-  // Post-conversion validation (POST /validate by job id): "invalid" marks
-  // the stage failed but never blocks the download/save flow -- the verdict
-  // annotates the finished conversion, it doesn't gate it (see manager.ts).
+  // Post-conversion validation: PDF reliability controls acceptance; a review
+  // pass is a warning and a loss holds download/save (see manager.ts).
   // Entries converted before validation existed have no `validation` at all
   // and get an honest warning rather than a pretend pass.
   const validationState: StageState =
     status === "validating" || validation?.status === "running"
       ? "active"
       : validation?.status === "valid"
-        ? "completed"
+        ? validation.sourceReliability?.review_required ? "warning" : "completed"
         : validation?.status === "invalid"
           ? "failed"
           : validation?.status === "skipped"
@@ -154,7 +153,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
   const validationLogs: LogLine[] = []
   if (status === "validating" || validation) {
     validationLogs.push({
-      text: "Validating dataset — POST /validate (full .tf → .cfm load cycle)…",
+      text: "Validating archive…",
       tone: "info",
     })
   }
@@ -162,13 +161,16 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     case "valid": {
       const stats = validation.stats
       validationLogs.push({
-        text: stats
-          ? `Corpus validated — ${(stats.max_slot ?? 0).toLocaleString()} slots, ${
-              stats.node_types ?? 0
-            } node types, ${
-              (stats.node_features ?? 0) + (stats.edge_features ?? 0)
-            } features`
-          : "Corpus validated.",
+        text:
+          stats?.documents !== undefined
+            ? `C-USX validated — ${stats.documents.toLocaleString()} documents, ${(stats.assets ?? 0).toLocaleString()} assets, ${(stats.characters ?? 0).toLocaleString()} characters`
+            : stats
+              ? `Corpus validated — ${(stats.max_slot ?? 0).toLocaleString()} slots, ${
+                  stats.node_types ?? 0
+                } node types, ${
+                  (stats.node_features ?? 0) + (stats.edge_features ?? 0)
+                } features`
+              : "Corpus validated.",
         tone: "success",
       })
       break
@@ -181,7 +183,9 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
           tone: "error",
         })),
         {
-          text: "Suggested action: the archive can still be saved, but apps may fail to load it — retry the conversion or check the source document.",
+          text: validation.sourceReliability?.passed === false
+            ? "Acceptance is held. " + validation.sourceReliability.message
+            : "Suggested action: the archive can still be saved, but apps may fail to load it — retry the conversion or check the source document.",
           tone: "info",
         }
       )
@@ -200,6 +204,27 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       text: "No validation recorded for this run (converted before validation was added).",
       tone: "warning",
     })
+  }
+  if (validation?.sourceReliability) {
+    const reliability = validation.sourceReliability
+    const score = reliability.score_percent
+    const rounded = score === null ? null : Number(score.toFixed(1))
+    // Preserve the policy boundary when rounding would change the displayed band.
+    const displayScore = score !== null && ((score < 50 && rounded === 50) || (score > 90 && rounded === 90))
+      ? String(score) : score?.toFixed(1)
+    validationLogs.push({
+      text: reliability.score_percent === null
+        ? "Source reliability: unscored. " + reliability.message
+        : `Source reliability: ${displayScore}%. ${reliability.message}`,
+      tone: reliability.decision === "pass" ? "success"
+        : reliability.passed ? "warning" : "error",
+    })
+    for (const mismatch of reliability.mismatches.slice(0, 5)) {
+      validationLogs.push({
+        text: `Page ${mismatch.page_number}: expected ${JSON.stringify(mismatch.expected)}, converted ${JSON.stringify(mismatch.actual)}`,
+        tone: "warning",
+      })
+    }
   }
 
   // Hugging Face Hub publish (POST /storage by job id): a MANUAL step the

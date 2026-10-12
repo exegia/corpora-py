@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react"
+import type { SourceReliability } from "~/lib/atoms/upload-atom"
 
 // Mirrors `admin.services.jobs.ConversionJob.to_dict()` -- see
-// packages/admin/src/admin/services/jobs.py. No progress percentage: the
-// conversion pipeline has no progress hook, so the server only ever reports
-// these four coarse states (see admin/services/websocket.py's docstring).
+// packages/admin/src/admin/services/jobs.py. Job status has four coarse
+// states; forced PDF OCR also carries confirmed page counts.
 export type JobStatus = "queued" | "running" | "succeeded" | "failed"
 
 export type JobStatusMessage = {
@@ -39,6 +39,17 @@ export type JobStatusMessage = {
    */
   result_filename: string
   download_ready: boolean
+  progress?: {
+    completed_pages: number
+    total_pages: number | null
+    updated_at: number
+  } | null
+  validation?: {
+    valid: boolean
+    reasons?: string[]
+    stats?: Record<string, number>
+    source_reliability?: SourceReliability | null
+  } | null
 }
 
 export type WebSocketStatus =
@@ -101,7 +112,7 @@ export class JobGoneError extends Error {
 export type PollFailureReason =
   /** The server 404'd a job we were tracking -- it no longer exists. */
   | "gone"
-  /** The overall `deadlineMs` budget elapsed without a terminal status. */
+  /** No new status or conversion progress within `deadlineMs`. */
   | "timeout"
   /** `maxConsecutiveErrors` fetches failed in a row -- server unreachable. */
   | "unreachable"
@@ -110,10 +121,8 @@ export type PollOptions = {
   /** Base interval between successful status checks. */
   intervalMs?: number
   /**
-   * Hard budget for the whole poll, measured from the first tick. A healthy
-   * conversion of even a very large document finishes well inside this (see
-   * issue #185's benchmarks); a job still non-terminal after the deadline is
-   * wedged, and the UI must stop showing an infinite spinner (issue #189).
+   * Idle budget since the last status/log/progress change. Large forced-OCR
+   * conversions can exceed this total runtime while completing pages.
    */
   deadlineMs?: number
   /** Consecutive fetch failures tolerated before giving up as unreachable. */
@@ -134,8 +143,8 @@ const MAX_ERROR_BACKOFF_MS = 10_000
 /**
  * Polling equivalent of `subscribeJobStatus`, driving `GET /convert/{id}`
  * on an interval until the job reaches a terminal state -- or until the
- * poll itself gives up (issue #189): a 404 for a tracked job, an overall
- * deadline, or too many consecutive fetch failures all end tracking via
+ * poll itself gives up: a 404 for a tracked job, an idle deadline,
+ * or too many consecutive fetch failures all end tracking via
  * `onFailure` instead of spinning forever. Transient errors back off
  * (doubling up to 10 s) rather than hammering at a fixed rate.
  *
@@ -168,7 +177,9 @@ export const pollJobStatus = (
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
   let consecutiveErrors = 0
-  const startedAt = Date.now()
+  let lastActivityAt = Date.now()
+  let lastSignature: string | undefined
+  let waitingForOcrWorker = false
 
   const giveUp = (reason: PollFailureReason) => {
     stopped = true
@@ -177,7 +188,7 @@ export const pollJobStatus = (
 
   const tick = async () => {
     if (stopped) return
-    if (Date.now() - startedAt > deadlineMs) {
+    if (!waitingForOcrWorker && Date.now() - lastActivityAt > deadlineMs) {
       giveUp("timeout")
       return
     }
@@ -186,6 +197,12 @@ export const pollJobStatus = (
       const message = await fetchStatus()
       if (stopped) return
       consecutiveErrors = 0
+      const signature = JSON.stringify([message.status, message.last_log, message.progress])
+      if (signature !== lastSignature) {
+        lastSignature = signature
+        lastActivityAt = Date.now()
+      }
+      waitingForOcrWorker = message.source_format === "pdf" && ["PDF OCR: waiting for worker", "PDF comparison: waiting for independent worker"].includes(message.last_log ?? "")
       onMessage(message)
       if (TERMINAL_STATUSES.includes(message.status)) return
     } catch (error) {

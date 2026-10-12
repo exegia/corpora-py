@@ -1,16 +1,17 @@
 # Corpora Example App
 
 The reference client for the `corpora-py` API: convert documents into
-compressed C-USX document packages, retain the existing corpus import workflow, and chat with an
+either Corpus archives or compressed C-USX document packages, and chat with an
 AI that queries the corpus through MCP tools. One codebase ships two ways —
 a native desktop app via Electrobun, and a static SPA on the web
 ([corpora-py-example.vercel.app](https://corpora-py-example.vercel.app)).
 
 ## Features
 
-- **Convert** — individual EPUB, HTML, XML, TEI, PDF and plain text → compressed
-  C-USX `.cusx` packages, with live job status over WebSocket (and polling fallback).
-  Text-Fabric/TEI dataset ZIPs retain the `.corpus` import path.
+- **Convert** — individual EPUB, HTML, XML/TEI, Markdown, PDF and plain text with two
+  output choices: Corpus (Text-Fabric/Context-Fabric `.corpus`) and C-USX `.cusx`.
+  Live job status uses WebSocket with polling fallback. The choice stays fixed
+  through retries; Text-Fabric/TEI dataset ZIPs require Corpus.
 - **Explore & publish** — browse both archive types on the Hugging Face Hub and
   publish manually through the existing repo/bucket configuration
 - **Corpus detail & reader** — edit manifest metadata, browse the section index,
@@ -24,7 +25,8 @@ a native desktop app via Electrobun, and a static SPA on the web
 
 C-USX conversion requires the matching backend from this development change;
 released corpora-py v6.0.0 does not yet expose this output option. The package
-contains extended USX XML, a parsed document tree and a pinned linking snapshot.
+uses the v0.2 multi-document layout: chapter XML, compact document trees, pinned
+linking snapshots, source navigation and spine order, and unchanged asset bytes.
 It does not grant reference approval or original-location mapping authority.
 The existing Text-Fabric detail reader and MCP graph queries remain for `.corpus`
 archives; a C-USX reader is separate work. See the [package contract](../docs/architecture/cusx-package.md).

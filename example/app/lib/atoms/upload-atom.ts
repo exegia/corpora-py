@@ -29,8 +29,8 @@ export type UploadStatus =
  * failed (network error, server too old to know /validate) -- deliberately
  * distinct from "invalid", which is the server saying the corpus does not
  * round-trip the `.tf -> .cfm -> mmap` load cycle. A validation problem
- * never blocks the download/save flow: the verdict is an annotation on the
- * finished conversion, not a gate.
+ * annotates other formats. PDF source reliability controls acceptance:
+ * loss or an unavailable comparison holds the download/save flow.
  */
 export type ValidationOutcome = {
   status: "running" | "valid" | "invalid" | "skipped"
@@ -38,6 +38,38 @@ export type ValidationOutcome = {
   reasons?: string[]
   /** Corpus stats from a successful validation (see CorpusStats server-side). */
   stats?: Record<string, number>
+  sourceReliability?: SourceReliability
+}
+
+export type SourceReliability = {
+  assessment_kind?: "automatic-ocr-agreement"
+  comparison_engine?: string
+  comparison_snapshot_sha256?: string
+  comparison_lock_sha256?: string
+  compared_pages?: number
+  dimension_scores?: Record<string, number>
+  bundle?: {
+    profile: string
+    report: string
+    independent_snapshot?: string
+    independent_lock?: string
+    documents?: Record<string, string>
+  }
+  score_percent: number | null
+  decision: "loss" | "review" | "pass" | "unscored"
+  passed: boolean
+  review_required: boolean
+  message: string
+  converter?: string
+  converter_version?: string
+  source_sha256?: string
+  snapshot_sha256?: string
+  lock_sha256?: string
+  mismatches: {
+    page_number: number
+    expected: string
+    actual: string
+  }[]
 }
 
 /**
@@ -70,6 +102,7 @@ export type UploadEntry = {
   type: string
   status: UploadStatus
   progress: number
+  ocrProgress?: { completed_pages: number; total_pages: number | null }
   error: string | null
   /** `File.lastModified` of the source file, when the browser provided one. */
   lastModified?: number
@@ -77,6 +110,7 @@ export type UploadEntry = {
   uploadedAt?: number
   /** Source format sent as `source_format` to `POST /convert` (see source-format.ts). */
   sourceFormat?: string
+  outputFormat?: "corpus" | "cusx"
   /**
    * Client-side pre-upload findings (ZIP contents inventory, extraction
    * notes -- see inspect-zip.ts), shown under the "File type validated"

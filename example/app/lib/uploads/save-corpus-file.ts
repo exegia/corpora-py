@@ -14,7 +14,7 @@ type SaveFilePicker = (options: {
 export const saveCorpusFile = async (
   filename: string,
   blob: Blob
-): Promise<void> => {
+): Promise<boolean> => {
   const showSaveFilePicker = (
     window as unknown as { showSaveFilePicker?: SaveFilePicker }
   ).showSaveFilePicker
@@ -39,9 +39,10 @@ export const saveCorpusFile = async (
       const writable = await handle.createWritable()
       await writable.write(blob)
       await writable.close()
-      return
+      return true
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return
+      if (error instanceof DOMException && error.name === "AbortError")
+        return false
       throw error
     }
   }
@@ -52,4 +53,5 @@ export const saveCorpusFile = async (
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+  return true
 }

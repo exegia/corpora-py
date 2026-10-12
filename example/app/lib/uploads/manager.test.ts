@@ -4,8 +4,11 @@ import { uploadAtom, type UploadEntry } from "~/lib/atoms/upload-atom"
 import { API_URL } from "~/lib/types/socket"
 import {
   deleteUpload,
+  initUploadManager,
   publishConversion,
   publishUpload,
+  retryUpload,
+  saveUpload,
   uploadFile,
 } from "./manager"
 
@@ -219,9 +222,62 @@ describe("publishUpload", () => {
     await publishUpload("nope")
     expect(requests).toHaveLength(0)
   })
+
+  test("a cancelled save keeps the converted C-USX entry ready", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window")
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        showSaveFilePicker: async () => {
+          throw new DOMException("Cancelled", "AbortError")
+        },
+      },
+    })
+    stubFetch(() => new Response(new Blob(["archive bytes"])))
+    const id = seedEntry({ corpusName: "book.cusx", outputFormat: "cusx" })
+    try {
+      await saveUpload(id)
+      expect(store.get(uploadAtom)[id]?.status).toBe("ready")
+      expect(store.get(uploadAtom)[id]?.corpusName).toBe("book.cusx")
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, "window", descriptor)
+      else Reflect.deleteProperty(globalThis, "window")
+      deleteUpload(id)
+    }
+  })
 })
 
 describe("conversion output choice", () => {
+  for (const outputFormat of ["corpus", "cusx"] as const) {
+    test(`explicit ${outputFormat} survives retry for Markdown`, async () => {
+      const requests = stubFetch(() =>
+        Response.json({ detail: "retry fixture" }, { status: 422 })
+      )
+      const id = uploadFile(new File(["# Heading\n"], "notes.md"), {
+        sourceFormat: "markdown",
+        outputFormat,
+      })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const retried = retryUpload(id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      try {
+        expect(retried).toBeDefined()
+        expect(requests).toHaveLength(2)
+        for (const request of requests) {
+          const form = request.init?.body as FormData
+          expect(form.get("source_format")).toBe("markdown")
+          expect(form.get("output_format")).toBe(outputFormat)
+        }
+        expect(getDefaultStore().get(uploadAtom)[retried!]?.outputFormat).toBe(
+          outputFormat
+        )
+      } finally {
+        deleteUpload(id)
+        if (retried) deleteUpload(retried)
+      }
+    })
+  }
+
   for (const [sourceFormat, outputFormat] of [
     ["plain", "cusx"],
     ["epub", "cusx"],
@@ -249,4 +305,102 @@ describe("conversion output choice", () => {
       }
     })
   }
+})
+
+
+describe("stale conversion recovery", () => {
+  const websocketDescriptor = Object.getOwnPropertyDescriptor(globalThis, "WebSocket")
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window")
+  const storageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage")
+  const ids: string[] = []
+
+  const silentSocket = () => {
+    Object.defineProperty(globalThis, "WebSocket", {
+      configurable: true,
+      value: class extends EventTarget {
+        close() {}
+      },
+    })
+  }
+
+  afterEach(() => {
+    for (const id of ids) deleteUpload(id)
+    ids.length = 0
+    for (const [key, descriptor] of [
+      ["WebSocket", websocketDescriptor],
+      ["window", windowDescriptor],
+      ["localStorage", storageDescriptor],
+    ] as const) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
+  })
+
+  test("an open silent socket cannot hide a missing server job", async () => {
+    silentSocket()
+    let requests = 0
+    stubFetch(() => {
+      requests += 1
+      return requests === 1
+        ? Response.json({job_id: "gone-job", ws_url: "/convert/gone-job/ws"})
+        : Response.json({detail: "Not found"}, {status: 404})
+    })
+    const id = uploadFile(new File(["text"], "book.txt"))
+    ids.push(id)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const entry = getDefaultStore().get(uploadAtom)[id]
+    expect(requests).toBe(2)
+    expect(entry.status).toBe("error")
+    expect(entry.error).toContain("no longer exists")
+  })
+
+  test("REST reports the actual terminal validation result without a socket frame", async () => {
+    silentSocket()
+    let requests = 0
+    stubFetch(() => {
+      requests += 1
+      return requests === 1
+        ? Response.json({job_id: "held-job", ws_url: "/convert/held-job/ws"})
+        : Response.json({
+          status: "failed", logs: ["Comparing source"], last_log: "Comparing source",
+          error: "Independent reference required",
+          validation: {valid: false, source_reliability: {
+            decision: "unscored", score_percent: null, passed: false,
+            review_required: true, message: "Independent reference required", mismatches: [],
+          }},
+        })
+    })
+    const id = uploadFile(new File(["pdf"], "book.pdf"), {sourceFormat: "pdf"})
+    ids.push(id)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const entry = getDefaultStore().get(uploadAtom)[id]
+    expect(entry.status).toBe("error")
+    expect(entry.validation?.sourceReliability?.decision).toBe("unscored")
+    expect(entry.error).toBe("Independent reference required")
+  })
+
+  test("reload resumes a job without a saved WebSocket path and reconciles progress", async () => {
+    silentSocket()
+    const id = "rehydrated-active-job"
+    ids.push(id)
+    Object.defineProperty(globalThis, "window", {configurable: true, value: {}})
+    Object.defineProperty(globalThis, "localStorage", {configurable: true, value: {
+      getItem: () => JSON.stringify([{
+        id, jobId: "running-job", name: "book.pdf", type: "application/pdf",
+        size: 1024, sourceFormat: "pdf", status: "converting", progress: 60, error: null,
+      }]),
+      setItem: () => {},
+    }})
+    stubFetch(() => Response.json({
+      status: "running", source_format: "pdf", logs: ["PDF OCR: completed 420/925 pages"],
+      last_log: "PDF OCR: completed 420/925 pages",
+      progress: {completed_pages: 420, total_pages: 925, updated_at: 123},
+    }))
+    initUploadManager()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const entry = getDefaultStore().get(uploadAtom)[id]
+    expect(entry.status).toBe("converting")
+    expect(entry.ocrProgress?.completed_pages).toBe(420)
+    expect(entry.ocrProgress?.total_pages).toBe(925)
+  })
 })

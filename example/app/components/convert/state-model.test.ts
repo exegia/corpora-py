@@ -39,6 +39,47 @@ const STORED: StorageOutcome = {
   sizeBytes: 57609,
 }
 
+describe("archive validation counts", () => {
+  test("shows document statistics for C-USX without graph statistics", () => {
+    const entry = baseEntry({
+      validation: {
+        status: "valid",
+        stats: {
+          documents: 41,
+          assets: 19,
+          characters: 394317,
+          units: 20946,
+        },
+      },
+    })
+    const text = stageById(entry, "validation")
+      .logs.map((line) => line.text)
+      .join("\n")
+    expect(text).toContain("41 documents, 19 assets, 394,317 characters")
+    expect(text).not.toContain("slots")
+    expect(text).not.toContain(".tf")
+  })
+
+  test("retains graph statistics for Text-Fabric archives", () => {
+    const entry = baseEntry({
+      validation: {
+        status: "valid",
+        stats: {
+          max_slot: 11,
+          node_types: 2,
+          node_features: 3,
+          edge_features: 4,
+        },
+      },
+    })
+    const text = stageById(entry, "validation")
+      .logs.map((line) => line.text)
+      .join("\n")
+    expect(text).toContain("11 slots, 2 node types, 7 features")
+    expect(text).not.toContain("documents")
+  })
+})
+
 describe("manual publish in flight", () => {
   const entry = baseEntry({ storage: { status: "running" } })
 
@@ -157,5 +198,35 @@ describe("regressions around the storage stage", () => {
     })
     expect(stageById(entry, "validation").state).toBe("failed")
     expect(stageById(entry, "storage").state).toBe("completed")
+  })
+})
+
+
+describe("PDF source reliability", () => {
+  const entry = (score: number, passed: boolean, review: boolean) => baseEntry({
+    sourceFormat: "pdf", status: passed ? "ready" : "error",
+    validation: { status: passed ? "valid" : "invalid", sourceReliability: {
+      score_percent: score, decision: passed ? review ? "review" : "pass" : "loss",
+      passed, review_required: review, message: "Independent comparison.",
+      mismatches: [{page_number: 1, expected: "שָׁלוֹם", actual: "שלום"}],
+    } },
+  })
+  test("review passes show a warning and literal mismatches", () => {
+    const stage = stageById(entry(75, true, true), "validation")
+    expect(stage.state).toBe("warning")
+    expect(stage.logs.map(line => line.text).join("\n")).toContain("שָׁלוֹם")
+  })
+  test("loss holds acceptance", () => {
+    const loss = entry(49, false, false)
+    const stage = stageById(loss, "validation")
+    expect(stage.state).toBe("failed")
+    expect(stageById(loss, "converting").state).toBe("completed")
+    expect(stage.logs.map(line => line.text).join("\n")).toContain("Acceptance is held")
+  })
+  test("rounding cannot move a score into another decision band", () => {
+    for (const [score, passed] of [[49.9999, false], [90.0001, true]] as const) {
+      const logs = stageById(entry(score, passed, false), "validation").logs
+      expect(logs.map(line => line.text).join("\n")).toContain(`${score}%`)
+    }
   })
 })

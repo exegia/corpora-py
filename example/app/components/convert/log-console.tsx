@@ -161,7 +161,7 @@ export function LogConsole({
           {lines.length > 0 && (
             <div className="border-t border-border p-4 font-mono text-xs leading-relaxed md:text-sm">
               {lines.map((line, index) => (
-                <p
+                <div
                   key={`${index}-${line.text}`}
                   className="mb-1.5 flex animate-in items-start gap-2 duration-300 fade-in last:mb-0 motion-reduce:animate-none"
                 >
@@ -190,7 +190,7 @@ export function LogConsole({
                       {line.description}
                     </span>
                   </div>
-                </p>
+                </div>
               ))}
             </div>
           )}

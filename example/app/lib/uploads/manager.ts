@@ -4,6 +4,7 @@ import { API_URL } from "~/lib/types/socket"
 import {
   uploadAtom,
   type StorageOutcome,
+  type SourceReliability,
   type UploadEntry,
   type ValidationOutcome,
 } from "~/lib/atoms/upload-atom"
@@ -39,10 +40,9 @@ import { saveCorpusFile } from "./save-corpus-file"
  */
 const store = getDefaultStore()
 
-// Coarse client-side stage markers. The server has no progress hook (see
-// JobStatus's docstring in use-socket.ts) so these are NOT real completion
-// percentages -- the file card renders an indeterminate animation while
-// "converting" rather than trusting these numbers as progress.
+// Coarse client-side stage markers. PDF OCR page counts describe extraction;
+// the full pipeline also includes packaging and validation. Other formats
+// retain an indeterminate conversion indicator.
 const PROGRESS = {
   started: 0,
   queued: 20,
@@ -127,10 +127,14 @@ const validateConversion = async (
       valid: boolean
       reasons: string[]
       stats: Record<string, number> | null
+      source_reliability?: SourceReliability | null
     }
-    return result.valid
-      ? { status: "valid", stats: result.stats ?? undefined }
-      : { status: "invalid", reasons: result.reasons }
+    return {
+      status: result.valid ? "valid" : "invalid",
+      stats: result.stats ?? undefined,
+      reasons: result.reasons,
+      sourceReliability: result.source_reliability ?? undefined,
+    }
   } catch (error) {
     return {
       status: "skipped",
@@ -194,20 +198,28 @@ const handleJobSucceeded = async (
   resultFilename: string,
   displayName: string | null
 ): Promise<void> => {
-  // Validate before downloading: the verdict annotates the conversion (the
-  // "Dataset validated" stage in the console) but never gates it -- an
-  // invalid or unvalidatable archive is still downloaded and saveable, with
-  // the problem surfaced in the UI instead of silently discarding minutes of
-  // conversion work.
+  const serverReliability = store.get(uploadAtom)[id]?.validation?.sourceReliability
+  // Validate before downloading. PDF source reliability must pass acceptance;
+  // review passes remain downloadable with their mismatches visible.
   updateEntry(id, (draft) => {
     draft.status = "validating"
     draft.progress = PROGRESS.validating
     draft.validation = { status: "running" }
   })
   const validation = await validateConversion(jobId)
+  validation.sourceReliability ??= serverReliability
   updateEntry(id, (draft) => {
     draft.validation = validation
   })
+  if ((validation.sourceReliability && !validation.sourceReliability.passed) ||
+      (store.get(uploadAtom)[id]?.sourceFormat === "pdf" && !validation.sourceReliability)) {
+    updateEntry(id, (draft) => {
+      draft.status = "error"
+      draft.error = validation.sourceReliability?.message ?? "PDF source reliability could not be verified; acceptance is held"
+    })
+    stopTracking(id)
+    return
+  }
 
   // Publishing to the Hugging Face Hub deliberately does NOT happen here:
   // it's a manual step (`publishUpload`) the user triggers from the result
@@ -263,20 +275,42 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
   // (matching the backend's AuthMiddleware WebSocket contract).
   const wsUrl = withWsAuth(`${API_URL.replace(/^http/, "ws")}${wsPath}`)
 
+  let settled = false
+  let fallback: (() => void) | undefined
+
   const handleMessage = (message: JobStatusMessage) => {
+    if (settled) return
+    if (message.status === "succeeded" || message.status === "failed") settled = true
     // Applies regardless of which branch below fires -- the server can push
     // an update with the same `status` but a new `last_log` line (see
     // websocket.py), and the UI should reflect that either way.
     updateEntry(id, (draft) => {
       draft.logs = message.logs
       draft.lastLog = message.last_log
+      draft.ocrProgress = message.progress ?? undefined
+      if (message.validation) {
+        draft.validation = {
+          status: message.validation.valid ? "valid" : "invalid",
+          reasons: message.validation.reasons,
+          stats: message.validation.stats,
+          sourceReliability: message.validation.source_reliability ?? undefined,
+        }
+      }
     })
 
     switch (message.status) {
+      case "queued":
+        updateEntry(id, (draft) => {
+          draft.status = "queued"
+          draft.progress = PROGRESS.queued
+        })
+        break
       case "running":
         updateEntry(id, (draft) => {
           draft.status = "converting"
-          draft.progress = PROGRESS.converting
+          draft.progress = message.progress?.total_pages
+            ? Math.round(PROGRESS.queued + (PROGRESS.validating - PROGRESS.queued - 1) * message.progress.completed_pages / message.progress.total_pages)
+            : PROGRESS.converting
         })
         break
       case "failed":
@@ -298,21 +332,9 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
     }
   }
 
-  // The WebSocket is the preferred transport (real push, no polling
-  // traffic) and is what the desktop sidecar serves. On the Vercel
-  // deployment it is unreliable in a sneaky way: the handshake succeeds and
-  // the current status is pushed, but a long conversion then sits idle for
-  // minutes (the server only pushes on status change, and sends no pings),
-  // so the proxy/function duration limit kills the socket MID-JOB. Any
-  // close or error before a terminal status therefore falls back to
-  // polling -- which on Vercel also keeps a request in flight, without
-  // which the frozen function instance stops advancing the conversion
-  // thread at all. Only a close after "succeeded"/"failed" (the server
-  // closing a finished stream, mirrored by subscribeJobStatus) means
-  // tracking is genuinely done.
-  let settled = false
-  let fallback: (() => void) | undefined
-
+  // WebSockets provide immediate updates. REST periodically reconciles the
+  // authoritative state even if a socket stays open without delivering frames
+  // (for example after a proxy or browser suspends an old connection).
   const startPolling = () => {
     if (fallback || settled) return
     fallback = pollJobStatus(
@@ -330,9 +352,10 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
       handleMessage,
       {
         onFailure: (reason) => {
+          settled = true
           const messages: Record<PollFailureReason, string> = {
             gone: "The conversion job no longer exists on the server. Try the upload again.",
-            timeout: `Conversion timed out: no result after ${Math.round(POLL_DEFAULTS.deadlineMs / 60_000)} minutes. Try the upload again.`,
+            timeout: `Conversion tracking timed out after ${Math.round(POLL_DEFAULTS.deadlineMs / 60_000)} minutes without progress. Check the server job before retrying.`,
             unreachable:
               "Lost contact with the server while tracking the conversion. Try the upload again.",
           }
@@ -348,27 +371,25 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
 
   const closeSocket = subscribeJobStatus(
     wsUrl,
-    (message) => {
-      if (message.status === "succeeded" || message.status === "failed") {
-        settled = true
-      }
-      handleMessage(message)
-    },
+    handleMessage,
     (status) => {
       if (status === "error" || status === "closed") startPolling()
     }
   )
 
   unsubscribers.set(id, () => {
+    settled = true
     closeSocket()
     fallback?.()
   })
+  startPolling()
 }
 
 export type UploadOptions = {
   name?: string
   description?: string
   sourceFormat?: string
+  outputFormat?: "corpus" | "cusx"
   /** Pre-upload inspection notes to surface in the conversion console. */
   inspection?: string[]
 }
@@ -433,20 +454,20 @@ const performUpload = async (
 ): Promise<void> => {
   try {
     const sourceFormat = options.sourceFormat ?? detectSourceFormat(file.name)
+    const outputFormat =
+      options.outputFormat ??
+      (sourceFormat === "tf_zip" || sourceFormat === "tei_zip"
+        ? "corpus"
+        : "cusx")
     updateEntry(id, (draft) => {
       draft.sourceFormat = sourceFormat
+      draft.outputFormat = outputFormat
     })
 
     const formData = new FormData()
     formData.append("file", file)
     formData.append("source_format", sourceFormat)
-    // Existing dataset ZIPs retain their corpus import path. Documents use C-USX.
-    formData.append(
-      "output_format",
-      sourceFormat === "tf_zip" || sourceFormat === "tei_zip"
-        ? "corpus"
-        : "cusx"
-    )
+    formData.append("output_format", outputFormat)
     formData.append(
       "name",
       options.name?.trim() || file.name.replace(/\.[^./]+$/, "")
@@ -459,9 +480,13 @@ const performUpload = async (
     })
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
-        detail?: string
+        detail?: string | { reasons?: string[] }
       }
-      throw new Error(body.detail ?? `Upload failed (${response.status})`)
+      const detail =
+        typeof body.detail === "string"
+          ? body.detail
+          : body.detail?.reasons?.join("; ")
+      throw new Error(detail ?? `Upload failed (${response.status})`)
     }
 
     const { job_id: jobId, ws_url: wsPath } =
@@ -533,7 +558,8 @@ export const saveUpload = async (id: string): Promise<void> => {
   }
 
   try {
-    await saveCorpusFile(cached.filename, cached.blob)
+    const saved = await saveCorpusFile(cached.filename, cached.blob)
+    if (!saved) return
     updateEntry(id, (draft) => {
       draft.status = "success"
     })
@@ -603,6 +629,7 @@ const reconcileReady = async (id: string, jobId: string): Promise<void> => {
 }
 
 let initialized = false
+let stopPersistence: (() => void) | undefined
 
 /**
  * One-time, idempotent startup: rehydrates past-conversion history from
@@ -647,7 +674,7 @@ export const initUploadManager = (): void => {
       // failed, or the server restarted and 404s) while the app was closed.
       // A reload mid-"validating" lands here too: the socket re-pushes
       // "succeeded", which re-runs validation and the download from scratch.
-      if (entry.wsPath) trackJob(entry.id, entry.jobId, entry.wsPath)
+      trackJob(entry.id, entry.jobId, entry.wsPath ?? `/convert/${entry.jobId}/ws`)
     } else if (entry.status === "ready") {
       void reconcileReady(entry.id, entry.jobId)
     }
@@ -657,7 +684,16 @@ export const initUploadManager = (): void => {
   // see `savePersistedUploads` for what's deliberately excluded (and
   // `persistence.ts` for why this doesn't try to survive a *server*
   // restart). Never unsubscribed: this manager lives for the whole app.
-  store.sub(uploadAtom, () => {
+  stopPersistence = store.sub(uploadAtom, () => {
     savePersistedUploads(store.get(uploadAtom))
+  })
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    savePersistedUploads(store.get(uploadAtom))
+    stopPersistence?.()
+    for (const stop of unsubscribers.values()) stop()
+    unsubscribers.clear()
   })
 }

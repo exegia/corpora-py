@@ -141,3 +141,34 @@ describe("pollJobStatus", () => {
     expect(failures).toEqual([])
   })
 })
+
+
+test("OCR page progress keeps polling beyond the total elapsed deadline", async () => {
+  let calls = 0
+  const {messages, failures, stop} = runPoll(async () => {
+    await sleep(30)
+    calls++
+    const next = message(calls === 5 ? "succeeded" : "running")
+    next.source_format = "pdf"
+    next.last_log = `PDF OCR: completed ${calls}/5 pages`
+    next.progress = {completed_pages:calls, total_pages:5, updated_at:calls}
+    return next
+  }, {deadlineMs:80})
+  await sleep(400)
+  stop()
+  expect(messages.at(-1)?.status).toBe("succeeded")
+  expect(failures).toEqual([])
+})
+
+test("waiting for the independent worker does not time out a queued PDF", async () => {
+  const { failures, messages, stop } = runPoll(async () => {
+    const next = message("running")
+    next.source_format = "pdf"
+    next.last_log = "PDF comparison: waiting for independent worker"
+    return next
+  }, { deadlineMs: 15 })
+  await sleep(80)
+  stop()
+  expect(messages.length).toBeGreaterThan(1)
+  expect(failures).toEqual([])
+})
