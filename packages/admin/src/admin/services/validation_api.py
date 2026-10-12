@@ -137,10 +137,11 @@ async def validate(payload: ValidationRequest, request: Request) -> ValidationRe
 
     if target_path.is_file() and target_path.suffix.lower() == ".ctei":
         from ..converters.tei import validate_ctei_archive
+        from ..converters.tei.package import CTEIArchiveValidationError
 
         try:
             summary = await asyncio.to_thread(validate_ctei_archive, target_path)
-        except Exception as exc:
+        except CTEIArchiveValidationError as exc:
             return ValidationResponse(
                 corpus=name,
                 path=str(target_path),

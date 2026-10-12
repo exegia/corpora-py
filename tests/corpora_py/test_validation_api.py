@@ -291,3 +291,25 @@ def test_validate_malformed_ctei_metadata_returns_invalid(client, tmp_path, memb
     assert resp.status_code == 200
     assert resp.json()["valid"] is False
     assert resp.json()["reasons"]
+
+
+@pytest.mark.parametrize("failure", ["io", "schema", "programming"])
+def test_ctei_operational_failures_remain_server_errors(client, tmp_path, monkeypatch, failure):
+    from admin.converters.tei import package
+    from lxml import etree
+
+    archive = tmp_path / "book.ctei"
+    archive.write_bytes(b"placeholder")
+
+    def broken(*args):
+        if failure == "io":
+            raise OSError("private filesystem path")
+        if failure == "schema":
+            raise etree.XMLSyntaxError("broken bundled schema", 1, 1, 1)
+        raise RuntimeError("internal validator failure")
+
+    monkeypatch.setattr(package, "validators" if failure == "schema" else "_validate_ctei_archive", broken)
+    with TestClient(client.app, raise_server_exceptions=False) as server:
+        response = server.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 500
+    assert response.text == "Internal Server Error"

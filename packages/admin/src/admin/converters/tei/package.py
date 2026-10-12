@@ -429,7 +429,23 @@ def _remap_hierarchy(value):
     return value
 
 
+class CTEIArchiveValidationError(ValueError):
+    """The supplied archive is malformed or fails its declared package contract."""
+
+
 def validate_ctei_archive(path: Path) -> dict:
+    """Validate input structure while keeping schema/operational failures distinct."""
+    with _SCHEMA_LOCK:
+        schemas = validators()
+    try:
+        return _validate_ctei_archive(path, schemas)
+    except (ValueError, zipfile.BadZipFile, etree.XMLSyntaxError, yaml.YAMLError) as exc:
+        raise CTEIArchiveValidationError(str(exc)) from exc
+    except (KeyError, TypeError, AttributeError, IndexError) as exc:
+        raise CTEIArchiveValidationError("Invalid CTEI archive structure") from exc
+
+
+def _validate_ctei_archive(path: Path, schemas: tuple) -> dict:
     """Check ZIP paths, layout, manifest inventory, TEI schemas and all local pointers."""
     with zipfile.ZipFile(path) as zf:
         infos = zf.infolist()
@@ -492,7 +508,7 @@ def validate_ctei_archive(path: Path) -> dict:
             raise ValueError("CTEI sidecar has a missing or non-local target")
 
     with _SCHEMA_LOCK:
-        upstream, profile, schematron = validators()
+        upstream, profile, schematron = schemas
         for name in docs:
             root = roots[name]
             for schema in (upstream, profile, schematron):
