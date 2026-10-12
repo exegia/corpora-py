@@ -161,6 +161,8 @@ def _resolve_upload_source(payload: UploadRequest, request: Request) -> tuple[Pa
             raise HTTPException(
                 status_code=409, detail=f"Job is {job.status.value}, not ready"
             )
+        if path.suffix.lower() == ".ctei":
+            raise HTTPException(status_code=422, detail="CTEI publishing is not supported")
         return path, payload.filename or (
             job.to_dict()["result_filename"]
             if path.suffix == ".cusx"
@@ -170,6 +172,8 @@ def _resolve_upload_source(payload: UploadRequest, request: Request) -> tuple[Pa
     local = Path(payload.path).expanduser()  # type: ignore[arg-type]
     if not local.is_file():
         raise HTTPException(status_code=404, detail=f"No archive at {local}")
+    if local.suffix.lower() == ".ctei":
+        raise HTTPException(status_code=422, detail="CTEI publishing is not supported")
     return local, payload.filename
 
 

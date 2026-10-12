@@ -227,3 +227,40 @@ def test_validate_unfinished_job_is_409(client, monkeypatch):
 
     assert resp.status_code == 409
     assert "not ready" in resp.json()["detail"]
+
+
+@pytest.mark.parametrize("target", ["path", "job_id"])
+def test_validate_ctei_uses_tei_profile(client, tmp_path, monkeypatch, target):
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+    from admin.services.jobs import JobStatus
+
+    source = tmp_path / "source.txt"
+    source.write_text("Exact ὁ λόγος é.\n\nNext.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    _patch_job(monkeypatch, _FakeJob(status=JobStatus.SUCCEEDED, result_path=archive))
+    monkeypatch.setattr(
+        validation_api,
+        "validate_corpus_archive",
+        lambda *args: pytest.fail("Text-Fabric validator used for CTEI"),
+    )
+
+    resp = client.post("/validate", json={target: str(archive) if target == "path" else "abc"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["valid"] is True
+    assert body["stats"]["documents"] == 1
+    assert body["stats"]["review_items"] == 1
+    assert body["checks"]["tei-p5"] is True
+    assert body["checks"]["source_verified"] is False
+
+
+def test_validate_corrupt_ctei_returns_invalid_verdict(client, tmp_path):
+    archive = tmp_path / "broken.ctei"
+    archive.write_bytes(b"not a ZIP")
+    resp = client.post("/validate", json={"path": str(archive)})
+    assert resp.status_code == 200
+    assert resp.json()["valid"] is False
+    assert resp.json()["reasons"]
