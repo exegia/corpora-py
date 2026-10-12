@@ -20,6 +20,7 @@ are how a client finds out when it's done.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 import tempfile
@@ -151,10 +152,12 @@ class ConversionJobStatus(BaseModel):
     finished_at: float | None
     error: str | None = Field(description="Failure reason once `status` is `failed`.")
     logs: list[str] = Field(
-        description="Coarse fixed-stage checkpoints, not progress — the "
-        "conversion pipeline has no percentage hook."
+        description="Stage checkpoints and confirmed PDF OCR page progress."
     )
     last_log: str | None
+    progress: dict[str, int | float | None] | None = Field(
+        default=None, description="Confirmed OCR page counts and latest activity timestamp."
+    )
     validation: dict[str, Any] | None = Field(
         description="Post-conversion corpus validation summary "
         "(`corpus`/`valid`/`stats`/`reasons`/`checks`) — set once the "
@@ -335,13 +338,9 @@ def _run_conversion(
     metadata, falling back to the request `name` / filename stem -- see
     issue #109) is derived before the expensive TF walk so it's available on
     the running status, written into `manifest.name`, and slugified for the
-    on-disk archive filename. The `job_manager.log()` calls bracketing each
-    stage are coarse, fixed checkpoints, not real progress --
-    `converter()` and `convert_to_corpus()` have no progress hook to report
-    from mid-call (see `packages/admin/CLAUDE.md`'s "Known gaps"). They
-    exist so a client watching `/convert/{id}/ws` sees *something* move
-    during a multi-minute conversion instead of a status stuck on "running"
-    with no other signal.
+    on-disk archive filename. PDF jobs stream confirmed OCR page counts;
+    other formats report coarse checkpoints around parsing and packaging.
+    These events reach clients through `/convert/{id}` and its WebSocket.
     """
     job = job_manager.get(job_id)
     try:
@@ -482,6 +481,19 @@ async def create_conversion(
         # Pre-conversion gate (issue #173): sniff the real file type, refuse
         # anything that can only fail minutes later in the background job.
         report = validate_upload(source_path, source_format)
+        if (
+            source_format == SourceFormat.PDF
+            and report.detected_format == "pdf"
+            and report.convertible
+        ):
+            from ..parsers.pdf_ocr import check_ocr_runtime
+
+            # Verify locked assets without running inference on the event loop.
+            try:
+                await asyncio.to_thread(check_ocr_runtime)
+            except ValueError as exc:
+                report.convertible = False
+                report.reasons = [str(exc)]
         if not report.convertible:
             raise HTTPException(status_code=422, detail=report.to_dict())
 

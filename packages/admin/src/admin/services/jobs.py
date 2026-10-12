@@ -15,9 +15,9 @@ in-memory) so multiple clients (a polling REST client, a WebSocket) can
 observe the same job, and a serverless deployment can swap in a shared
 backend (Postgres, Redis) so jobs survive instance recycling.
 
-See `packages/admin/CLAUDE.md` and `services/websocket.py` for why this
-reports coarse status (queued/running/succeeded/failed) rather than a
-percentage: the conversion pipeline has no progress hook.
+Job status is coarse (queued/running/succeeded/failed). Forced PDF OCR also
+reports confirmed page counts; its watchdog measures inactivity rather than
+total runtime. Other formats retain their existing coarse checkpoints.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from typing import Any, Literal
 
 from common.utils.config import settings
 
+from ..parsers.pdf_progress import WAITING_STAGES, latest_activity, stamp_activity
 from ..parsers.schema import SourceFormat
 
 logger = logging.getLogger(__name__)
@@ -408,6 +409,7 @@ class ConversionJob:
             "logs": list(self.logs),
             "last_log": self.logs[-1] if self.logs else None,
             "validation": self.validation,
+            "progress": latest_activity(self.logs) if self.source_format == SourceFormat.PDF else None,
             "result_filename": result_filename,
             "download_ready": self.status == JobStatus.SUCCEEDED
             and (self.result_path is not None or bool(self.result_key)),
@@ -625,7 +627,7 @@ class JobManager:
             self._store.put(current)
 
     def _check_stall(self, job: ConversionJob) -> None:
-        """Mark a job FAILED if it's been RUNNING past `stall_timeout_seconds`.
+        """Fail a PDF after idle time, or other jobs after their runtime limit.
 
         Called under `self._lock` from `get()` -- the only place this runs.
         There is no background timer: a stalled job whose id nobody ever
@@ -634,10 +636,17 @@ class JobManager:
         either way. This only affects the *reported* status, not whether the
         pool slot is stuck.
         """
+        activity = latest_activity(job.logs) if job.source_format == SourceFormat.PDF else None
+        # A PDF waiting for the serialized OCR worker is queued for that
+        # resource, rather than stalled in inference. The active OCR process
+        # has its own idle timeout and is terminated if page progress stops.
+        if job.source_format == SourceFormat.PDF and job.logs and job.logs[-1] in WAITING_STAGES:
+            return
+        last_active = max(job.started_at or 0, activity["updated_at"] if activity else 0)
         if (
             job.status == JobStatus.RUNNING
             and job.started_at is not None
-            and time.time() - job.started_at > self._stall_timeout_seconds
+            and time.time() - last_active > self._stall_timeout_seconds
         ):
             logger.warning(
                 "Conversion job %s exceeded %.0fs stall timeout; marking failed "
@@ -645,7 +654,8 @@ class JobManager:
                 job.id,
                 self._stall_timeout_seconds,
             )
-            job.error = f"Conversion timed out after {self._stall_timeout_seconds / 60:.0f} minutes"
+            suffix = " without OCR page progress" if job.source_format == SourceFormat.PDF else ""
+            job.error = f"Conversion timed out after {self._stall_timeout_seconds / 60:.0f} minutes{suffix}"
             job.status = JobStatus.FAILED
             job.finished_at = time.time()
 
@@ -664,6 +674,8 @@ class JobManager:
             job = self._store.get(job_id)
             if job is None:
                 return
+            if job.source_format == SourceFormat.PDF:
+                message = stamp_activity(message)
             job.logs.append(message)
             del job.logs[:-_MAX_LOG_LINES]
             self._store.put(job)

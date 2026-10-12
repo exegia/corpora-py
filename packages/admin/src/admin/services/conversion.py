@@ -37,7 +37,9 @@ from typing import Any, Literal
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
 from ..parsers import PARSERS
+from ..parsers.pdf_progress import report_pdf_progress
 from ..parsers.schema import CorpusCategory, SourceFormat
+from .source_reliability import ComparisonProvider, validate_pdf_source
 
 logger = logging.getLogger("corpora.admin.conversion")
 
@@ -181,6 +183,7 @@ def run_conversion(
     on_log: Callable[[str], None] = _noop,
     on_display_name: Callable[[str], None] = _noop,
     on_validation: Callable[[dict[str, Any]], None] = _noop,
+    pdf_comparison_provider: ComparisonProvider | None = None,
 ) -> Path:
     """Blocking pipeline: parse -> Text-Fabric -> .cfm -> .corpus -> validate.
 
@@ -207,32 +210,65 @@ def run_conversion(
         source_format=source_format, source_path=source_path, name=name
     )
     on_display_name(display_name)
+
+    def validate_result(result: Path) -> dict[str, Any]:
+        summary = validate_archive(result)
+        if source_format == SourceFormat.PDF and summary.get("valid"):
+            on_log("Comparing converted PDF with the original source...")
+            with report_pdf_progress(on_log):
+                report = validate_pdf_source(source_path, result, pdf_comparison_provider)
+            if output_format == "cusx":
+                from ..converters.cusx_pdf_review import bundle_pdf_review
+
+                independent, lock = None, None
+                if report.get("assessment_kind") == "automatic-ocr-agreement":
+                    from .pdf_comparison import export_comparison_evidence
+
+                    independent, lock = export_comparison_evidence(source_path, report)
+                on_log("Bundling PDF reliability report and review evidence into C-USX...")
+                report, summary = bundle_pdf_review(result, report, independent=independent, lock=lock)
+            summary["source_reliability"] = report
+            summary.setdefault("checks", {})["pdf_source_reliability"] = report["passed"]
+            if report["review_required"] and report["passed"]:
+                on_log("Warning: " + report["message"])
+            if not report["passed"]:
+                summary["valid"] = False
+                summary.setdefault("reasons", []).append(report["message"])
+        return summary
     try:
         if output_format == "cusx":
             from ..converters.cusx import convert_to_cusx
 
             on_log(f"Parsing {source_format.value} source for C-USX...")
             try:
-                result = convert_to_cusx(
-                    source_path,
-                    output_path_for(display_name),
-                    source_format=source_format,
-                    name=display_name,
-                    description=description,
-                    author_sub=author_sub,
-                    category=category.value if category else "",
-                )
+                with report_pdf_progress(on_log):
+                    result = convert_to_cusx(
+                        source_path,
+                        output_path_for(display_name),
+                        source_format=source_format,
+                        name=display_name,
+                        description=description,
+                        author_sub=author_sub,
+                        category=category.value if category else "",
+                    )
             except ValueError as exc:
                 message = str(exc).strip()
                 if message and not mentions_any_path(message, private_paths):
                     raise ConversionError(message) from exc
                 raise
             on_log("C-USX XML compiled and compressed. Validating package...")
-            summary = validate_archive(result)
+            import json
+            import zipfile
+
+            with zipfile.ZipFile(result) as archive:
+                manifest = json.loads(archive.read("manifest.json"))
+            for diagnostic in manifest["diagnostics"]:
+                on_log("Source diagnostic: " + diagnostic)
+            summary = validate_result(result)
             on_validation(summary)
             if not summary.get("valid"):
                 raise CorpusValidationError(
-                    "Converted C-USX package failed validation", summary
+                    "; ".join(summary.get("reasons") or ["Converted C-USX package failed validation"]), summary
                 )
             on_log("Conversion complete.")
             return result
@@ -251,7 +287,8 @@ def run_conversion(
         converter = active_converters[source_format]
         tf_dir = work_dir / "tf"
         try:
-            dataset = converter(str(source_path), tf_dir, category=category)
+            with report_pdf_progress(on_log):
+                dataset = converter(str(source_path), tf_dir, category=category)
         except ValueError as exc:
             # Parsers/converters raise `ValueError` with deliberately
             # user-facing messages ("ZIP contains multiple Text-Fabric
@@ -283,7 +320,7 @@ def run_conversion(
         )
 
         on_log("Validating converted corpus...")
-        summary = validate_archive(result)
+        summary = validate_result(result)
         on_validation(summary)
         if not summary.get("valid"):
             reasons = [str(r) for r in summary.get("reasons") or []]

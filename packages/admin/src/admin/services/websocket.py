@@ -1,16 +1,11 @@
 """WebSocket endpoint for pushing conversion job status updates.
 
-This is a convenience layer over `JobManager` (`jobs.py`), not a source of
-fine-grained progress: the conversion pipeline (`admin.converters`,
-`admin.converters._walker.convert_document`) has no progress hook, and
-`Parser.iter_units()` is an unbounded generator with no known total unit
-count up front. So the server can only report coarse status transitions
-(queued -> running -> succeeded/failed), never "record 4213 of 31,000" or a
-percentage. See `packages/admin/CLAUDE.md` before wiring in real progress --
-that requires threading a callback through every `_{format}_to_tf.py`
-converter and `_walker.convert_document()`, not just this endpoint.
+This is a convenience layer over `JobManager` (`jobs.py`). PDF jobs expose
+confirmed OCR page counts; other formats expose coarse stage checkpoints.
+The underlying non-PDF parsers remain unbounded generators without a known
+unit count, so those checkpoints do not imply a conversion percentage.
 
-Given that ceiling, this still beats plain REST polling for UX on a
+This still beats plain REST polling for UX on a
 multi-minute conversion (a full Bible, a large EPUB): the client opens one
 connection and is pushed the terminal state the instant it happens, instead
 of guessing a polling interval and burning idle requests. It's not a
@@ -58,6 +53,7 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
     await websocket.accept()
     last_status: JobStatus | None = None
     last_log_count = 0
+    last_log: str | None = None
     try:
         while True:
             try:
@@ -71,10 +67,12 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
             # (see `_run_conversion` in `api.py`) and a client watching for
             # "is this still alive" needs those in-between pushes, not just
             # the coarse queued/running/succeeded/failed transitions.
-            if job.status != last_status or len(job.logs) != last_log_count:
+            current_log = job.logs[-1] if job.logs else None
+            if job.status != last_status or len(job.logs) != last_log_count or current_log != last_log:
                 await websocket.send_json(job.to_dict())
                 last_status = job.status
                 last_log_count = len(job.logs)
+                last_log = current_log
             if job.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
                 break
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)

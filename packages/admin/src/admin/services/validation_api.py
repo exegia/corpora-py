@@ -78,6 +78,7 @@ class ValidationResponse(BaseModel):
     stats: dict[str, int] | None
     reasons: list[str]
     checks: dict[str, Any]
+    source_reliability: dict[str, Any] | None = None
 
 
 def _resolve_job_target(payload: ValidationRequest, request: Request) -> tuple[str, Path]:
@@ -134,6 +135,11 @@ async def validate(payload: ValidationRequest, request: Request) -> ValidationRe
     missing corpus/path/job (unresolvable target) is a 404.
     """
     name, target_path = _resolve_target(payload, request)
+    reliability = None
+    if payload.job_id:
+        job = job_manager.get(payload.job_id)
+        if job and job.validation:
+            reliability = job.validation.get("source_reliability")
 
     # Blocking, CPU-bound load cycle (text-fabric / cfabric are synchronous);
     # run it off the event loop so the server stays responsive. A file is
@@ -147,6 +153,7 @@ async def validate(payload: ValidationRequest, request: Request) -> ValidationRe
             corpus=name,
             path=str(target_path),
             **{key: summary[key] for key in ("valid", "stats", "reasons", "checks")},
+            source_reliability=reliability,
         )
     if target_path.is_file():
         result = await asyncio.to_thread(
@@ -163,4 +170,5 @@ async def validate(payload: ValidationRequest, request: Request) -> ValidationRe
         stats=summary["stats"],
         reasons=summary["reasons"],
         checks=summary["checks"],
+        source_reliability=reliability,
     )

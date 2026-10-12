@@ -3,9 +3,9 @@
 Runs right after the upload lands on disk, before a job is submitted: sniff
 the file's real type from its magic bytes, compare it against the declared
 `source_format`, and refuse anything that cannot become a text corpus —
-images, audio/video, non-zip archives, unknown binary, and PDFs with no
-extractable text layer (classified via `pdf_inspector`, the same library
-the converter routes through — issue #175). Failing here turns a
+images, audio/video, non-zip archives, unknown binary, and unreadable or
+encrypted PDFs. Scanned PDFs are eligible for the pinned forced OCR worker.
+Classification is informational; source reliability is checked after conversion. Failing here turns a
 minutes-long guaranteed-to-fail background job into an immediate 422 whose
 detail is the full `UploadValidationReport`.
 
@@ -55,6 +55,7 @@ _ACCEPTED: dict[SourceFormat, frozenset[str]] = {
     SourceFormat.XML: _TEXTUAL,
     SourceFormat.TEI: _TEXTUAL,
     SourceFormat.PLAIN: _TEXTUAL,
+    SourceFormat.MARKDOWN: _TEXTUAL,
 }
 
 _MAGIC_FAMILIES: tuple[tuple[bytes, str], ...] = (
@@ -135,7 +136,15 @@ def _detect_family(head: bytes) -> str:
 
 
 def _classify_pdf(path: Path, report: UploadValidationReport) -> None:
-    """Attach `pdf_inspector`'s verdict; reject PDFs with no text layer."""
+    """Inspect PDF readability; forced OCR accepts scans without skipping pages."""
+    from ..parsers.pdf_ocr import inspect_pdf
+
+    try:
+        inspect_pdf(path)
+    except ValueError as exc:
+        report.convertible = False
+        report.reasons.append(str(exc))
+        return
     import pdf_inspector
 
     try:
@@ -158,16 +167,13 @@ def _classify_pdf(path: Path, report: UploadValidationReport) -> None:
         "pages_needing_ocr": skipped,
     }
     if classification.pdf_type in ("scanned", "image_based"):
-        report.convertible = False
-        report.reasons.append(
-            f"PDF has no extractable text layer (classified "
-            f"'{classification.pdf_type}', {classification.page_count} pages); "
-            "OCR is required before conversion"
+        report.warnings.append(
+            "Scanned PDF will use pinned Docling forced full-page OCR; "
+            "source reliability is assessed after conversion"
         )
     elif classification.pdf_type == "mixed" and skipped:
-        pages = ", ".join(str(page) for page in skipped)
         report.warnings.append(
-            f"{len(skipped)} page(s) need OCR and will be skipped: {pages}"
+            f"{len(skipped)} page(s) need OCR; forced full-page OCR processes every page"
         )
 
 
