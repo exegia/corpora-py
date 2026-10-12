@@ -167,6 +167,23 @@ def test_upload_by_missing_path_is_404(client, tmp_path):
     assert resp.status_code == 404
 
 
+@pytest.mark.parametrize("target", ["path", "job_id"])
+@pytest.mark.parametrize("filename", [None, "renamed.corpus"])
+def test_ctei_upload_is_rejected_before_storage(
+    client, fake_storage, jobs, tmp_path, target, filename
+):
+    archive = tmp_path / "book.ctei"
+    archive.write_bytes(b"CTEI bytes")
+    jobs.jobs["j1"] = FakeJob(result_path=archive)
+    payload = {target: str(archive) if target == "path" else "j1"}
+    if filename is not None:
+        payload["filename"] = filename
+    resp = client.post("/storage", json=payload)
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "CTEI publishing is not supported"
+    assert fake_storage.uploads == []
+
+
 def test_upload_by_job_id(client, fake_storage, jobs, tmp_path):
     archive = tmp_path / "job-x.corpus"
     archive.write_bytes(b"zip")

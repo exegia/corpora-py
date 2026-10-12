@@ -32,7 +32,7 @@ import re
 import shutil
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ..converters import CONVERTERS
 from ..converters.convert_to_corpus import convert_to_corpus
@@ -99,8 +99,7 @@ def extract_source_title(
         return parser.parse_metadata(str(source_path)).title
     except Exception:
         logger.warning(
-            "Metadata extraction failed for %s (%s) -- falling back to "
-            "request name",
+            "Metadata extraction failed for %s (%s) -- falling back to request name",
             source_path.name,
             source_format.value,
             exc_info=True,
@@ -152,6 +151,14 @@ def validate_archive(archive: Path) -> dict[str, Any]:
     doesn't import at module load (and the lazy call-time attribute is the
     test seam the services conftest stubs).
     """
+    if archive.suffix == ".ctei":
+        from ..converters.tei import validate_ctei_archive
+
+        return validate_ctei_archive(archive)
+    if archive.suffix == ".cusx":
+        from ..converters.cusx import validate_cusx_archive
+
+        return validate_cusx_archive(archive)
     from corpora_mcp.validate import validate_corpus_archive
 
     return validate_corpus_archive(archive).summary()
@@ -167,6 +174,7 @@ def run_conversion(
     work_dir: Path,
     source_format: SourceFormat,
     output_path_for: Callable[[str], Path],
+    output_format: Literal["corpus", "cusx", "ctei"] = "corpus",
     name: str = "",
     description: str = "",
     category: CorpusCategory | None = None,
@@ -202,8 +210,60 @@ def run_conversion(
     display_name = derive_display_name(
         source_format=source_format, source_path=source_path, name=name
     )
+    if output_format == "ctei" and source_format == SourceFormat.PLAIN:
+        # PlainTextParser's title is only the filename, not source metadata.
+        display_name = name.strip() or clean_filename_stem(source_path.name)
     on_display_name(display_name)
     try:
+        if output_format == "ctei":
+            from ..converters.tei import convert_to_ctei
+
+            on_log("Mapping source text, notes, tables and references to TEI...")
+            try:
+                result = convert_to_ctei(
+                    source_path, output_path_for(display_name),
+                    source_format=source_format, name=display_name,
+                    description=description, category=category, author_sub=author_sub,
+                )
+                summary = validate_archive(result)
+            except ValueError as exc:
+                message = str(exc).strip()
+                if message and not mentions_any_path(message, private_paths):
+                    raise ConversionError(message) from exc
+                raise
+            on_validation(summary)
+            on_log(f"CTEI archive validated; {summary['stats']['review_items']} items require human review.")
+            return result
+        if output_format == "cusx":
+            from ..converters.cusx import convert_to_cusx
+
+            on_log(f"Parsing {source_format.value} source for C-USX...")
+            try:
+                result = convert_to_cusx(
+                    source_path,
+                    output_path_for(display_name),
+                    source_format=source_format,
+                    name=display_name,
+                    description=description,
+                    author_sub=author_sub,
+                    category=category.value if category else "",
+                )
+            except ValueError as exc:
+                message = str(exc).strip()
+                if message and not mentions_any_path(message, private_paths):
+                    raise ConversionError(message) from exc
+                raise
+            on_log("C-USX XML compiled and compressed. Validating package...")
+            summary = validate_archive(result)
+            on_validation(summary)
+            if not summary.get("valid"):
+                raise CorpusValidationError(
+                    "Converted C-USX package failed validation", summary
+                )
+            on_log("Conversion complete.")
+            return result
+        if output_format != "corpus":
+            raise ConversionError("Unsupported conversion output format")
         if source_format == SourceFormat.TF_ZIP:
             on_log("Inspecting ZIP and importing Text-Fabric dataset...")
         elif source_format == SourceFormat.TEI_ZIP:

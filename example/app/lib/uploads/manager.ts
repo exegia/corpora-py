@@ -9,6 +9,7 @@ import {
 } from "~/lib/atoms/upload-atom"
 import {
   JobGoneError,
+  type ArchiveValidation,
   type JobStatusMessage,
   POLL_DEFAULTS,
   type PollFailureReason,
@@ -18,6 +19,12 @@ import {
 import { loadPersistedUploads, savePersistedUploads } from "./persistence"
 import { detectSourceFormat } from "./source-format"
 import { saveCorpusFile } from "./save-corpus-file"
+import {
+  outputFormatForEntry,
+  defaultOutputFormat,
+  supportsOutputFormat,
+  type OutputFormat,
+} from "./output-format"
 
 /**
  * Module-level upload/conversion job manager.
@@ -99,16 +106,32 @@ const stopTracking = (id: string): void => {
 }
 
 /**
- * Runs the converted archive through `POST /validate` (by job id -- see
- * `admin.services.validation_api`), mapping every outcome to a
+ * Uses the completed job's validation, falling back to `POST /validate`
+ * for older .corpus responses (see `admin.services.validation_api`). Maps every outcome to a
  * `ValidationOutcome` instead of throwing: an unreachable/failing validation
  * *request* is "skipped" (the check couldn't run), while a 200 with
  * `valid: false` is "invalid" (the check ran and the corpus is broken).
  * Neither blocks the download -- see `handleJobSucceeded`.
  */
-const validateConversion = async (
-  jobId: string
+export const validateConversion = async (
+  jobId: string,
+  outputFormat: OutputFormat = "corpus",
+  archiveValidation?: ArchiveValidation | null
 ): Promise<ValidationOutcome> => {
+  if (archiveValidation) {
+    return {
+      status: archiveValidation.valid ? "valid" : "invalid",
+      reasons: archiveValidation.reasons,
+      stats: archiveValidation.stats ?? undefined,
+      sourceVerified: archiveValidation.source_verified,
+    }
+  }
+  if (outputFormat === "ctei") {
+    return {
+      status: "skipped",
+      reasons: ["The API did not return TEI archive validation for this job."],
+    }
+  }
   try {
     const response = await apiFetch(`${API_URL}/validate`, {
       method: "POST",
@@ -192,8 +215,12 @@ const handleJobSucceeded = async (
   jobId: string,
   jobName: string,
   resultFilename: string,
-  displayName: string | null
+  displayName: string | null,
+  archiveValidation?: ArchiveValidation | null
 ): Promise<void> => {
+  const entry = store.get(uploadAtom)[id]
+  if (!entry) return
+  const outputFormat = outputFormatForEntry(entry)
   // Validate before downloading: the verdict annotates the conversion (the
   // "Dataset validated" stage in the console) but never gates it -- an
   // invalid or unvalidatable archive is still downloaded and saveable, with
@@ -204,7 +231,11 @@ const handleJobSucceeded = async (
     draft.progress = PROGRESS.validating
     draft.validation = { status: "running" }
   })
-  const validation = await validateConversion(jobId)
+  const validation = await validateConversion(
+    jobId,
+    outputFormat,
+    archiveValidation
+  )
   updateEntry(id, (draft) => {
     draft.validation = validation
   })
@@ -218,13 +249,13 @@ const handleJobSucceeded = async (
     const blob = await fetchCorpusBlob(jobId)
     // The server is the source of truth for the result filename: it
     // derives a slug from the display name (the human-readable title from
-    // the source, see issue #109) and always ends in `.corpus` (issue
+    // the source, see issue #109) and ends in the selected archive format (issue
     // #108). Using the server-supplied value means a reload-then-re-download
     // (which goes through `saveUpload`'s `entry.corpusName` path) keeps the
     // same filename, and the library never persists the original source
     // filename as the corpus name. `jobName` is kept only as a defensive
     // fallback for older servers that don't send `result_filename` yet.
-    const filename = resultFilename ?? `${jobName}.corpus`
+    const filename = resultFilename ?? `${jobName}.${outputFormat}`
 
     // The conversion succeeded, and the bytes are in hand -- from here, only
     // the local save-to-disk step can still fail, and that must never
@@ -292,7 +323,8 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
           jobId,
           message.name,
           message.result_filename,
-          message.display_name
+          message.display_name,
+          message.validation
         )
         break
     }
@@ -323,7 +355,8 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
         // eviction, backend restart), which pollJobStatus treats as
         // terminal instead of retrying forever (issue #189).
         if (response.status === 404) throw new JobGoneError()
-        if (!response.ok) throw new Error(`Status check failed (${response.status})`)
+        if (!response.ok)
+          throw new Error(`Status check failed (${response.status})`)
         return (await response.json()) as JobStatusMessage
       },
       handleMessage,
@@ -332,7 +365,8 @@ const trackJob = (id: string, jobId: string, wsPath: string): void => {
           const messages: Record<PollFailureReason, string> = {
             gone: "The conversion job no longer exists on the server. Try the upload again.",
             timeout: `Conversion timed out: no result after ${Math.round(POLL_DEFAULTS.deadlineMs / 60_000)} minutes. Try the upload again.`,
-            unreachable: "Lost contact with the server while tracking the conversion. Try the upload again.",
+            unreachable:
+              "Lost contact with the server while tracking the conversion. Try the upload again.",
           }
           updateEntry(id, (draft) => {
             draft.status = "error"
@@ -367,6 +401,7 @@ export type UploadOptions = {
   name?: string
   description?: string
   sourceFormat?: string
+  outputFormat?: OutputFormat
   /** Pre-upload inspection notes to surface in the conversion console. */
   inspection?: string[]
 }
@@ -416,6 +451,11 @@ export const uploadFile = (file: File, options: UploadOptions = {}): string => {
       lastModified: file.lastModified || undefined,
       uploadedAt: Date.now(),
       inspection: options.inspection,
+      outputFormat:
+        options.outputFormat ??
+        defaultOutputFormat(
+          options.sourceFormat ?? detectSourceFormat(file.name)
+        ),
       logs: [],
     }
   })
@@ -431,6 +471,13 @@ const performUpload = async (
 ): Promise<void> => {
   try {
     const sourceFormat = options.sourceFormat ?? detectSourceFormat(file.name)
+    const outputFormat =
+      options.outputFormat ?? defaultOutputFormat(sourceFormat)
+    if (!supportsOutputFormat(sourceFormat, outputFormat)) {
+      throw new Error(
+        ".ctei conversion requires an individual source document. Upload an EPUB, HTML, TEI/XML, PDF or text file, or a ZIP containing one document."
+      )
+    }
     updateEntry(id, (draft) => {
       draft.sourceFormat = sourceFormat
     })
@@ -438,6 +485,7 @@ const performUpload = async (
     const formData = new FormData()
     formData.append("file", file)
     formData.append("source_format", sourceFormat)
+    formData.append("output_format", outputFormat)
     formData.append(
       "name",
       options.name?.trim() || file.name.replace(/\.[^./]+$/, "")

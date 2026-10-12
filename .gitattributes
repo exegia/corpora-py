@@ -1,0 +1,3 @@
+# Preserve the generated schemas byte-for-byte for their provenance hashes.
+packages/admin/src/admin/converters/tei/profile/profile.sch -whitespace
+packages/admin/src/admin/converters/tei/profile/upstream/tei_all.rng -whitespace

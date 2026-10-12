@@ -50,6 +50,7 @@ from .jobs import snapshot_key_for
 from .storage import (
     CorpusNotFoundError,
     StorageError,
+    UnsupportedArchiveError,
     corpus_storage,
 )
 
@@ -133,11 +134,16 @@ def read_archive(archive: Path, view: str, **kwargs: Any) -> dict[str, Any]:
     }
     if view not in readers:
         raise ValueError("Unknown archive view")
+    if archive.suffix == ".cusx":
+        from ..converters.cusx import validate_cusx_archive
+
+        if not validate_cusx_archive(archive)["valid"]:
+            raise StorageError("Invalid C-USX package")
     with tempfile.TemporaryDirectory(prefix="corpora-private-reader-") as temporary:
         root = Path(temporary)
         with zipfile.ZipFile(archive) as packed:
             _safe_extract(packed, root)
-        name = "snapshot.corpus"
+        name = "snapshot.cusx" if archive.suffix == ".cusx" else "snapshot.corpus"
         token = _snapshot.set((name, _Cached(root)))
         try:
             return readers[view](name, **kwargs)
@@ -146,7 +152,7 @@ def read_archive(archive: Path, view: str, **kwargs: Any) -> dict[str, Any]:
 
 
 def register_local_archive(name: str, archive_path: Path) -> str:
-    """Serve detail reads from a local ``.corpus`` instead of the Hub.
+    """Serve detail reads from a local archive instead of the Hub.
 
     Registers ``archive_path`` under a safe cache key derived from ``name`` so
     that ``_ensure_extracted`` extracts it directly (no Hub download). Returns
@@ -178,7 +184,7 @@ def _safe_name(filename: str) -> str:
     name = Path(filename).name
     if name in ("", ".", "..") or name == _CORPUS_SUFFIX:
         raise CorpusNotFoundError(f"Invalid corpus filename: {filename!r}")
-    if not name.endswith(_CORPUS_SUFFIX):
+    if not name.endswith((".corpus", ".cusx")):
         name += _CORPUS_SUFFIX
     return name
 
@@ -246,6 +252,11 @@ def _ensure_extracted(filename: str) -> _Cached:
             # StorageError, which the callers map to 404 / 503 / 502.
             archive_path = corpus_storage.download(name, dest_dir=download_dir)
 
+        if archive_path.suffix == ".cusx":
+            from ..converters.cusx import validate_cusx_archive
+
+            if not validate_cusx_archive(archive_path)["valid"]:
+                raise StorageError("Invalid C-USX package")
         extract_dir.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive_path) as zf:
             _safe_extract(zf, extract_dir)
@@ -258,6 +269,10 @@ def _ensure_extracted(filename: str) -> _Cached:
 def _load_api(filename: str) -> Any:
     """Load (and cache) the cfabric api for `filename`; None if it won't load."""
     cached = _ensure_extracted(filename)
+    if filename.endswith(".cusx"):
+        raise UnsupportedArchiveError(
+            "C-USX document packages do not support Text-Fabric graph queries"
+        )
     with _lock:
         if cached.api_loaded:
             return cached.api
@@ -460,6 +475,8 @@ def _finest_otype(api: Any) -> str:
 def get_manifest(filename: str) -> dict[str, Any]:
     """Return the archive's ``manifest.yml`` as a dict (unknown keys preserved)."""
     cached = _ensure_extracted(filename)
+    if filename.endswith(".cusx"):
+        return json.loads((cached.extract_dir / "manifest.json").read_bytes())
     path = cached.extract_dir / "manifest.yml"
     if not path.is_file():
         raise CorpusNotFoundError(f"No manifest.yml in {_safe_name(filename)}")
@@ -475,6 +492,8 @@ def update_manifest(filename: str, updates: dict[str, Any]) -> dict[str, Any]:
     invalidates the local cache so the next read re-fetches the updated bytes.
     ``version`` is then overwritten by the 1.x history bump (issue #149).
     """
+    if filename.endswith(".cusx"):
+        raise UnsupportedArchiveError("C-USX packages do not support legacy manifest mutation")
     editable = {k: v for k, v in updates.items() if k in _EDITABLE_MANIFEST_KEYS}
     if not editable:
         raise StorageError("No editable manifest fields provided")
@@ -597,7 +616,11 @@ def _append_history(
     new_label = _next_1x_label(versions)
     actor = _actor()
     for row in versions:
-        if row.get("current") and superseded_snapshot_key and not row.get("snapshot_key"):
+        if (
+            row.get("current")
+            and superseded_snapshot_key
+            and not row.get("snapshot_key")
+        ):
             row["snapshot_key"] = superseded_snapshot_key
         row["current"] = False
     versions.append(

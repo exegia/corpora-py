@@ -20,14 +20,18 @@ are how a client finds out when it's done.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 import shutil
 import tempfile
 import uuid
+import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile
+import yaml
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -59,7 +63,6 @@ from .corpus_detail import (
 from .corpus_detail_api import ManifestUpdate, NodeAnnotation
 from .corpus_detail_api import _run as _run_detail
 from .jobs import (
-    _CORPUS_SUFFIX,
     ConversionJob,
     JobFailedError,
     JobQueueFullError,
@@ -140,6 +143,7 @@ class ConversionJobStatus(BaseModel):
         description="A `SourceFormat` value for `/convert` jobs; `/ingest` "
         "jobs (same registry) carry a detected file suffix instead."
     )
+    output_format: str = "corpus"
     name: str
     display_name: str | None = Field(
         description="Human-readable title derived from the source document's "
@@ -164,7 +168,7 @@ class ConversionJobStatus(BaseModel):
     )
     result_filename: str = Field(
         description="The filename a client should persist the result under "
-        "(always ends in `.corpus` for /convert jobs); matches the "
+        "(ends in `.corpus`, `.cusx` or `.ctei` for /convert jobs); matches the "
         "`Content-Disposition` on `/download`."
     )
     download_ready: bool
@@ -249,7 +253,9 @@ async def _save_upload(upload: UploadFile, dest_dir: Path) -> Path:
     return dest
 
 
-def _resolve_corpus_path(name: str, job_id: str) -> tuple[Path, str]:
+def _resolve_corpus_path(
+    name: str, job_id: str, output_format: Literal["corpus", "cusx", "ctei"] = "corpus"
+) -> tuple[Path, str]:
     """Pick the on-disk `.corpus` path and its exposed filename for one job.
 
     The stem is `_slugify(name)` (e.g. `"Summa Theologiae 1200 ENG"` ->
@@ -259,14 +265,14 @@ def _resolve_corpus_path(name: str, job_id: str) -> tuple[Path, str]:
     or a re-run of an idempotent job), a short uuid suffix is appended to
     keep the on-disk files unique -- the exposed `result_filename` tracks
     that suffix so a client echoing it back on download matches the actual
-    archive. The filename always ends in `.corpus` (see issue #108).
+    archive. The filename uses the selected `.corpus` or `.cusx` output suffix.
     """
     _RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
-    filename = result_filename_for(name, SourceFormat.PLAIN, job_id=job_id)
+    filename = result_filename_for(name, SourceFormat.PLAIN, job_id=job_id, output_format=output_format)
     path = _RESULTS_ROOT / filename
     if path.exists():
         stem = _slugify(name) or _slugify(job_id) or job_id
-        filename = f"{stem}-{uuid.uuid4().hex[:8]}{_CORPUS_SUFFIX}"
+        filename = f"{stem}-{uuid.uuid4().hex[:8]}.{output_format}"
         path = _RESULTS_ROOT / filename
     return path, filename
 
@@ -319,6 +325,7 @@ def _run_conversion(
     description: str,
     job_id: str,
     category: CorpusCategory | None = None,
+    output_format: Literal["corpus", "cusx", "ctei"] = "corpus",
 ) -> Path:
     """Blocking pipeline: parse -> Text-Fabric -> .cfm -> .corpus.
 
@@ -345,7 +352,8 @@ def _run_conversion(
             source_path=source_path,
             work_dir=work_dir,
             source_format=source_format,
-            output_path_for=lambda display: _resolve_corpus_path(display, job_id)[0],
+            output_path_for=lambda display: _resolve_corpus_path(display, job_id, output_format)[0],
+            output_format=output_format,
             name=name,
             description=description,
             category=category,
@@ -387,8 +395,7 @@ def _run_conversion(
     responses={
         413: {
             "model": ErrorDetail,
-            "description": f"Upload exceeds the "
-            f"{_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
+            "description": f"Upload exceeds the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
         },
         422: {
             "description": "Invalid upload filename, no converter registered "
@@ -400,8 +407,7 @@ def _run_conversion(
         },
         429: {
             "model": ErrorDetail,
-            "description": "Job queue is full — retry after in-flight "
-            "conversions finish.",
+            "description": "Job queue is full — retry after in-flight conversions finish.",
         },
         503: {
             "model": ErrorDetail,
@@ -421,9 +427,13 @@ def _run_conversion(
 async def create_conversion(
     request: Request,
     file: UploadFile,
+    background_tasks: BackgroundTasks,
     source_format: SourceFormat = Form(...),
     name: str = Form(...),
     description: str = Form(""),
+    output_format: Literal["corpus", "cusx", "ctei"] = Form(
+        "corpus", description="Output archive: Corpus (.corpus), C-USX (.cusx) or owned TEI ZIP (.ctei). CTEI packages preserve unresolved items in review.xml."
+    ),
     category: CorpusCategory | None = Form(
         default=None,
         description="Optional corpus category override "
@@ -447,6 +457,9 @@ async def create_conversion(
             detail=f"No converter registered for {source_format!r}. "
             f"Available: {sorted(f.value for f in CONVERTERS)}",
         )
+
+    if output_format in {"ctei", "cusx"} and source_format in {SourceFormat.TF_ZIP, SourceFormat.TEI_ZIP}:
+        raise HTTPException(status_code=422, detail="CTEI and C-USX require a source document; choose corpus output for dataset ZIPs")
 
     claims = _claims(request)
     owner = claims.get("sub") if claims else None
@@ -475,6 +488,7 @@ async def create_conversion(
                 source_format=source_format,
                 name=name,
                 owner=owner,
+                output_format=output_format,
                 fn=lambda: _run_conversion(
                     source_path=source_path,
                     work_dir=work_dir,
@@ -483,6 +497,7 @@ async def create_conversion(
                     description=description,
                     job_id=job_id,
                     category=category,
+                    output_format=output_format,
                 ),
             )
         except JobQueueFullError as exc:
@@ -510,6 +525,15 @@ async def create_conversion(
     # response channel.
     for warning in report.warnings:
         job_manager.log(job.id, warning)
+
+    if os.getenv("VERCEL") == "1" and job.completion is not None:
+        completion = job.completion
+        # Keep the serverless invocation active through terminal persistence.
+        # FastAPI sends the 202 body before awaiting this response task.
+        async def finish_conversion() -> None:
+            await asyncio.wrap_future(completion)
+
+        background_tasks.add_task(finish_conversion)
 
     logger.info("Queued conversion job %s (%s, %s)", job.id, source_format.value, name)
     return {
@@ -577,7 +601,7 @@ async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
     responses={
         200: {
             "content": {"application/zip": {}},
-            "description": "The finished `.corpus` archive; "
+            "description": "The finished `.corpus`, `.cusx` or `.ctei` archive; "
             "`Content-Disposition` carries `result_filename`.",
         },
         404: {"model": ErrorDetail, "description": "Unknown (or foreign) job id."},
@@ -631,9 +655,9 @@ _JOB_DETAIL_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
-def _job_corpus_key(job_id: str) -> str:
+def _job_corpus_key(job_id: str, suffix: str = ".corpus") -> str:
     """Stable cache key for a job's result archive (``job-<id>.corpus``)."""
-    return f"job-{job_id}"
+    return f"job-{job_id}{suffix}"
 
 
 def _store_op(fn):
@@ -669,11 +693,31 @@ def _resolve_succeeded(job_id: str, request: Request) -> Path:
     return path
 
 
+def _require_tf_archive(archive: Path) -> None:
+    if archive.suffix == ".ctei":
+        raise HTTPException(status_code=409, detail="This operation requires a Text-Fabric archive. CTEI supports download, manifest and versions reads.")
+
+
+def _ctei_metadata(archive: Path, member: str) -> dict[str, Any]:
+    from lxml.etree import XMLSyntaxError
+
+    from ..converters.tei.package import read_history
+
+    try:
+        with zipfile.ZipFile(archive) as zf:
+            data = zf.read(member)
+        return read_history(data) if member == "history.xml" else yaml.safe_load(data)
+    except (ValueError, KeyError, zipfile.BadZipFile, yaml.YAMLError, XMLSyntaxError) as exc:
+        raise HTTPException(status_code=422, detail="CTEI archive metadata is invalid") from exc
+
+
 @router.get("/{job_id}/manifest", responses=_JOB_DETAIL_RESPONSES)
 async def get_job_manifest(job_id: str, request: Request) -> dict[str, Any]:
     """Return the converted archive's ``manifest.yml``."""
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    if archive.suffix == ".ctei":
+        return await _run_detail(lambda: _ctei_metadata(archive, "manifest.yml"))
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     return await _run_detail(lambda: get_manifest(key))
 
 
@@ -681,7 +725,8 @@ async def get_job_manifest(job_id: str, request: Request) -> dict[str, Any]:
 async def get_job_index(job_id: str, request: Request) -> dict[str, Any]:
     """Return the converted archive's toc, section structure, and node-type stats."""
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     return await _run_detail(lambda: get_index(key))
 
 
@@ -695,7 +740,8 @@ async def get_job_sections(
 ) -> dict[str, Any]:
     """Paginated section children under ``parent`` (top-level if omitted)."""
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     return await _run_detail(
         lambda: get_sections(key, parent=parent, offset=offset, limit=limit)
     )
@@ -712,7 +758,8 @@ async def get_job_content(
 ) -> dict[str, Any]:
     """Return paginated passages under ``ref`` (or the whole corpus if omitted)."""
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     return await _run_detail(
         lambda: get_content(key, ref=ref, fmt=fmt, offset=offset, limit=limit)
     )
@@ -724,7 +771,8 @@ async def get_job_node(
 ) -> dict[str, Any]:
     """Inspect one graph node in the converted archive."""
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     return await _run_detail(lambda: get_node(key, node))
 
 
@@ -732,7 +780,9 @@ async def get_job_node(
 async def get_job_versions(job_id: str, request: Request) -> dict[str, Any]:
     """Return the converted archive's version timeline."""
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    if archive.suffix == ".ctei":
+        return await _run_detail(lambda: _ctei_metadata(archive, "history.xml"))
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     return await _run_detail(lambda: get_versions(key))
 
 
@@ -745,7 +795,8 @@ async def patch_job_manifest(
     Job-scoped writes stay available when Hub storage is read-only.
     """
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     updates = payload.model_dump(exclude_unset=True)
     return await _run_detail(lambda: update_manifest(key, updates))
 
@@ -756,7 +807,8 @@ async def patch_job_node(
 ) -> dict[str, Any]:
     """Annotate a node in the converted archive and bump ``v1.N`` (issue #149)."""
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     updates = payload.model_dump(exclude_unset=True)
     return await _run_detail(lambda: annotate_node(key, node, **updates))
 
@@ -785,7 +837,8 @@ async def restore_job_corpus(
     Job-scoped only — Hub storage restore stays 403/501. Not a git checkout.
     """
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     versions = (await _run_detail(lambda: get_versions(key)))["versions"]
     needle = payload.version_id.strip()
     row = _find_version_row(versions, needle)
@@ -861,7 +914,8 @@ async def diff_job_versions(
     Read-only: nothing is bumped, snapshotted, or republished.
     """
     archive = _resolve_succeeded(job_id, request)
-    key = register_local_archive(_job_corpus_key(job_id), archive)
+    _require_tf_archive(archive)
+    key = register_local_archive(_job_corpus_key(job_id, archive.suffix), archive)
     versions = (await _run_detail(lambda: get_versions(key)))["versions"]
 
     sides: list[tuple[dict[str, Any], Path]] = []

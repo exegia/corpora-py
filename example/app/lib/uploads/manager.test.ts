@@ -2,7 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { getDefaultStore } from "jotai"
 import { uploadAtom, type UploadEntry } from "~/lib/atoms/upload-atom"
 import { API_URL } from "~/lib/types/socket"
-import { publishConversion, publishUpload } from "./manager"
+import {
+  deleteUpload,
+  publishConversion,
+  publishUpload,
+  retryUpload,
+  uploadFile,
+  validateConversion,
+} from "./manager"
 
 /**
  * The manual Hugging Face publish contract:
@@ -23,7 +30,10 @@ const stubFetch = (
   respond: () => Response | Promise<Response>
 ): RecordedRequest[] => {
   const requests: RecordedRequest[] = []
-  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (
+    url: string | URL | Request,
+    init?: RequestInit
+  ) => {
     requests.push({ url: String(url), init })
     return respond()
   }) as typeof fetch
@@ -32,6 +42,107 @@ const stubFetch = (
 
 afterEach(() => {
   globalThis.fetch = realFetch
+})
+
+describe("conversion output selection", () => {
+  test("sends .ctei and retains it when retrying the failed upload", async () => {
+    const requests = stubFetch(() =>
+      Response.json({ detail: "Retry fixture" }, { status: 503 })
+    )
+    const file = new File(["λόγος"], "book.txt", { type: "text/plain" })
+    const id = uploadFile(file, { outputFormat: "ctei" })
+    await Bun.sleep(0)
+    expect(getDefaultStore().get(uploadAtom)[id]?.outputFormat).toBe("ctei")
+    expect(getDefaultStore().get(uploadAtom)[id]?.status).toBe("error")
+    const retried = retryUpload(id)!
+    await Bun.sleep(0)
+    expect(requests).toHaveLength(2)
+    for (const request of requests) {
+      const form = request.init!.body as FormData
+      expect(form.get("output_format")).toBe("ctei")
+      expect(form.get("source_format")).toBe("plain")
+    }
+    expect(getDefaultStore().get(uploadAtom)[retried]?.outputFormat).toBe(
+      "ctei"
+    )
+    deleteUpload(retried)
+  })
+
+  test("sends the selected .corpus output", async () => {
+    const requests = stubFetch(() =>
+      Response.json({ detail: "Fixture" }, { status: 503 })
+    )
+    const id = uploadFile(new File(["Text"], "book.txt"), {
+      outputFormat: "corpus",
+    })
+    await Bun.sleep(0)
+    expect((requests[0]!.init!.body as FormData).get("output_format")).toBe(
+      "corpus"
+    )
+    deleteUpload(id)
+  })
+
+  test("rejects a multi-document TEI ZIP before sending a .ctei request", async () => {
+    const requests = stubFetch(() => Response.json({}))
+    const id = uploadFile(new File(["ZIP"], "book.zip"), {
+      sourceFormat: "tei_zip",
+      outputFormat: "ctei",
+    })
+    await Bun.sleep(0)
+    expect(requests).toHaveLength(0)
+    expect(getDefaultStore().get(uploadAtom)[id]?.error).toContain(
+      "individual source document"
+    )
+    deleteUpload(id)
+  })
+})
+
+describe("completed job validation", () => {
+  test("uses the .corpus job verdict without a second validation request", async () => {
+    const requests = stubFetch(() => new Response(null, { status: 409 }))
+    const outcome = await validateConversion("job-123", "corpus", {
+      valid: true,
+      stats: { max_slot: 19 },
+    })
+    expect(outcome.status).toBe("valid")
+    expect(outcome.stats?.max_slot).toBe(19)
+    expect(requests).toHaveLength(0)
+  })
+
+  test("preserves an invalid .ctei verdict and source verification status", async () => {
+    const requests = stubFetch(() => Response.json({}))
+    const outcome = await validateConversion("job-123", "ctei", {
+      valid: false,
+      reasons: ["Broken reference"],
+      source_verified: false,
+    })
+    expect(outcome.status).toBe("invalid")
+    expect(outcome.reasons).toEqual(["Broken reference"])
+    expect(outcome.sourceVerified).toBe(false)
+    expect(requests).toHaveLength(0)
+  })
+
+  test("falls back to POST /validate for an older .corpus response", async () => {
+    const requests = stubFetch(() =>
+      Response.json({ valid: true, stats: { max_slot: 19 } })
+    )
+    expect((await validateConversion("job-123")).status).toBe("valid")
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.url).toBe(`${API_URL}/validate`)
+    expect(JSON.parse(String(requests[0]!.init?.body))).toEqual({
+      job_id: "job-123",
+    })
+  })
+
+  test("never sends a .ctei job to the corpus-only validator", async () => {
+    const requests = stubFetch(() => Response.json({}))
+    const outcome = await validateConversion("job-123", "ctei")
+    expect(outcome.status).toBe("skipped")
+    expect(outcome.reasons?.[0]).toContain(
+      "did not return TEI archive validation"
+    )
+    expect(requests).toHaveLength(0)
+  })
 })
 
 describe("publishConversion", () => {
@@ -211,4 +322,34 @@ describe("publishUpload", () => {
     await publishUpload("nope")
     expect(requests).toHaveLength(0)
   })
+})
+
+describe("conversion output choice", () => {
+  for (const [sourceFormat, outputFormat] of [
+    ["plain", "cusx"],
+    ["epub", "cusx"],
+    ["pdf", "cusx"],
+    ["tf_zip", "corpus"],
+    ["tei_zip", "corpus"],
+  ] as const) {
+    test(`${sourceFormat} requests ${outputFormat} without publishing`, async () => {
+      const requests = stubFetch(() =>
+        Response.json(
+          { detail: "test stops after submission" },
+          { status: 422 }
+        )
+      )
+      const id = uploadFile(new File(["text"], "fixture.txt"), { sourceFormat })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      try {
+        expect(requests).toHaveLength(1)
+        expect(requests[0].url).toBe(`${API_URL}/convert`)
+        const form = requests[0].init?.body as FormData
+        expect(form.get("source_format")).toBe(sourceFormat)
+        expect(form.get("output_format")).toBe(outputFormat)
+      } finally {
+        deleteUpload(id)
+      }
+    })
+  }
 })

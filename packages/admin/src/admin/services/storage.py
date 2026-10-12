@@ -50,10 +50,15 @@ from huggingface_hub.errors import (
 logger = logging.getLogger(__name__)
 
 _CORPUS_SUFFIX = ".corpus"
+_ARCHIVE_SUFFIXES = (".corpus", ".cusx")
 
 
 class StorageError(Exception):
     """Base error for Hub storage operations (network, auth, bad input)."""
+
+
+class UnsupportedArchiveError(StorageError):
+    """The archive format does not support the requested operation."""
 
 
 class StorageNotConfiguredError(StorageError):
@@ -97,7 +102,7 @@ def _safe_archive_name(raw: str) -> str:
     name = Path(raw).name
     if name in ("", ".", ".."):
         raise StorageError(f"Invalid corpus filename: {raw!r}")
-    if not name.endswith(_CORPUS_SUFFIX):
+    if not name.endswith(_ARCHIVE_SUFFIXES):
         name += _CORPUS_SUFFIX
     return name
 
@@ -192,7 +197,7 @@ class CorpusStorage:
                     url=self._url_for(entry.path),
                 )
                 for entry in entries
-                if entry.path.endswith(_CORPUS_SUFFIX)
+                if entry.path.endswith(_ARCHIVE_SUFFIXES)
             ]
         except (RepositoryNotFoundError, BucketNotFoundError):
             # Nothing has been uploaded yet (ensure_repo() runs on first
@@ -280,7 +285,11 @@ class CorpusStorage:
                     repo_type=self.repo_type,
                     local_dir=str(dest_dir),
                 )
-        except (EntryNotFoundError, RepositoryNotFoundError, BucketNotFoundError) as exc:
+        except (
+            EntryNotFoundError,
+            RepositoryNotFoundError,
+            BucketNotFoundError,
+        ) as exc:
             raise CorpusNotFoundError(
                 f"No corpus named {filename!r} in {repo_id}"
             ) from exc
@@ -311,7 +320,11 @@ class CorpusStorage:
                     repo_type=self.repo_type,
                     commit_message=f"Delete {filename}",
                 )
-        except (EntryNotFoundError, RepositoryNotFoundError, BucketNotFoundError) as exc:
+        except (
+            EntryNotFoundError,
+            RepositoryNotFoundError,
+            BucketNotFoundError,
+        ) as exc:
             raise CorpusNotFoundError(
                 f"No corpus named {filename!r} in {repo_id}"
             ) from exc

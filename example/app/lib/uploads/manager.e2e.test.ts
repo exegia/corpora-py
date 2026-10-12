@@ -64,7 +64,7 @@ test.skipIf(!serverUp || !storageUp)(
       expect(entry.status).toBe("ready")
       expect(entry.error).toBeNull()
       expect(entry.validation?.status).toBe("valid")
-      expect(entry.corpusName).toBe(`${JOB_NAME}.corpus`)
+      expect(entry.corpusName).toBe(`${JOB_NAME}.cusx`)
 
       // The requirement under test, part 1: finishing the pipeline did NOT
       // publish anything -- the Hub push is manual.
@@ -75,7 +75,7 @@ test.skipIf(!serverUp || !storageUp)(
       await publishUpload(id)
       const published = getDefaultStore().get(uploadAtom)[id]!
       expect(published.storage?.status).toBe("stored")
-      expect(published.storage?.filename).toBe(`${JOB_NAME}.corpus`)
+      expect(published.storage?.filename).toBe(`${JOB_NAME}.cusx`)
       expect(published.storage?.repoId).toBeTruthy()
       expect(published.storage?.url).toMatch(
         new RegExp(
@@ -93,7 +93,7 @@ test.skipIf(!serverUp || !storageUp)(
         response.json()
       )) as Array<{ filename: string; url: string }>
       const stored = listed.find(
-        (candidate) => candidate.filename === `${JOB_NAME}.corpus`
+        (candidate) => candidate.filename === `${JOB_NAME}.cusx`
       )
       expect(stored?.url).toBe(published.storage?.url)
     } finally {

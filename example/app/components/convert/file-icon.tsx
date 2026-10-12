@@ -39,6 +39,7 @@ const EXTENSION_TO_KIND: Record<string, keyof typeof KINDS> = {
   tgz: "archive",
   rar: "archive",
   corpus: "archive",
+  ctei: "archive",
   pdf: "pdf",
   doc: "document",
   docx: "document",

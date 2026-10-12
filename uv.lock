@@ -379,12 +379,13 @@ wheels = [
 
 [[package]]
 name = "corpora-admin"
-version = "6.0.0"
+version = "6.1.0"
 source = { editable = "packages/admin" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "context-fabric" },
     { name = "corpora-common" },
+    { name = "corpora-linking" },
     { name = "docling-core" },
     { name = "ebooklib" },
     { name = "huggingface-hub" },
@@ -408,6 +409,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "context-fabric", specifier = ">=0.5.7" },
     { name = "corpora-common", editable = "packages/common" },
+    { name = "corpora-linking", specifier = ">=0.1.0,<0.2" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling-core", specifier = ">=2.30" },
     { name = "ebooklib", specifier = ">=0.20" },
@@ -425,7 +427,7 @@ provides-extras = ["docling"]
 
 [[package]]
 name = "corpora-common"
-version = "6.0.0"
+version = "6.1.0"
 source = { editable = "packages/common" }
 dependencies = [
     { name = "cryptography" },
@@ -458,7 +460,7 @@ wheels = [
 
 [[package]]
 name = "corpora-mcp"
-version = "6.0.0"
+version = "6.1.0"
 source = { editable = "packages/mcp" }
 dependencies = [
     { name = "corpora-common" },
@@ -482,7 +484,7 @@ provides-extras = ["sse"]
 
 [[package]]
 name = "corpora-py"
-version = "6.0.0"
+version = "6.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
