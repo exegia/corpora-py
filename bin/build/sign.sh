@@ -99,7 +99,6 @@ sign_macos() {
 
   log "Signing Mach-O files..."
   local -a machos
-  mapfile -t machos < <(find_macho_files "$python_dir" | sort -r)  # deepest first by sorting paths longer first? simple reverse lexical approx
 
   # Better: sort by depth (number of path components) descending
   machos=()
@@ -131,7 +130,7 @@ sign_macos() {
       --team-id "$team_id" \
       --wait
   else
-    echo "    Warning: APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID not set — skipping notarization."
+    log "Warning: APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID not set — skipping notarization."
   fi
 
   echo "$archive"
@@ -160,7 +159,7 @@ sign_windows() {
     binaries+=("$f")
   done < <(find "$python_dir" \( -name "*.exe" -o -name "*.dll" -o -name "*.pyd" \) -type f ! -type l -print0)
 
-  echo "==> Signing ${#binaries[@]} Windows binaries..."
+  log "Signing ${#binaries[@]} Windows binaries..."
 
   for f in "${binaries[@]}"; do
     if [[ -n "$custom_cmd" ]]; then
@@ -178,17 +177,7 @@ sign_windows() {
     fi
   done
 
-  mkdir -p "$out_dir"
-  local archive="$out_dir/corpora-py-${platform_key}.zip"
-  log "Creating archive: $(basename "$archive")"
-
-  # Recreate the zip logic from sign.py / archive
-  (
-    cd "$(dirname "$python_dir")"
-    zip -9 -r -y "$archive" "$(basename "$python_dir")"
-  )
-
-  echo "$archive"
+  "$SCRIPT_DIR/archive.sh" create "$python_dir" "$out_dir" "$platform_key"
 }
 
 # --- dispatch ---
