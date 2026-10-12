@@ -101,6 +101,13 @@ Transport-free conversion (the same work `/convert` does in a job thread) is
 `admin.services.conversion.run_conversion` — that's what the standalone
 [`corpora` CLI](https://github.com/exegia/corpora-cli) calls.
 
+`POST /convert` also accepts `output_format=ctei` to produce an owned TEI ZIP
+with extension `.ctei`. It includes the corpus manifest and TOC, native TEI
+reading files, review findings, references, XML version history, assets and
+semantic presentation roles. See [the CTEI contract](../../docs/architecture/ctei.md)
+for the layout, input limits and Supabase column migration. The default
+output remains `.corpus`.
+
 ## HTTP and MCP surfaces
 
 Every router here is a plain `APIRouter` meant to be included into the combined

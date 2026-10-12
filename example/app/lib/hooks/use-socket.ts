@@ -1,4 +1,12 @@
 import { useEffect, useState } from "react"
+import type { OutputFormat } from "~/lib/uploads/output-format"
+
+export type ArchiveValidation = {
+  valid: boolean
+  reasons?: string[]
+  stats?: Record<string, number> | null
+  source_verified?: boolean
+}
 
 // Mirrors `admin.services.jobs.ConversionJob.to_dict()` -- see
 // packages/admin/src/admin/services/jobs.py. No progress percentage: the
@@ -9,6 +17,8 @@ export type JobStatus = "queued" | "running" | "succeeded" | "failed"
 export type JobStatusMessage = {
   id: string
   source_format: string
+  output_format?: OutputFormat
+  validation?: ArchiveValidation | null
   name: string
   /**
    * The human-readable title derived from the source document's own
@@ -30,7 +40,7 @@ export type JobStatusMessage = {
   last_log: string | null
   /**
    * The human-readable filename the client should store the result under
-   * (always `*.corpus` for /convert jobs, `*.graph.json` for /ingest jobs).
+   * (`*.corpus` or `*.ctei` for /convert, `*.graph.json` for /ingest).
    * Derived from the display name (or the request `name` before the title
    * is known), not the upload filename -- so a client that stores only
    * this field never persists the original source file as the library
@@ -202,7 +212,10 @@ export const pollJobStatus = (
         giveUp("unreachable")
         return
       }
-      delay = Math.min(intervalMs * 2 ** consecutiveErrors, MAX_ERROR_BACKOFF_MS)
+      delay = Math.min(
+        intervalMs * 2 ** consecutiveErrors,
+        MAX_ERROR_BACKOFF_MS
+      )
     }
     timer = setTimeout(() => void tick(), delay)
   }

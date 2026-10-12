@@ -8,11 +8,12 @@ a native desktop app via Electrobun, and a static SPA on the web
 
 ## Features
 
-- **Convert** — individual EPUB, HTML, XML, TEI, PDF and plain text → compressed
-  C-USX `.cusx` packages, with live job status over WebSocket (and polling fallback).
-  Text-Fabric/TEI dataset ZIPs retain the `.corpus` import path.
-- **Explore & publish** — browse both archive types on the Hugging Face Hub and
-  publish manually through the existing repo/bucket configuration
+- **Convert** — choose Context-Fabric `.corpus`, C-USX `.cusx` or TEI `.ctei` output for EPUB,
+  HTML, TEI/XML, PDF and plain text, with live job status and download.
+  `.ctei` uses the completed job's TEI validation and shows source review
+  separately from archive validity. Text-Fabric/TEI dataset ZIPs and GitHub
+  repositories remain `.corpus` inputs; a single zipped document can use any output.
+- **Explore & publish** — browse and publish `.corpus` and `.cusx` archives on the Hugging Face Hub
 - **Corpus detail & reader** — edit manifest metadata, browse the section index,
   read paginated passages (see [the flow](#corpus-detail-flow))
 - **Chat** — an in-browser agent that loads a published corpus and queries it
