@@ -115,7 +115,29 @@ def set_features(cv: CV, node: tuple[str, int], **features: Any) -> None:
     """
     for name in features:
         cv.meta(name, description=f"'{name}' feature", valueType="str")
-    cv.feature(node, **features)
+    # TF escapes LF and tabs but writes CR literally. Context-Fabric treats
+    # those CRs as extra feature records, corrupting node numbers. Preserve
+    # the graph path's historical universal-newline behavior at this boundary;
+    # C-USX serializes the untouched Document separately.
+    cv.feature(
+        node,
+        **{
+            name: value.replace("\r\n", "\n").replace("\r", "\n")
+            if isinstance(value, str)
+            else value
+            for name, value in features.items()
+        },
+    )
+
+
+def _contains_carriage_return(value: Any) -> bool:
+    if isinstance(value, str):
+        return "\r" in value
+    if isinstance(value, dict):
+        return any(_contains_carriage_return(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_contains_carriage_return(v) for v in value)
+    return False
 
 
 def _unit_features(unit: Unit) -> dict[str, Any]:
@@ -276,4 +298,9 @@ def convert_documents(
     )
     if not good:
         raise RuntimeError(f"Text-Fabric conversion failed for {source_label!r}")
-    return ConvertedDataset.wrap(output_path, category=category)
+    warnings = []
+    if any(_contains_carriage_return(document.model_dump()) for document in documents):
+        warnings.append(
+            "Text-Fabric normalizes CR/CRLF to LF; C-USX retains exact source line endings"
+        )
+    return ConvertedDataset.wrap(output_path, category=category, warnings=warnings)

@@ -6,7 +6,6 @@ projection. It never invents scripture identities or original-file anchors.
 
 import hashlib
 import json
-import uuid
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -18,7 +17,8 @@ from ..parsers import PARSERS
 from ..parsers.schema import Document, SourceFormat, Unit
 
 CX = "urn:corpora:usx-extension:0.1"
-PROFILE = "corpora-cusx-package/0.1.0"
+LEGACY_PROFILE = "corpora-cusx-package/0.1.0"
+PROFILE = "corpora-cusx-package/0.2.0"
 STREAM = "cusx-itertext/v1"
 MAX_BYTES = 256 * 1024 * 1024
 MEMBERS = {"document.usx", "document.json", "snapshot.json", "references.json", "mappings.json"}
@@ -33,12 +33,22 @@ def encoded(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _unit(parent: ET.Element, unit: Unit, depth: int = 0) -> None:
+def _unit(parent: ET.Element, unit: Unit, depth: int = 0, *, legacy: bool = False) -> None:
     if depth > 200:
         raise ValueError("source structure exceeds the supported nesting depth")
     # Source IDs remain source metadata; they do not become global anchors.
     node = ET.SubElement(parent, f"{{{CX}}}unit", {"type": unit.type})
     node.set("attributes", encoded(unit.attrs).decode())
+    if not legacy:
+        if unit.namespace:
+            node.set("namespace", unit.namespace)
+        if unit.namespaces:
+            node.set("namespaces", encoded(unit.namespaces).decode())
+        if unit.source_attrs:
+            node.set("source-attributes", encoded(unit.source_attrs).decode())
+        source_id = unit.attrs.get("id") or unit.attrs.get("xml:id")
+        if source_id:
+            node.set("id", source_id)
     if unit.id is not None:
         node.set("source-id", unit.id)
     if unit.label is not None:
@@ -47,17 +57,33 @@ def _unit(parent: ET.Element, unit: Unit, depth: int = 0) -> None:
         para = ET.SubElement(node, "para", {"style": "p"})
         para.text = "".join(token.text + token.after for token in unit.tokens)
     for child in unit.children:
-        _unit(node, child, depth + 1)
-    if unit.tokens and not unit.children:
+        _unit(node, child, depth + 1, legacy=legacy)
+    if legacy and unit.tokens and not unit.children:
         # Deliberate converted-stream separator, never a native-file offset.
         node.tail = "\n\n"
 
 
-def document_xml(document: Document) -> bytes:
-    root = ET.Element("usx", {"version": "3.1", f"{{{CX}}}profile": PROFILE})
+def document_xml(document: Document, *, profile: str = PROFILE) -> bytes:
+    root = ET.Element("usx", {"version": "3.1", f"{{{CX}}}profile": profile})
     for unit in document.units:
-        _unit(root, unit)
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        _unit(root, unit, legacy=profile == LEGACY_PROFILE)
+    for node in root.iter():
+        for text in (node.text, node.tail, *node.attrib.values()):
+            if text is None:
+                continue
+            for character in text:
+                code = ord(character)
+                if not (character in "\t\n\r" or 0x20 <= code <= 0xD7FF
+                        or 0xE000 <= code <= 0xFFFD or 0x10000 <= code <= 0x10FFFF):
+                    raise ValueError(
+                        f"Source contains U+{code:04X}, which C-USX XML cannot represent "
+                        "without changing the text. Remove or replace that control "
+                        "character in a copy of the source, or try another format"
+                    )
+    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    # XML parsers normalize literal CR in text. Character references preserve
+    # the source scalar instead, including CR decoded from XHTML entities.
+    return data if profile == LEGACY_PROFILE else data.replace(b"\r", b"&#13;")
 
 
 def convert_to_cusx(
@@ -70,76 +96,20 @@ def convert_to_cusx(
     author_sub: str | None = None,
     category: str = "",
 ) -> Path:
+    from .cusx_package import write_package
+
     parser = PARSERS.get(source_format)
     if parser is None:
         raise ValueError("C-USX currently supports EPUB, PDF, HTML, XML/TEI and plain text sources")
-    if source_format == SourceFormat.PDF:
-        from pypdf import PdfReader
-
-        # Do not produce a partial document while silently skipping OCR pages.
-        pages = PdfReader(source).pages
-        if not pages or any(not (page.extract_text() or "").strip() for page in pages):
-            raise ValueError("C-USX requires extractable text on every PDF page; OCR is required")
-    document = parser.parse(str(source))
-    if not document.units:
-        raise ValueError("source contains no supported document units")
-    xml = document_xml(document)
-    root = ET.fromstring(xml)
-    text = "".join(root.itertext())
-    if not text.strip():
-        raise ValueError("source contains no extractable text")
-    source_digest = digest(source.read_bytes())
-    conversion_id = str(uuid.uuid4())
-    endpoint = {
-        "work_id": "urn:uuid:" + str(uuid.uuid4()),
-        "edition_id": "urn:uuid:" + str(uuid.uuid4()),
-        "package_id": "urn:uuid:" + conversion_id,
-        "revision": digest(xml),
-        "document_id": "document.usx",
-        "locators": [],
-    }
-    members = {
-        "document.usx": xml,
-        "document.json": encoded(document.model_dump(mode="json")),
-        "snapshot.json": encoded({"endpoint": endpoint, "stream_id": STREAM, "text": text}),
-        "references.json": encoded([]),
-        "mappings.json": encoded(
-            {"mappings": [], "diagnostics": ["native selection mappings unavailable"]}
-        ),
-    }
-    manifest = {
-        "format": PROFILE,
-        "name": name,
-        "description": description,
-        "category": category,
-        "created_by": author_sub,
-        "identity": endpoint,
-        "source": {
-            "filename": source.name,
-            "format": source_format.value,
-            "revision": source_digest,
-        },
-        "stream": {"id": STREAM, "offset_unit": "unicode-scalar", "normalization": "preserve"},
-        "diagnostics": [
-            "parser projection; source structure and spacing may differ",
-            "no references approved or published",
-        ],
-        "files": {key: digest(data) for key, data in members.items()},
-    }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_name(output.name + "." + uuid.uuid4().hex + ".tmp")
-    try:
-        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("manifest.json", encoded(manifest))
-            for key, data in members.items():
-                archive.writestr(key, data)
-        summary = validate_cusx_archive(temporary)
-        if not summary["valid"]:
-            raise ValueError("converted C-USX package failed validation")
-        temporary.replace(output)
-    finally:
-        temporary.unlink(missing_ok=True)
-    return output
+    return write_package(
+        source,
+        output,
+        source_format=source_format,
+        name=name,
+        description=description,
+        author_sub=author_sub,
+        category=category,
+    )
 
 
 def validate_cusx_archive(path: Path) -> dict[str, Any]:
@@ -150,12 +120,18 @@ def validate_cusx_archive(path: Path) -> dict[str, Any]:
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
             names = [info.filename for info in infos]
-            if len(names) != len(set(names)) or set(names) != MEMBERS | {"manifest.json"}:
-                raise ValueError("unexpected, duplicate or missing package members")
+            if len(names) != len(set(names)):
+                raise ValueError("duplicate package members")
             if sum(info.file_size for info in infos) > MAX_BYTES:
                 raise ValueError("C-USX package exceeds the uncompressed size limit")
             manifest = json.loads(archive.read("manifest.json"))
-            if manifest["format"] != PROFILE or set(manifest["files"]) != MEMBERS:
+            if manifest["format"] == PROFILE:
+                from .cusx_package import validate_package
+
+                return validate_package(path)
+            if set(names) != MEMBERS | {"manifest.json"}:
+                raise ValueError("unexpected or missing package members")
+            if manifest["format"] != LEGACY_PROFILE or set(manifest["files"]) != MEMBERS:
                 raise ValueError("unsupported C-USX package profile or file inventory")
             members = {name: archive.read(name) for name in MEMBERS}
             if any(digest(data) != manifest["files"][name] for name, data in members.items()):
@@ -164,10 +140,10 @@ def validate_cusx_archive(path: Path) -> dict[str, Any]:
             if b"<!DOCTYPE" in xml.upper() or b"<!ENTITY" in xml.upper():
                 raise ValueError("XML entity declarations are unsupported")
             root = ET.fromstring(xml)
-            if root.tag != "usx" or root.get(f"{{{CX}}}profile") != PROFILE:
+            if root.tag != "usx" or root.get(f"{{{CX}}}profile") != LEGACY_PROFILE:
                 raise ValueError("invalid C-USX document profile")
             document = Document.model_validate_json(members["document.json"])
-            if document_xml(document) != xml:
+            if document_xml(document, profile=LEGACY_PROFILE) != xml:
                 raise ValueError("C-USX XML differs from the parsed document projection")
             validated_snapshot = TextSnapshot.model_validate_json(members["snapshot.json"])
             snapshot = validated_snapshot.model_dump(mode="json")

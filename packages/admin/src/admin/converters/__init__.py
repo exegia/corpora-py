@@ -13,6 +13,7 @@ from ..parsers import SourceFormat
 from ._category import categorize, detect_category
 from ._epub_to_tf import convert_epub_to_tf
 from ._html_to_tf import convert_html_to_tf
+from ._markdown_to_tf import convert_markdown_to_tf
 from ._pdf_to_tf import convert_pdf_to_tf
 from ._tei_to_tf import convert_tei_to_tf
 from ._tei_zip_to_tf import convert_tei_zip_to_tf
@@ -31,6 +32,7 @@ CONVERTERS = {
     SourceFormat.TEI: convert_tei_to_tf,
     SourceFormat.TEI_ZIP: convert_tei_zip_to_tf,
     SourceFormat.PLAIN: convert_text_to_tf,
+    SourceFormat.MARKDOWN: convert_markdown_to_tf,
     SourceFormat.TF_ZIP: convert_tf_zip_to_tf,
 }
 
