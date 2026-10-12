@@ -227,3 +227,207 @@ def test_validate_unfinished_job_is_409(client, monkeypatch):
 
     assert resp.status_code == 409
     assert "not ready" in resp.json()["detail"]
+
+
+@pytest.mark.parametrize("target", ["path", "job_id"])
+def test_validate_ctei_uses_tei_profile(client, tmp_path, monkeypatch, target):
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+    from admin.services.jobs import JobStatus
+
+    source = tmp_path / "source.txt"
+    source.write_text("Exact ὁ λόγος é.\n\nNext.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    _patch_job(monkeypatch, _FakeJob(status=JobStatus.SUCCEEDED, result_path=archive))
+    monkeypatch.setattr(
+        validation_api,
+        "validate_corpus_archive",
+        lambda *args: pytest.fail("Text-Fabric validator used for CTEI"),
+    )
+
+    resp = client.post("/validate", json={target: str(archive) if target == "path" else "abc"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["valid"] is True
+    assert body["stats"]["documents"] == 1
+    assert body["stats"]["review_items"] == 1
+    assert body["checks"]["tei-p5"] is True
+    assert body["checks"]["source_verified"] is False
+
+
+def test_validate_corrupt_ctei_returns_invalid_verdict(client, tmp_path):
+    archive = tmp_path / "broken.ctei"
+    archive.write_bytes(b"not a ZIP")
+    resp = client.post("/validate", json={"path": str(archive)})
+    assert resp.status_code == 200
+    assert resp.json()["valid"] is False
+    assert resp.json()["reasons"]
+
+
+@pytest.mark.parametrize("member,content", [
+    ("manifest.yml", "{}"), ("manifest.yml", "[]"),
+    ("manifest.yml", "null"), ("toc.yml", "null"),
+])
+def test_validate_malformed_ctei_metadata_returns_invalid(client, tmp_path, member, content):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    with zipfile.ZipFile(archive) as zf:
+        files = {name: zf.read(name) for name in zf.namelist() if not name.endswith("/")}
+    files[member] = content.encode()
+    with zipfile.ZipFile(archive, "w") as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+
+    resp = client.post("/validate", json={"path": str(archive)})
+    assert resp.status_code == 200
+    assert resp.json()["valid"] is False
+    assert resp.json()["reasons"]
+
+
+@pytest.mark.parametrize("failure", ["io", "schema", "programming"])
+def test_ctei_operational_failures_remain_server_errors(client, tmp_path, monkeypatch, failure):
+    from admin.converters.tei import package
+    from lxml import etree
+
+    archive = tmp_path / "book.ctei"
+    archive.write_bytes(b"placeholder")
+
+    def broken(*args):
+        if failure == "io":
+            raise OSError("private filesystem path")
+        if failure == "schema":
+            raise etree.XMLSyntaxError("broken bundled schema", 1, 1, 1)
+        raise RuntimeError("internal validator failure")
+
+    monkeypatch.setattr(package, "validators" if failure == "schema" else "_validate_ctei_archive", broken)
+    with TestClient(client.app, raise_server_exceptions=False) as server:
+        response = server.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 500
+    assert response.text == "Internal Server Error"
+
+
+@pytest.mark.parametrize("damage", ["encrypted", "unsupported_compression", "corrupt_deflate"])
+def test_unreadable_ctei_zip_members_return_invalid(client, tmp_path, damage):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    data = bytearray(archive.read_bytes())
+    with zipfile.ZipFile(archive) as zf:
+        info = next(info for info in zf.infolist() if info.file_size)
+    local = info.header_offset
+    central = data.index(b"PK\x01\x02", local)
+    while True:
+        name_length = int.from_bytes(data[central + 28:central + 30], "little")
+        extra_length = int.from_bytes(data[central + 30:central + 32], "little")
+        comment_length = int.from_bytes(data[central + 32:central + 34], "little")
+        if data[central + 46:central + 46 + name_length] == info.filename.encode():
+            break
+        central += 46 + name_length + extra_length + comment_length
+    if damage == "encrypted":
+        data[local + 6] |= 1
+        data[central + 8] |= 1
+    elif damage == "unsupported_compression":
+        data[local + 8:local + 10] = (99).to_bytes(2, "little")
+        data[central + 10:central + 12] = (99).to_bytes(2, "little")
+    else:
+        name_length = int.from_bytes(data[local + 26:local + 28], "little")
+        extra_length = int.from_bytes(data[local + 28:local + 30], "little")
+        data[local + 30 + name_length + extra_length] = 0xFF
+    archive.write_bytes(data)
+
+    response = client.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 200
+    assert response.json()["valid"] is False
+    assert response.json()["reasons"]
+
+
+def test_ctei_accepts_runtime_zstandard_compression(client, tmp_path):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    compression = getattr(zipfile, "ZIP_ZSTANDARD", None)
+    if compression is None:
+        pytest.skip("Zstandard ZIP compression requires Python 3.14")
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    with zipfile.ZipFile(archive) as zf:
+        files = {name: zf.read(name) for name in zf.namelist() if not name.endswith("/")}
+    with zipfile.ZipFile(archive, "w", compression=compression) as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    response = client.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 200
+    assert response.json()["valid"] is True
+
+
+@pytest.mark.parametrize("codec", ["ZIP_DEFLATED", "ZIP_BZIP2", "ZIP_LZMA", "ZIP_ZSTANDARD"])
+def test_corrupt_native_compressed_members_are_invalid(client, tmp_path, codec):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    compression = getattr(zipfile, codec, None)
+    if compression is None:
+        pytest.skip("Compression method is unavailable on this Python runtime")
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    with zipfile.ZipFile(archive) as zf:
+        files = {name: zf.read(name) for name in zf.namelist() if not name.endswith("/")}
+    with zipfile.ZipFile(archive, "w", compression=compression) as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    data = bytearray(archive.read_bytes())
+    with zipfile.ZipFile(archive) as zf:
+        info = zf.infolist()[0]
+    local = info.header_offset
+    name_length = int.from_bytes(data[local + 26:local + 28], "little")
+    extra_length = int.from_bytes(data[local + 28:local + 30], "little")
+    offset = local + 30 + name_length + extra_length
+    data[offset + (4 if codec == "ZIP_LZMA" else 0)] = 0xFF
+    archive.write_bytes(data)
+
+    response = client.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 200
+    assert response.json()["valid"] is False
+
+
+def test_missing_optional_codecs_do_not_prevent_module_loading(monkeypatch):
+    import runpy
+    import warnings
+
+    from admin.converters.tei import package
+
+    original = package.importlib.import_module
+    def without_codecs(name, *args, **kwargs):
+        if name in {"zlib", "lzma", "compression.zstd"}:
+            raise ModuleNotFoundError(name)
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(package.importlib, "import_module", without_codecs)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*found in sys.modules.*", category=RuntimeWarning)
+        loaded = runpy.run_module(package.__name__)
+    assert loaded["_ZIP_DECODE_ERRORS"] == ()
+    assert callable(loaded["convert_to_ctei"])

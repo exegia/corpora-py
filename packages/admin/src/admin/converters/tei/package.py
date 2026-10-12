@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import mimetypes
 import os
@@ -24,6 +25,20 @@ from .inputs import load_source, readable
 
 VERSION_DIR = "version_1.0.0"
 CTEI_NS = "urn:corpora:ctei:1"
+def _native_zip_decoder_errors() -> tuple[type[Exception], ...]:
+    errors: tuple[type[Exception], ...] = ()
+    for module_name, error_name in (
+        ("zlib", "error"), ("lzma", "LZMAError"), ("compression.zstd", "ZstdError"),
+    ):
+        try:
+            decoder = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        errors += (getattr(decoder, error_name),)
+    return errors
+
+
+_ZIP_DECODE_ERRORS = _native_zip_decoder_errors()
 REQUIRED = {
     "manifest.yml",
     "toc.yml",
@@ -429,10 +444,28 @@ def _remap_hierarchy(value):
     return value
 
 
+class CTEIArchiveValidationError(ValueError):
+    """The supplied archive is malformed or fails its declared package contract."""
+
+
 def validate_ctei_archive(path: Path) -> dict:
+    """Validate input structure while keeping schema/operational failures distinct."""
+    with _SCHEMA_LOCK:
+        schemas = validators()
+    try:
+        return _validate_ctei_archive(path, schemas)
+    except (ValueError, zipfile.BadZipFile, etree.XMLSyntaxError, yaml.YAMLError) as exc:
+        raise CTEIArchiveValidationError(str(exc)) from exc
+    except (KeyError, TypeError, AttributeError, IndexError) as exc:
+        raise CTEIArchiveValidationError("Invalid CTEI archive structure") from exc
+
+
+def _validate_ctei_archive(path: Path, schemas: tuple) -> dict:
     """Check ZIP paths, layout, manifest inventory, TEI schemas and all local pointers."""
     with zipfile.ZipFile(path) as zf:
         infos = zf.infolist()
+        if any(info.flag_bits & 1 for info in infos):
+            raise ValueError("Encrypted CTEI ZIP members are not supported")
         names = [i.filename for i in infos]
         if (
             len(names) != len(set(names))
@@ -447,9 +480,20 @@ def validate_ctei_archive(path: Path) -> dict:
                 or "\\" in name
             ):
                 raise ValueError("CTEI member escapes archive")
-        if not REQUIRED <= set(names) or zf.testzip() is not None:
-            raise ValueError("CTEI ZIP is incomplete or corrupt")
-        files = {n: zf.read(n) for n in names if not n.endswith("/")}
+        try:
+            if not REQUIRED <= set(names) or zf.testzip() is not None:
+                raise ValueError("CTEI ZIP is incomplete or corrupt")
+            files = {n: zf.read(n) for n in names if not n.endswith("/")}
+        except NotImplementedError as exc:
+            raise ValueError("Unsupported CTEI ZIP compression") from exc
+        except _ZIP_DECODE_ERRORS as exc:
+            raise ValueError("Corrupt CTEI compressed data") from exc
+        except OSError as exc:
+            # bz2 uses this specific errno-free error for malformed compressed input.
+            # Other I/O failures must remain operational errors.
+            if exc.errno is None and str(exc) == "Invalid data stream":
+                raise ValueError("Corrupt CTEI BZIP2 data") from exc
+            raise
     manifest = yaml.safe_load(files["manifest.yml"])
     toc = yaml.safe_load(files["toc.yml"])
     if (
@@ -492,7 +536,7 @@ def validate_ctei_archive(path: Path) -> dict:
             raise ValueError("CTEI sidecar has a missing or non-local target")
 
     with _SCHEMA_LOCK:
-        upstream, profile, schematron = validators()
+        upstream, profile, schematron = schemas
         for name in docs:
             root = roots[name]
             for schema in (upstream, profile, schematron):

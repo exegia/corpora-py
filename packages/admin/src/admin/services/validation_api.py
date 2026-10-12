@@ -47,7 +47,7 @@ class ValidationRequest(BaseModel):
     path: str | None = Field(
         default=None,
         description=(
-            "Validate a dataset directory or a packaged `.corpus` archive on "
+            "Validate a dataset directory or a `.corpus`, `.cusx`, or `.ctei` archive on "
             "disk instead (overrides corpus). For a `.corpus` archive the "
             "shipped `.cfm` cache is checked against a `.tf` recompile."
         ),
@@ -55,7 +55,7 @@ class ValidationRequest(BaseModel):
     job_id: str | None = Field(
         default=None,
         description=(
-            "Validate the finished `.corpus` archive of a succeeded conversion "
+            "Validate the finished archive of a succeeded conversion "
             "job (overrides path and corpus). This is how the desktop app "
             "validates a just-converted upload without knowing server paths."
         ),
@@ -127,13 +127,40 @@ def _resolve_target(payload: ValidationRequest, request: Request) -> tuple[str, 
 
 @router.post("", response_model=ValidationResponse)
 async def validate(payload: ValidationRequest, request: Request) -> ValidationResponse:
-    """Validate a corpus through the full Context-Fabric load cycle.
+    """Validate an archive by its format, or a dataset through the Context-Fabric cycle.
 
     Returns 200 with ``valid: false`` and the reasons when the dataset loads but
     fails validation -- an invalid corpus is a result, not a bad request. Only a
     missing corpus/path/job (unresolvable target) is a 404.
     """
     name, target_path = _resolve_target(payload, request)
+
+    if target_path.is_file() and target_path.suffix.lower() == ".ctei":
+        from ..converters.tei import validate_ctei_archive
+        from ..converters.tei.package import CTEIArchiveValidationError
+
+        try:
+            summary = await asyncio.to_thread(validate_ctei_archive, target_path)
+        except CTEIArchiveValidationError as exc:
+            return ValidationResponse(
+                corpus=name,
+                path=str(target_path),
+                valid=False,
+                stats=None,
+                reasons=[str(exc)],
+                checks={"archive": False, "source_verified": False},
+            )
+        return ValidationResponse(
+            corpus=summary["corpus"],
+            path=str(target_path),
+            valid=summary["valid"],
+            stats=summary["stats"],
+            reasons=summary["reasons"],
+            checks={
+                **dict.fromkeys(summary["checks"], True),
+                "source_verified": summary["source_verified"],
+            },
+        )
 
     # Blocking, CPU-bound load cycle (text-fabric / cfabric are synchronous);
     # run it off the event loop so the server stays responsive. A file is
