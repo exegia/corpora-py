@@ -25,12 +25,18 @@ export const saveCorpusFile = async (
         suggestedName: filename,
         types: [
           {
-            description: filename.endsWith(".cusx")
-              ? "C-USX archive"
-              : "Corpus archive",
+            description: filename.endsWith(".ctei")
+              ? "TEI archive"
+              : filename.endsWith(".cusx")
+                ? "C-USX archive"
+                : "Corpus archive",
             accept: {
               "application/zip": [
-                filename.endsWith(".cusx") ? ".cusx" : ".corpus",
+                filename.endsWith(".ctei")
+                  ? ".ctei"
+                  : filename.endsWith(".cusx")
+                    ? ".cusx"
+                    : ".corpus",
               ],
             },
           },

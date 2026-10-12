@@ -89,6 +89,7 @@ def job_to_row(job: ConversionJob) -> dict[str, Any]:
     return {
         "id": job.id,
         "source_format": _source_format_to_row(job.source_format),
+        "output_format": job.output_format,
         "name": job.name,
         "status": job.status.value,
         "created_at": job.created_at,
@@ -115,6 +116,7 @@ def job_from_row(row: dict[str, Any]) -> ConversionJob:
     return ConversionJob(
         id=row["id"],
         source_format=_source_format_from_row(row["source_format"]),
+        output_format=row.get("output_format") or "corpus",
         name=row.get("name") or "",
         status=JobStatus(status_raw),
         created_at=float(row["created_at"]),
@@ -343,7 +345,7 @@ class SupabaseResultStore(ResultStore):
         A missed snapshot is logged and returns ``None`` so the conversion
         can still succeed (issue #147). Extra labels are for #149.
         """
-        key = snapshot_key_for(job_id, label, path.suffix)
+        key = snapshot_key_for(job_id, label, Path(path).suffix)
         if key is None:
             logger.warning(
                 "Snapshot skipped for job %s: invalid label %r", job_id, label
@@ -404,7 +406,7 @@ class SupabaseResultStore(ResultStore):
             raise JobStoreError(
                 f"Could not download conversion result ({resp.status_code})"
             )
-        dest = self._cache_dir / Path(key).name
+        dest = self._cache_dir / job_id / Path(key).name
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_name(dest.name + ".tmp")
         tmp.write_bytes(resp.content)

@@ -1,0 +1,14 @@
+{
+  "profile": "corpora-tei/0.1.0",
+  "upstream": "TEI P5 4.12.0",
+  "upstreamRevision": "113e933e2",
+  "source": "https://vault.tei-c.de/P5/4.12.0/xml/tei/odd/p5subset.xml",
+  "sourceSha256": "5b89720edc6f3821ab3d0aa242aa5dc922bfbafabfb103d2de9d211001c33e26",
+  "stylesheetsVersion": "7.61.0",
+  "stylesheetsCommit": "81408afc9a25c9170c49adadb0df508ead8ba959",
+  "saxonche": "12.10.0",
+  "profile.odd": "9e0ccde6fa047afec137b82bd616603a87db07ee3b1ac4ec51473067ba74566e",
+  "profile.rng": "be9031181500f877f46ff0b2151c1827583ad5807ef0bc76a0e27301f6981e17",
+  "profile.sch": "19e438807a5f564b5c27dc1d7bbde22507a4a513fec22b0de9cb13b98272493d",
+  "upstream/tei_all.rng": "b0f115095ead2ccc6933aa3365c6f4a82cba3b2ec7eee7f76bb616d7a63b7e48"
+}

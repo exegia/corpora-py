@@ -22,6 +22,7 @@ from ._walker import ConvertedDataset, SectionSpec
 from ._xml_to_tf import convert_xml_to_tf
 from .convert_to_cfm import convert_to_cfm
 from .convert_to_corpus import CorpusArchiveError, convert_to_corpus
+from .tei import convert_to_ctei
 
 CONVERTERS = {
     SourceFormat.EPUB: convert_epub_to_tf,
@@ -50,5 +51,6 @@ __all__ = [
     "convert_xml_to_tf",
     "convert_to_cfm",
     "convert_to_corpus",
+    "convert_to_ctei",
     "detect_category",
 ]
