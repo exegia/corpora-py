@@ -377,3 +377,37 @@ def test_ctei_accepts_runtime_zstandard_compression(client, tmp_path):
     response = client.post("/validate", json={"path": str(archive)})
     assert response.status_code == 200
     assert response.json()["valid"] is True
+
+
+@pytest.mark.parametrize("codec", ["ZIP_DEFLATED", "ZIP_BZIP2", "ZIP_LZMA", "ZIP_ZSTANDARD"])
+def test_corrupt_native_compressed_members_are_invalid(client, tmp_path, codec):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    compression = getattr(zipfile, codec, None)
+    if compression is None:
+        pytest.skip("Compression method is unavailable on this Python runtime")
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    with zipfile.ZipFile(archive) as zf:
+        files = {name: zf.read(name) for name in zf.namelist() if not name.endswith("/")}
+    with zipfile.ZipFile(archive, "w", compression=compression) as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    data = bytearray(archive.read_bytes())
+    with zipfile.ZipFile(archive) as zf:
+        info = zf.infolist()[0]
+    local = info.header_offset
+    name_length = int.from_bytes(data[local + 26:local + 28], "little")
+    extra_length = int.from_bytes(data[local + 28:local + 30], "little")
+    offset = local + 30 + name_length + extra_length
+    data[offset + (4 if codec == "ZIP_LZMA" else 0)] = 0xFF
+    archive.write_bytes(data)
+
+    response = client.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 200
+    assert response.json()["valid"] is False

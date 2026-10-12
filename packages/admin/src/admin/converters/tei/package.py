@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
 import json
+import lzma
 import mimetypes
 import os
 import shutil
@@ -25,6 +27,13 @@ from .inputs import load_source, readable
 
 VERSION_DIR = "version_1.0.0"
 CTEI_NS = "urn:corpora:ctei:1"
+_ZIP_DECODE_ERRORS: tuple[type[Exception], ...] = (zlib.error, lzma.LZMAError)
+try:
+    _zstd = importlib.import_module("compression.zstd")
+except ModuleNotFoundError:
+    pass
+else:
+    _ZIP_DECODE_ERRORS += (_zstd.ZstdError,)
 REQUIRED = {
     "manifest.yml",
     "toc.yml",
@@ -472,6 +481,14 @@ def _validate_ctei_archive(path: Path, schemas: tuple) -> dict:
             files = {n: zf.read(n) for n in names if not n.endswith("/")}
         except NotImplementedError as exc:
             raise ValueError("Unsupported CTEI ZIP compression") from exc
+        except _ZIP_DECODE_ERRORS as exc:
+            raise ValueError("Corrupt CTEI compressed data") from exc
+        except OSError as exc:
+            # bz2 uses this specific errno-free error for malformed compressed input.
+            # Other I/O failures must remain operational errors.
+            if exc.errno is None and str(exc) == "Invalid data stream":
+                raise ValueError("Corrupt CTEI BZIP2 data") from exc
+            raise
     manifest = yaml.safe_load(files["manifest.yml"])
     toc = yaml.safe_load(files["toc.yml"])
     if (
