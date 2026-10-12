@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 PLATFORMS = {"macos-arm64", "macos-x64", "windows-x64"}
 CHECKS = {
@@ -93,7 +94,8 @@ def publish(tag: str, root: Path) -> None:
     )
     files.append(checksums)
     target_tag = f"sidecars/{tag}" if source.get("immutable") else tag
-    target = api(f"repos/{repo}/releases/tags/{target_tag}", optional=True)
+    target_path = f"repos/{repo}/releases/tags/{quote(target_tag, safe='')}"
+    target = api(target_path, optional=True)
     unsigned = any(not receipt["signed"] for receipt in receipts.values())
     if target is None:
         notes = (
@@ -121,7 +123,7 @@ def publish(tag: str, root: Path) -> None:
             ],
             check=True,
         )
-        target = api(f"repos/{repo}/releases/tags/{target_tag}")
+        target = api(target_path)
     existing = {asset["name"]: asset for asset in target["assets"]}
     uploads = []
     for path in files:
@@ -140,7 +142,7 @@ def publish(tag: str, root: Path) -> None:
         subprocess.run(
             ["gh", "release", "edit", target_tag, "--draft=false", "--latest=false"], check=True
         )
-    published = api(f"repos/{repo}/releases/tags/{target_tag}")
+    published = api(target_path)
     if target_tag != tag and published["html_url"] not in (source["body"] or ""):
         notes = (
             (source["body"] or "")
