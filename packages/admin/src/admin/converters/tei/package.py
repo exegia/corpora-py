@@ -9,6 +9,7 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+import zlib
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from threading import Lock
@@ -439,7 +440,7 @@ def validate_ctei_archive(path: Path) -> dict:
         schemas = validators()
     try:
         return _validate_ctei_archive(path, schemas)
-    except (ValueError, zipfile.BadZipFile, etree.XMLSyntaxError, yaml.YAMLError) as exc:
+    except (ValueError, zipfile.BadZipFile, zlib.error, etree.XMLSyntaxError, yaml.YAMLError) as exc:
         raise CTEIArchiveValidationError(str(exc)) from exc
     except (KeyError, TypeError, AttributeError, IndexError) as exc:
         raise CTEIArchiveValidationError("Invalid CTEI archive structure") from exc
@@ -449,6 +450,12 @@ def _validate_ctei_archive(path: Path, schemas: tuple) -> dict:
     """Check ZIP paths, layout, manifest inventory, TEI schemas and all local pointers."""
     with zipfile.ZipFile(path) as zf:
         infos = zf.infolist()
+        if any(info.flag_bits & 1 for info in infos):
+            raise ValueError("Encrypted CTEI ZIP members are not supported")
+        if any(info.compress_type not in {
+            zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED, zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA,
+        } for info in infos):
+            raise ValueError("Unsupported CTEI ZIP compression")
         names = [i.filename for i in infos]
         if (
             len(names) != len(set(names))
