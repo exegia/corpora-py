@@ -1,0 +1,1049 @@
+{
+  "$defs": {
+    "CitationLocator": {
+      "additionalProperties": false,
+      "description": "An unresolved address request, never proof of an exact passage.",
+      "properties": {
+        "kind": {
+          "const": "citation",
+          "default": "citation",
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "profile": {
+          "minLength": 1,
+          "title": "Profile",
+          "type": "string"
+        },
+        "scheme_id": {
+          "minLength": 1,
+          "title": "Scheme Id",
+          "type": "string"
+        },
+        "scheme_version": {
+          "minLength": 1,
+          "title": "Scheme Version",
+          "type": "string"
+        },
+        "reading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reading"
+        }
+      },
+      "required": [
+        "value",
+        "profile",
+        "scheme_id",
+        "scheme_version"
+      ],
+      "title": "CitationLocator",
+      "type": "object"
+    },
+    "DocumentEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "tree": {
+          "minLength": 1,
+          "title": "Tree",
+          "type": "string"
+        },
+        "snapshot": {
+          "minLength": 1,
+          "title": "Snapshot",
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/Endpoint"
+        },
+        "characters": {
+          "minimum": 0,
+          "title": "Characters",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/DocumentSource"
+        },
+        "linear": {
+          "title": "Linear",
+          "type": "boolean"
+        },
+        "in_spine": {
+          "title": "In Spine",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "tree",
+        "snapshot",
+        "identity",
+        "characters",
+        "label",
+        "role",
+        "source",
+        "linear",
+        "in_spine"
+      ],
+      "title": "DocumentEntry",
+      "type": "object"
+    },
+    "DocumentSource": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "fragment": {
+          "default": "",
+          "title": "Fragment",
+          "type": "string"
+        },
+        "start_event": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Event"
+        },
+        "end_event": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Event"
+        },
+        "page_number": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Number"
+        },
+        "page_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Label"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "DocumentSource",
+      "type": "object"
+    },
+    "Endpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "work_id": {
+          "minLength": 1,
+          "title": "Work Id",
+          "type": "string"
+        },
+        "edition_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edition Id"
+        },
+        "package_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Package Id"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "document_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Id"
+        },
+        "locators": {
+          "default": [],
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "citation": "#/$defs/CitationLocator",
+                "epub": "#/$defs/EpubLocator",
+                "epub-resource": "#/$defs/EpubResourceLocator",
+                "html-range": "#/$defs/HtmlRangeLocator",
+                "html-text": "#/$defs/HtmlTextLocator",
+                "pdf": "#/$defs/PdfLocator",
+                "structural": "#/$defs/StructuralLocator",
+                "text": "#/$defs/TextLocator"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextLocator"
+              },
+              {
+                "$ref": "#/$defs/PdfLocator"
+              },
+              {
+                "$ref": "#/$defs/EpubLocator"
+              },
+              {
+                "$ref": "#/$defs/EpubResourceLocator"
+              },
+              {
+                "$ref": "#/$defs/HtmlTextLocator"
+              },
+              {
+                "$ref": "#/$defs/HtmlRangeLocator"
+              },
+              {
+                "$ref": "#/$defs/StructuralLocator"
+              },
+              {
+                "$ref": "#/$defs/CitationLocator"
+              }
+            ]
+          },
+          "title": "Locators",
+          "type": "array"
+        }
+      },
+      "required": [
+        "work_id"
+      ],
+      "title": "Endpoint",
+      "type": "object"
+    },
+    "EpubLocator": {
+      "additionalProperties": false,
+      "description": "Native resource path and opaque CFI; this core does not parse EPUB CFI.",
+      "properties": {
+        "kind": {
+          "const": "epub",
+          "default": "epub",
+          "title": "Kind",
+          "type": "string"
+        },
+        "asset_id": {
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "href": {
+          "minLength": 1,
+          "title": "Href",
+          "type": "string"
+        },
+        "cfi": {
+          "minLength": 1,
+          "title": "Cfi",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextLocator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "asset_id",
+        "href",
+        "cfi"
+      ],
+      "title": "EpubLocator",
+      "type": "object"
+    },
+    "EpubResourceLocator": {
+      "additionalProperties": false,
+      "description": "An EPUB resource only, without invented fragment or CFI precision.",
+      "properties": {
+        "kind": {
+          "const": "epub-resource",
+          "default": "epub-resource",
+          "title": "Kind",
+          "type": "string"
+        },
+        "asset_id": {
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "href": {
+          "minLength": 1,
+          "title": "Href",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset_id",
+        "href"
+      ],
+      "title": "EpubResourceLocator",
+      "type": "object"
+    },
+    "HtmlRangeLocator": {
+      "additionalProperties": false,
+      "description": "Range spanning pinned parsed HTML text nodes; Unicode scalar node offsets.",
+      "properties": {
+        "kind": {
+          "const": "html-range",
+          "default": "html-range",
+          "title": "Kind",
+          "type": "string"
+        },
+        "asset_id": {
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "parser": {
+          "const": "beautifulsoup-html.parser/v1",
+          "default": "beautifulsoup-html.parser/v1",
+          "title": "Parser",
+          "type": "string"
+        },
+        "parser_version": {
+          "minLength": 1,
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "start_path": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "Start Path",
+          "type": "array"
+        },
+        "start_offset": {
+          "minimum": 0,
+          "title": "Start Offset",
+          "type": "integer"
+        },
+        "end_path": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "End Path",
+          "type": "array"
+        },
+        "end_offset": {
+          "minimum": 0,
+          "title": "End Offset",
+          "type": "integer"
+        },
+        "text": {
+          "$ref": "#/$defs/TextLocator"
+        }
+      },
+      "required": [
+        "asset_id",
+        "parser_version",
+        "start_path",
+        "start_offset",
+        "end_path",
+        "end_offset",
+        "text"
+      ],
+      "title": "HtmlRangeLocator",
+      "type": "object"
+    },
+    "HtmlTextLocator": {
+      "additionalProperties": false,
+      "description": "Unicode selection in one text node of a pinned, explicitly parsed DOM.",
+      "properties": {
+        "kind": {
+          "const": "html-text",
+          "default": "html-text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "asset_id": {
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "parser": {
+          "const": "beautifulsoup-html.parser/v1",
+          "default": "beautifulsoup-html.parser/v1",
+          "title": "Parser",
+          "type": "string"
+        },
+        "parser_version": {
+          "minLength": 1,
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "node_path": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "Node Path",
+          "type": "array"
+        },
+        "text": {
+          "$ref": "#/$defs/TextLocator"
+        }
+      },
+      "required": [
+        "asset_id",
+        "parser_version",
+        "node_path",
+        "text"
+      ],
+      "title": "HtmlTextLocator",
+      "type": "object"
+    },
+    "NavigationEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source_href": {
+          "title": "Source Href",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/NavigationEntry"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "source_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Path"
+        },
+        "fragment": {
+          "default": "",
+          "title": "Fragment",
+          "type": "string"
+        },
+        "external_href": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Href"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NavigationTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "label",
+        "source_href",
+        "role",
+        "children"
+      ],
+      "title": "NavigationEntry",
+      "type": "object"
+    },
+    "NavigationTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "fragment": {
+          "title": "Fragment",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_id",
+        "fragment"
+      ],
+      "title": "NavigationTarget",
+      "type": "object"
+    },
+    "PackageIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "work_id": {
+          "minLength": 1,
+          "title": "Work Id",
+          "type": "string"
+        },
+        "edition_id": {
+          "minLength": 1,
+          "title": "Edition Id",
+          "type": "string"
+        },
+        "package_id": {
+          "minLength": 1,
+          "title": "Package Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "work_id",
+        "edition_id",
+        "package_id"
+      ],
+      "title": "PackageIdentity",
+      "type": "object"
+    },
+    "PdfLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "pdf",
+          "default": "pdf",
+          "title": "Kind",
+          "type": "string"
+        },
+        "asset_id": {
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "rectangles": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PdfRectangle"
+          },
+          "title": "Rectangles",
+          "type": "array"
+        },
+        "quads": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PdfQuad"
+          },
+          "title": "Quads",
+          "type": "array"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextLocator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "coordinates": {
+          "const": "unrotated-cropbox-top-left-points",
+          "default": "unrotated-cropbox-top-left-points",
+          "title": "Coordinates",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset_id",
+        "page"
+      ],
+      "title": "PdfLocator",
+      "type": "object"
+    },
+    "PdfPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "PdfPoint",
+      "type": "object"
+    },
+    "PdfQuad": {
+      "additionalProperties": false,
+      "description": "Clockwise polygon in unrotated CropBox-relative top-left points.",
+      "properties": {
+        "points": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/PdfPoint"
+            },
+            {
+              "$ref": "#/$defs/PdfPoint"
+            },
+            {
+              "$ref": "#/$defs/PdfPoint"
+            },
+            {
+              "$ref": "#/$defs/PdfPoint"
+            }
+          ],
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "PdfQuad",
+      "type": "object"
+    },
+    "PdfRectangle": {
+      "additionalProperties": false,
+      "properties": {
+        "x0": {
+          "minimum": 0,
+          "title": "X0",
+          "type": "number"
+        },
+        "y0": {
+          "minimum": 0,
+          "title": "Y0",
+          "type": "number"
+        },
+        "x1": {
+          "exclusiveMinimum": 0,
+          "title": "X1",
+          "type": "number"
+        },
+        "y1": {
+          "exclusiveMinimum": 0,
+          "title": "Y1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "title": "PdfRectangle",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/SourceFormat"
+        },
+        "revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence"
+        }
+      },
+      "required": [
+        "filename",
+        "format",
+        "revision"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "SourceFormat": {
+      "enum": [
+        "epub",
+        "html",
+        "xml",
+        "tei",
+        "pdf",
+        "plain",
+        "markdown",
+        "tf_zip",
+        "tei_zip"
+      ],
+      "title": "SourceFormat",
+      "type": "string"
+    },
+    "Stream": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "const": "cusx-itertext/v1",
+          "title": "Id",
+          "type": "string"
+        },
+        "offset_unit": {
+          "const": "unicode-scalar",
+          "title": "Offset Unit",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "preserve",
+          "title": "Normalization",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "offset_unit",
+        "normalization"
+      ],
+      "title": "Stream",
+      "type": "object"
+    },
+    "StructuralLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "structural",
+          "default": "structural",
+          "title": "Kind",
+          "type": "string"
+        },
+        "anchor_id": {
+          "minLength": 1,
+          "title": "Anchor Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "anchor_id"
+      ],
+      "title": "StructuralLocator",
+      "type": "object"
+    },
+    "TextLocator": {
+      "additionalProperties": false,
+      "description": "Zero-based half-open scalar offsets in a named, immutable text stream.",
+      "properties": {
+        "kind": {
+          "const": "text",
+          "default": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "stream_id": {
+          "minLength": 1,
+          "title": "Stream Id",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "exclusiveMinimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "exact": {
+          "minLength": 1,
+          "title": "Exact",
+          "type": "string"
+        },
+        "prefix": {
+          "default": "",
+          "title": "Prefix",
+          "type": "string"
+        },
+        "suffix": {
+          "default": "",
+          "title": "Suffix",
+          "type": "string"
+        },
+        "normalization": {
+          "default": "preserve",
+          "enum": [
+            "preserve",
+            "NFC"
+          ],
+          "title": "Normalization",
+          "type": "string"
+        },
+        "offset_unit": {
+          "const": "unicode-scalar",
+          "default": "unicode-scalar",
+          "title": "Offset Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream_id",
+        "start",
+        "end",
+        "exact"
+      ],
+      "title": "TextLocator",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "corpora-cusx-package/0.2.0",
+      "title": "Format",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "category": {
+      "title": "Category",
+      "type": "string"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "identity": {
+      "$ref": "#/$defs/PackageIdentity"
+    },
+    "source": {
+      "$ref": "#/$defs/Source"
+    },
+    "stream": {
+      "$ref": "#/$defs/Stream"
+    },
+    "documents": {
+      "items": {
+        "$ref": "#/$defs/DocumentEntry"
+      },
+      "minItems": 1,
+      "title": "Documents",
+      "type": "array"
+    },
+    "reading_order": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Reading Order",
+      "type": "array"
+    },
+    "supplementary": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Supplementary",
+      "type": "array"
+    },
+    "navigation": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/NavigationEntry"
+        },
+        "type": "array"
+      },
+      "title": "Navigation",
+      "type": "object"
+    },
+    "assets": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Assets",
+      "type": "array"
+    },
+    "diagnostics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "files": {
+      "additionalProperties": {
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "propertyNames": {
+        "minLength": 1
+      },
+      "title": "Files",
+      "type": "object"
+    }
+  },
+  "required": [
+    "format",
+    "name",
+    "description",
+    "category",
+    "created_by",
+    "identity",
+    "source",
+    "stream",
+    "documents",
+    "reading_order",
+    "supplementary",
+    "navigation",
+    "assets",
+    "diagnostics",
+    "files"
+  ],
+  "title": "PackageManifest",
+  "type": "object"
+}

@@ -1,0 +1,258 @@
+{
+  "$defs": {
+    "DocumentMetadata": {
+      "description": "Dublin-Core-ish metadata, common enough to exist across all formats.",
+      "properties": {
+        "source_format": {
+          "$ref": "#/$defs/SourceFormat"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "creators": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Creators",
+          "type": "array"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "publisher": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publisher"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Identifier"
+        },
+        "rights": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rights"
+        },
+        "subjects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Subjects",
+          "type": "array"
+        },
+        "extra": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Extra",
+          "type": "object"
+        }
+      },
+      "required": [
+        "source_format"
+      ],
+      "title": "DocumentMetadata",
+      "type": "object"
+    },
+    "SourceFormat": {
+      "enum": [
+        "epub",
+        "html",
+        "xml",
+        "tei",
+        "pdf",
+        "plain",
+        "markdown",
+        "tf_zip",
+        "tei_zip"
+      ],
+      "title": "SourceFormat",
+      "type": "string"
+    },
+    "Token": {
+      "description": "A single slot: the atomic text unit (typically a word).",
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "after": {
+          "default": "",
+          "title": "After",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "Token",
+      "type": "object"
+    },
+    "Unit": {
+      "description": "A single node in the document tree: a chapter, page, div, paragraph,\ntable row, verse — anything that either contains other `Unit`s or holds\ntext as `Token`s.\n\n`type` is a free-form label (e.g. \"chapter\", \"p\", \"table\", \"verse\") kept\nas a string rather than an enum, since each format has its own vocabulary\nand new ones must be addable without touching this schema.",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "namespace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Namespace"
+        },
+        "namespaces": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Namespaces",
+          "type": "object"
+        },
+        "attrs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attrs",
+          "type": "object"
+        },
+        "source_attrs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Source Attrs",
+          "type": "object"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/Token"
+          },
+          "title": "Tokens",
+          "type": "array"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Unit"
+          },
+          "title": "Children",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Unit",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/DocumentMetadata"
+    },
+    "units": {
+      "items": {
+        "$ref": "#/$defs/Unit"
+      },
+      "title": "Units",
+      "type": "array"
+    }
+  },
+  "required": [
+    "metadata"
+  ],
+  "title": "Document",
+  "type": "object"
+}
