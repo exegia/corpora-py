@@ -20,6 +20,16 @@ on:
 
   workflow_dispatch:
     inputs:
+      reuse_run_id:
+        description: "Retry publishing verified bundles from this sidecar run (requires release_ref)"
+        required: false
+        type: string
+        default: ""
+      release_ref:
+        description: "Existing release tag to rebuild and publish (for example v6.1.0)"
+        required: false
+        type: string
+        default: ""
       skip_sign:
         description: "Skip code signing (for testing builds without certificates)"
         required: false
@@ -28,6 +38,16 @@ on:
 
   workflow_call:
     inputs:
+      reuse_run_id:
+        description: "Retry publishing verified bundles from this sidecar run"
+        required: false
+        type: string
+        default: ""
+      release_ref:
+        description: "Existing release tag to rebuild and publish; empty builds only"
+        required: false
+        type: string
+        default: ""
       skip_sign:
         description: "Skip code signing"
         required: false
@@ -40,14 +60,50 @@ on:
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
+permissions:
+  contents: read
+
+concurrency:
+  group: sidecar-${{ inputs.release_ref || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ── 1. Build workspace wheel at once on a fast Linux runner ───────────────
   build-wheel:
     name: Build wheel
+    if: ${{ inputs.reuse_run_id == '' }}
     runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.source.outputs.release_tag }}
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      version: ${{ steps.version.outputs.version }}
+      wheel_sha256: ${{ steps.wheel.outputs.sha256 }}
 
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.release_ref && format('refs/tags/{0}', inputs.release_ref) || github.ref }}
+
+      - name: Verify release source
+        id: source
+        shell: bash
+        env:
+          RELEASE_REF: ${{ inputs.release_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          release_tag="$RELEASE_REF"
+          if [[ "$EVENT_NAME" == push ]]; then
+            release_tag="${EVENT_REF#refs/tags/}"
+          fi
+          if [[ -n "$release_tag" ]]; then
+            [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || exit 1
+            gh release view "$release_tag" --json tagName,isDraft --jq 'select(.isDraft == false).tagName' | grep -Fx "$release_tag"
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -55,10 +111,31 @@ jobs:
           enable-cache: true
 
       - name: Build workspace wheel
+        id: wheel
+        shell: bash
         run: |
           uv build --wheel --out-dir dist/
-          echo "Built wheels:"
-          ls -lh dist/*.whl
+          uv run --no-project --python 3.13 python - <<'PY'
+          import hashlib, os, tomllib
+          from pathlib import Path
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          wheel, = Path("dist").glob("*.whl")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"sha256={hashlib.sha256(wheel.read_bytes()).hexdigest()}\n")
+          Path("dist/version.txt").write_text(version)
+          PY
+
+      - name: Record source version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.source.outputs.release_tag }}
+        run: |
+          version=$(cat dist/version.txt)
+          if [[ -n "$RELEASE_TAG" ]]; then
+            [[ "$RELEASE_TAG" == "v$version" ]] || exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+        id: version
 
       - name: Upload wheel
         uses: actions/upload-artifact@v7
@@ -71,6 +148,7 @@ jobs:
   # ── 2. Bundle, sign, and archive per platform ─────────────────────────────────
   bundle:
     name: Bundle (${{ matrix.platform }})
+    if: ${{ inputs.reuse_run_id == '' }}
     needs: build-wheel
     outputs:
       artifact_prefix: corpora-py-sidecar-${{ github.run_id }}
@@ -87,6 +165,9 @@ jobs:
             runner: windows-latest
 
     runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v7.0.1
@@ -112,8 +193,9 @@ jobs:
       - name: Bundle (unsigned)
         if: ${{ inputs.skip_sign == true }}
         run: |
-          ./bin/build.sh \
+          ./bin/build/build.sh \
              --platform ${{ matrix.platform }} \
+             --out-dir dist \
              --skip-sign \
              --skip-build
         env:
@@ -123,8 +205,9 @@ jobs:
       - name: Bundle + sign (macOS)
         if: ${{ inputs.skip_sign != true && startsWith(matrix.platform, 'macos') }}
         run: |
-          ./bin/build.sh \
+          ./bin/build/build.sh \
             --platform ${{ matrix.platform }} \
+            --out-dir dist \
             --skip-build
         env:
           APP_IDENTIFIER: ${{ vars.APP_IDENTIFIER }}
@@ -138,10 +221,10 @@ jobs:
 
       - name: Bundle + sign (Windows)
         if: ${{ inputs.skip_sign != true && matrix.platform == 'windows-x64' }}
-        shell: pwsh
         run: |
-          ./bin/build.sh `
-            --platform ${{ matrix.platform }} `
+          ./bin/build/build.sh \
+            --platform ${{ matrix.platform }} \
+            --out-dir dist \
             --skip-build
         env:
           APP_IDENTIFIER: ${{ vars.APP_IDENTIFIER }}
@@ -149,10 +232,57 @@ jobs:
           WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
           WINDOWS_SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
 
+      - name: Verify packed runtime
+        env:
+          EXPECTED_VERSION: ${{ needs.build-wheel.outputs.version }}
+          SOURCE_SHA: ${{ needs.build-wheel.outputs.source_sha }}
+          WHEEL_SHA256: ${{ needs.build-wheel.outputs.wheel_sha256 }}
+          SKIP_SIGN: ${{ inputs.skip_sign == true }}
+        run: >-
+          uv run --no-project --python 3.13 python bin/build/verify.py archive
+          dist/corpora-py-${{ matrix.platform }}.zip "$EXPECTED_VERSION" "${{ matrix.platform }}"
+
       - name: Upload archive
         uses: actions/upload-artifact@v7
         with:
           name: corpora-py-sidecar-${{ github.run_id }}-${{ matrix.platform }}
-          path: dist/corpora-py-${{ matrix.platform }}.zip
+          path: |
+            dist/corpora-py-${{ matrix.platform }}.zip
+            dist/corpora-py-${{ matrix.platform }}.json
           if-no-files-found: error
           retention-days: 30
+
+  publish:
+    name: Publish release bundles
+    needs: [build-wheel, bundle]
+    if: >-
+      ${{ always() && !cancelled() &&
+          ((inputs.reuse_run_id != '' && inputs.release_ref != '') ||
+           (needs.build-wheel.result == 'success' && needs.bundle.result == 'success' &&
+            needs.build-wheel.outputs.release_tag != '')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: corpora-py-sidecar-${{ inputs.reuse_run_id || github.run_id }}-*
+          run-id: ${{ inputs.reuse_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: sidecars/
+
+      - name: Publish verified bundles and checksums
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_ref || needs.build-wheel.outputs.release_tag }}
+          ARTIFACT_RUN_ID: ${{ inputs.reuse_run_id || github.run_id }}
+        run: >-
+          uv run --no-project --python 3.13 python bin/build/publish.py "$RELEASE_TAG" sidecars

@@ -29,7 +29,7 @@ Options:
 Notes:
   * "create" always produces: <out-dir>/corpora-py-<platform-key>.zip
   * macOS uses: ditto -c -k --keepParent  (preserves symlinks)
-  * Other platforms use: zip -9 -r -y     (relative to python-dir's parent)
+  * Windows uses the bundled Python's zipfile module (no external zip tool).
 EOF
 }
 
@@ -59,23 +59,37 @@ cmd_create() {
 
   [[ -d "$python_dir" ]] || die "python_dir not found: $python_dir"
   mkdir -p "$out_dir"
+  python_dir="$(cd "$python_dir" && pwd)"
+  out_dir="$(cd "$out_dir" && pwd)"
 
   local archive="$out_dir/corpora-py-${platform_key}.zip"
-  echo "==> Creating unsigned archive: $(basename "$archive")"
+  log "Creating archive: $(basename "$archive")"
 
   if [[ "$(uname -s)" == "Darwin" ]]; then
     ditto -c -k --keepParent "$python_dir" "$archive"
+  elif [[ "$platform_key" == "windows-x64" ]]; then
+    "$python_dir/python.exe" -I - "$python_dir" "$archive" <<'PY'
+import sys
+import zipfile
+from pathlib import Path
+
+source = Path(sys.argv[1])
+with zipfile.ZipFile(sys.argv[2], "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+    for path in sorted(source.rglob("*")):
+        archive.write(path, path.relative_to(source.parent))
+PY
   else
     local parent name
     parent="$(dirname "$python_dir")"
     name="$(basename "$python_dir")"
     (
       cd "$parent"
-      zip -9 -r -y "$archive" "$name"
+      zip -9 -r -y "$archive" "$name" >&2
     )
   fi
 
-  echo "==> Created: $archive"
+  log "Created: $archive"
+  echo "$archive"
 }
 
 # --- arg parsing ---

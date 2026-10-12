@@ -125,6 +125,34 @@ PyPI, `build-sidecar.yml` builds the signed per-platform bundles, and
 Every step in the first five is a `make` target, so anything CI does can be
 reproduced locally.
 
+To rebuild desktop bundles for an existing release without moving its tag:
+
+```bash
+gh workflow run build-sidecar.yml --ref main -f release_ref=v6.1.0 -f skip_sign=true
+```
+
+The wheel comes from that exact release tag; the build scripts come from the
+workflow's selected branch. Each platform extracts its ZIP and checks the API,
+SQLite, XML, TEI schema hashes and `.ctei` conversion using the bundled Python.
+After all platforms pass, the workflow publishes ZIPs, provenance JSON and SHA256
+checksums. For an immutable source release, it creates a companion
+`sidecars/vX.Y.Z` release as a draft, attaches every asset, publishes it without
+changing the latest release, and links it from the original release notes.
+`skip_sign=true` explicitly produces
+unsigned bundles, labeled as such on the release. Leave it false only when the
+platform signing credentials are configured. Without `release_ref`, a manual
+run uploads Actions artifacts only. Existing release assets are never overwritten.
+
+If only publishing failed, reuse the run's verified platform artifacts:
+
+```bash
+gh workflow run build-sidecar.yml --ref main -f release_ref=v6.1.0 -f reuse_run_id=38234941166
+```
+
+Publishing checks all three native jobs, source/build commits, archive hashes
+and provenance before uploading. A retry accepts existing assets only when
+their digests match; it does not rebuild the runtimes.
+
 ### Merge methods differ by level
 
 Feature PRs into `dev` (or an in-flight `release/v*`) are **squashed** — that
