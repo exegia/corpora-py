@@ -29,12 +29,12 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from threading import Lock
-from typing import Any, Literal
+from typing import Any
 
 from common.utils.config import settings
 
@@ -63,6 +63,7 @@ _MAX_LOG_LINES = 50
 # suffix, so a client never persists the original source filename as the
 # library object (see issue #108).
 _CORPUS_SUFFIX = ".corpus"
+_ARCHIVE_SUFFIXES = {".corpus", ".cusx", ".ctei"}
 _GRAPH_SUFFIX = ".graph.json"
 
 # One or more non-alphanumeric characters collapsed to a single dash. Used
@@ -91,11 +92,9 @@ def snapshot_key_for(job_id: str, label: str, suffix: str = ".corpus") -> str | 
     id cannot escape the prefix.
     """
     safe = snapshot_label(label)
-    if not safe:
+    if not safe or suffix not in _ARCHIVE_SUFFIXES:
         return None
     if not job_id or "/" in job_id or ".." in job_id or "\\" in job_id:
-        return None
-    if suffix not in (".corpus", ".cusx"):
         return None
     return f"conversion-jobs/{job_id}/{safe}{suffix}"
 
@@ -115,7 +114,7 @@ def result_filename_for(
     source_format: SourceFormat | str,
     *,
     job_id: str = "",
-    output_format: Literal["corpus", "cusx"] = "corpus",
+    output_format: str = "corpus",
 ) -> str:
     """The human-readable filename a client should store the result under.
 
@@ -127,11 +126,14 @@ def result_filename_for(
     `Content-Disposition` -- so a client that stores only this filename
     never persists the original source file as the library object.
     """
-    if output_format not in ("corpus", "cusx"):
+    if output_format not in ("corpus", "cusx", "ctei"):
         raise ValueError("unsupported output format")
     slug = _slugify(name) or _slugify(job_id) or job_id
     if isinstance(source_format, SourceFormat):
-        return f"{slug}.{output_format}"
+        suffix = "." + output_format
+        if suffix not in _ARCHIVE_SUFFIXES:
+            raise ValueError("Unsupported conversion output format")
+        return f"{slug}{suffix}"
     return f"{slug}{_GRAPH_SUFFIX}"
 
 
@@ -258,7 +260,7 @@ class LocalResultStore(ResultStore):
         return None
 
     def save_snapshot(self, job_id: str, path: Path, label: str) -> str | None:
-        key = snapshot_key_for(job_id, label, path.suffix)
+        key = snapshot_key_for(job_id, label, Path(path).suffix)
         if key is None:
             return None
         src = Path(path)
@@ -270,7 +272,7 @@ class LocalResultStore(ResultStore):
         dest_dir = self._cache_dir if self._cache_dir is not None else src.parent
         try:
             dest_dir.mkdir(parents=True, exist_ok=True)
-            dest = dest_dir / f"{job_id}-{snapshot_label(label)}.corpus"
+            dest = dest_dir / f"{job_id}-{snapshot_label(label)}{src.suffix}"
             if dest.resolve() != src.resolve():
                 shutil.copy2(src, dest)
         except OSError:
@@ -289,8 +291,9 @@ class LocalResultStore(ResultStore):
         if len(parts) == 3 and parts[0] == "conversion-jobs":
             label = snapshot_label(Path(parts[2]).stem)
             dest_dir = self._cache_dir
-            if label and dest_dir is not None:
-                dest = dest_dir / f"{job_id}-{label}.corpus"
+            suffix = Path(parts[2]).suffix
+            if parts[1] == job_id and label and suffix in _ARCHIVE_SUFFIXES and dest_dir is not None:
+                dest = dest_dir / f"{job_id}-{label}{suffix}"
                 if dest.is_file():
                     return dest
             raise SnapshotMissingError("Snapshot is no longer available")
@@ -370,8 +373,14 @@ class ConversionJob:
     # status; an invalid archive also fails the job with the top reasons in
     # `error` (see `_run_conversion` in `api.py`).
     validation: dict[str, Any] | None = None
+    output_format: str = "corpus"
+    # Local invocation completion only; never persisted or exposed in status.
+    completion: Future[None] | None = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> dict[str, Any]:
+        # Older rows predate output_format; the stored result suffix remains authoritative.
+        suffix = Path(self.result_key or self.result_path or "").suffix
+        output_format = suffix[1:] if suffix in _ARCHIVE_SUFFIXES else self.output_format
         # The on-disk `result_path.name` (e.g. `job-abc123.corpus`) is a
         # server-internal unique id, not a useful library filename. The
         # `result_filename` we expose is derived from the display name (or
@@ -389,15 +398,14 @@ class ConversionJob:
                 self.display_name or self.name,
                 self.source_format,
                 job_id=self.id,
-                output_format="cusx"
-                if (self.result_key or "").endswith(".cusx")
-                else "corpus",
+                output_format=output_format,
             )
         return {
             "id": self.id,
             "source_format": self.source_format.value
             if isinstance(self.source_format, SourceFormat)
             else self.source_format,
+            "output_format": output_format,
             "name": self.name,
             "display_name": self.display_name,
             "status": self.status.value,
@@ -499,6 +507,7 @@ class JobManager:
         fn: Callable[[], Path],
         owner: str | None = None,
         job_id: str | None = None,
+        output_format: str = "corpus",
     ) -> ConversionJob:
         """Register a new job and hand `fn` to the worker pool.
 
@@ -523,6 +532,7 @@ class JobManager:
             source_format=source_format,
             name=name,
             owner=owner,
+            output_format=output_format,
         )
         with self._lock:
             self._reap_expired()
@@ -534,7 +544,7 @@ class JobManager:
                     f"{pending} conversions already queued/running (limit {self._max_pending})"
                 )
             self._store.put(job)
-        self._executor.submit(self._run, job, fn)
+        job.completion = self._executor.submit(self._run, job, fn)
         return job
 
     def _run(self, job: ConversionJob, fn: Callable[[], Path]) -> None:
@@ -552,7 +562,7 @@ class JobManager:
                 # v1.0 HEAD snapshot (issue #147). Failure here must not
                 # flip the job to FAILED — restore can fall back to HEAD
                 # while it is still v1.0. Extra labels are for #149.
-                if Path(result_path).name.endswith(".corpus"):
+                if Path(result_path).suffix in _ARCHIVE_SUFFIXES:
                     try:
                         self._results.save_snapshot(
                             job.id, Path(result_path), "v1.0"
@@ -743,7 +753,8 @@ class JobManager:
         job = self.get(job_id)
         label = snapshot_label(Path(key).stem)
         if job is not None and job.result_path is not None and label:
-            sibling = Path(job.result_path).parent / f"{job_id}-{label}.corpus"
+            suffix = Path(key).suffix
+            sibling = Path(job.result_path).parent / f"{job_id}-{label}{suffix}"
             if sibling.is_file():
                 return sibling
         raise SnapshotMissingError("Snapshot is no longer available")
@@ -846,7 +857,8 @@ class JobManager:
                             exc_info=True,
                         )
                 for minor in range(33):
-                    snap_key = snapshot_key_for(job.id, f"v1.{minor}")
+                    suffix = Path(job.result_key or job.result_path or ("result." + job.output_format)).suffix
+                    snap_key = snapshot_key_for(job.id, f"v1.{minor}", suffix)
                     if not snap_key:
                         continue
                     try:
