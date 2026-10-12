@@ -411,3 +411,23 @@ def test_corrupt_native_compressed_members_are_invalid(client, tmp_path, codec):
     response = client.post("/validate", json={"path": str(archive)})
     assert response.status_code == 200
     assert response.json()["valid"] is False
+
+
+def test_missing_optional_codecs_do_not_prevent_module_loading(monkeypatch):
+    import runpy
+    import warnings
+
+    from admin.converters.tei import package
+
+    original = package.importlib.import_module
+    def without_codecs(name, *args, **kwargs):
+        if name in {"zlib", "lzma", "compression.zstd"}:
+            raise ModuleNotFoundError(name)
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(package.importlib, "import_module", without_codecs)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*found in sys.modules.*", category=RuntimeWarning)
+        loaded = runpy.run_module(package.__name__)
+    assert loaded["_ZIP_DECODE_ERRORS"] == ()
+    assert callable(loaded["convert_to_ctei"])
