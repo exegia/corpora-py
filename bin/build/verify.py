@@ -45,13 +45,13 @@ def verify_runtime(version: str, target: str) -> None:
         root = Path(temporary)
         source = root / "source.txt"
         text = "Exact ὁ λόγος e\u0301\u00a0word.\n\nSecond paragraph."
-        source.write_text(text, encoding="utf-8")
+        source.write_bytes(text.encode("utf-8"))
         archive = root / "document.ctei"
         convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
         verdict = validate_ctei_archive(archive)
         assert verdict["valid"] and not verdict["source_verified"]
         with zipfile.ZipFile(archive) as packed:
-            assert packed.read("assets/source/original.txt").decode() == text
+            assert packed.read("assets/source/original.txt") == source.read_bytes()
 
     with TestClient(app) as client:
         response = client.get("/health")
