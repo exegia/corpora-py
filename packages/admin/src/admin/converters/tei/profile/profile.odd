@@ -1,0 +1,36 @@
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xmlns:rng="http://relaxng.org/ns/structure/1.0" xmlns:sch="http://purl.oclc.org/dsdl/schematron">
+ <teiHeader><fileDesc><titleStmt><title>Corpora TEI experiment 0.1.0</title></titleStmt><publicationStmt><p>Unpublished experiment</p></publicationStmt><sourceDesc><p>TEI P5 4.12.0 pinned by build_profile.py</p></sourceDesc></fileDesc></teiHeader>
+ <text><body><schemaSpec ident="corpora-tei" start="TEI" source="upstream/p5subset.xml">
+  <moduleRef key="tei"/>
+  <moduleRef key="header" include="teiHeader fileDesc titleStmt editionStmt edition publicationStmt sourceDesc encodingDesc projectDesc refsDecl profileDesc langUsage language idno"/>
+  <moduleRef key="core" include="title author bibl p head list item emph hi quote note ref graphic gap unclear lg l foreign choice abbr expan"/>
+  <moduleRef key="textstructure" include="TEI text front body back div"/>
+  <moduleRef key="figures" include="figure figDesc table row cell"/>
+  <moduleRef key="linking" include="anchor standOff"/>
+  <moduleRef key="analysis" include="spanGrp span"/>
+  <elementSpec ident="div" mode="change"><attList><attDef ident="type" mode="change" usage="req"><valList type="closed"><valItem ident="part"/><valItem ident="book"/><valItem ident="surah"/><valItem ident="chapter"/><valItem ident="section"/><valItem ident="introduction"/><valItem ident="appendix"/><valItem ident="frontmatter"/><valItem ident="backmatter"/></valList></attDef></attList></elementSpec>
+  <elementSpec ident="hi" mode="change"><attList><attDef ident="rend" mode="change" usage="req"><valList type="closed"><valItem ident="italic"/><valItem ident="bold"/><valItem ident="smallcaps"/><valItem ident="superscript"/><valItem ident="subscript"/><valItem ident="underline"/></valList></attDef></attList></elementSpec>
+  <elementSpec ident="ref" mode="change"><attList><attDef ident="type" mode="change" usage="req"><valList type="closed"><valItem ident="resolved"/><valItem ident="unresolved"/></valList></attDef><attDef ident="target" mode="change" usage="req"/></attList></elementSpec>
+  <elementSpec ident="span" mode="change"><attList><attDef ident="from" mode="change" usage="req"/><attDef ident="to" mode="change" usage="req"/><attDef ident="n" mode="change" usage="req"/></attList></elementSpec>
+  <elementSpec ident="spanGrp" mode="change"><attList><attDef ident="type" mode="change" usage="req"><valList type="closed"><valItem ident="verse"/></valList></attDef></attList></elementSpec>
+  <elementSpec ident="list" mode="change"><attList><attDef ident="type" mode="change" usage="req"><valList type="closed"><valItem ident="ordered"/><valItem ident="unordered"/></valList></attDef></attList></elementSpec>
+  <elementSpec ident="row" mode="change"><attList><attDef ident="role" mode="change"><valList type="closed"><valItem ident="label"/><valItem ident="data"/></valList></attDef></attList></elementSpec>
+  <elementSpec ident="cell" mode="change"><attList><attDef ident="role" mode="change"><valList type="closed"><valItem ident="label"/><valItem ident="data"/></valList></attDef></attList></elementSpec>
+  <elementSpec ident="choice" mode="change"><content><sequence><elementRef key="abbr"/><elementRef key="expan"/></sequence></content></elementSpec>
+  <elementSpec ident="expan" mode="change"><content><textNode/></content></elementSpec>
+  <constraintSpec ident="logical-profile" scheme="schematron"><constraint>
+   <sch:schema queryBinding="xslt"><sch:ns prefix="t" uri="http://www.tei-c.org/ns/1.0"/><sch:ns prefix="xml" uri="http://www.w3.org/XML/1998/namespace"/>
+    <sch:pattern id="logical">
+     <sch:rule context="t:TEI"><sch:assert test="@xml:id and @xml:lang and count(t:text)=1">Standalone TEI requires ID, language and one text.</sch:assert><sch:assert test="t:teiHeader/t:fileDesc/t:editionStmt/t:edition">Edition must be declared.</sch:assert></sch:rule>
+     <sch:rule context="t:text//*"><sch:assert test="@xml:id">Every reading node needs a stable ID.</sch:assert><sch:assert test="not(self::t:pb or self::t:lb or self::t:fw or self::t:cb)">Page boundaries, running matter and print wrapping are forbidden.</sch:assert><sch:assert test="not(@style or @facs or @rendition)">CSS/layout must stay in external provenance.</sch:assert><sch:assert test="not(@*[not(namespace-uri()='http://www.w3.org/XML/1998/namespace' and (local-name()='id' or local-name()='lang')) and not(namespace-uri()='' and ((local-name()='n' and local-name(..)='div') or (local-name()='type' and (local-name(..)='div' or local-name(..)='list' or local-name(..)='ref')) or (local-name()='rend' and local-name(..)='hi') or (local-name()='target' and local-name(..)='ref') or (local-name()='url' and local-name(..)='graphic') or ((local-name()='role' or local-name()='rows' or local-name()='cols') and (local-name(..)='cell' or local-name(..)='row')) or (local-name()='reason' and (local-name(..)='gap' or local-name(..)='unclear'))))])">Only profile-declared instance attributes are allowed.</sch:assert></sch:rule>
+     <sch:rule context="t:body|t:front|t:back|t:div|t:lg|t:list|t:table|t:row"><sch:assert test="not(text()[normalize-space(.)])">Structural containers cannot hide unclassified text.</sch:assert></sch:rule>
+     <sch:rule context="t:span"><sch:assert test="@xml:id and @n and starts-with(@from,'#') and starts-with(@to,'#') and not(@target)">Canonical span requires local anchor endpoints, ID and source number.</sch:assert><sch:assert test="count(//t:anchor[@xml:id=substring(current()/@from,2)])=1 and count(//t:anchor[@xml:id=substring(current()/@to,2)])=1">Endpoints must exist once.</sch:assert></sch:rule>
+     <sch:rule context="t:cell"><sch:assert test="not(@rows) or (number(@rows)&gt;0 and floor(number(@rows))=number(@rows))">Positive integer rowspan.</sch:assert><sch:assert test="not(@cols) or (number(@cols)&gt;0 and floor(number(@cols))=number(@cols))">Positive integer colspan.</sch:assert></sch:rule>
+     <sch:rule context="t:gap|t:unclear"><sch:assert test="@reason">Uncertainty requires source-evidenced reason.</sch:assert></sch:rule>
+     <sch:rule context="t:choice"><sch:assert test="not(text()[normalize-space(.)]) and not(*[normalize-space(following-sibling::text())])">Choice alternatives cannot hide reading text or tails.</sch:assert></sch:rule>
+     <sch:rule context="t:expan"><sch:assert test="parent::t:choice">Expansion text requires an explicit abbreviation alternative.</sch:assert></sch:rule>
+    </sch:pattern>
+   </sch:schema>
+  </constraint></constraintSpec>
+ </schemaSpec></body></text>
+</TEI>

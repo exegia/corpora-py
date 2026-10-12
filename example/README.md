@@ -8,8 +8,11 @@ a native desktop app via Electrobun, and a static SPA on the web
 
 ## Features
 
-- **Convert** — EPUB, HTML, XML, TEI, PDF and plain text → Text-Fabric `.corpus`
-  archives, with live job status over WebSocket (and polling fallback)
+- **Convert** — choose Context-Fabric `.corpus` or TEI `.ctei` output for EPUB,
+  HTML, TEI/XML, PDF and plain text, with live job status and download.
+  `.ctei` uses the completed job's TEI validation and shows source review
+  separately from archive validity. Text-Fabric/TEI dataset ZIPs and GitHub
+  repositories remain `.corpus` inputs; a single zipped document can use either output.
 - **Explore & publish** — browse the `.corpus` archives on the Hugging Face Hub
 - **Corpus detail & reader** — edit manifest metadata, browse the section index,
   read paginated passages (see [the flow](#corpus-detail-flow))

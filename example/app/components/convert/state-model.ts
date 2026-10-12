@@ -1,6 +1,7 @@
 import type { UploadEntry } from "~/lib/atoms/upload-atom"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
 import type { LogLine } from "./log-console"
+import { outputFormatForEntry } from "~/lib/uploads/output-format"
 
 /**
  * Client-side state model for the upload -> conversion experience.
@@ -63,6 +64,8 @@ const serverLineTone = (line: string): LogLine["tone"] =>
  * percentage.
  */
 export const deriveStages = (entry: UploadEntry): Stage[] => {
+  const outputFormat = outputFormatForEntry(entry)
+  const tei = outputFormat === "ctei"
   const { status, error, jobId, sourceFormat, logs, validation, storage } =
     entry
 
@@ -142,7 +145,11 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     status === "validating" || validation?.status === "running"
       ? "active"
       : validation?.status === "valid"
-        ? "completed"
+        ? tei &&
+          (validation.sourceVerified !== true ||
+            (validation.stats?.review_items ?? 0) > 0)
+          ? "warning"
+          : "completed"
         : validation?.status === "invalid"
           ? "failed"
           : validation?.status === "skipped"
@@ -154,13 +161,34 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
   const validationLogs: LogLine[] = []
   if (status === "validating" || validation) {
     validationLogs.push({
-      text: "Validating dataset — POST /validate (full .tf → .cfm load cycle)…",
+      text: tei
+        ? "Checking TEI archive validation returned by the conversion service…"
+        : "Checking dataset validation from the conversion service (full .tf → .cfm load cycle)…",
       tone: "info",
     })
   }
   switch (validation?.status) {
     case "valid": {
       const stats = validation.stats
+      if (tei) {
+        validationLogs.push({
+          text: `TEI archive validated${stats ? ` — ${stats.documents ?? 0} ${stats.documents === 1 ? "document" : "documents"}, ${stats.assets ?? 0} ${stats.assets === 1 ? "asset" : "assets"}` : ""}.`,
+          tone: "success",
+        })
+        if ((stats?.review_items ?? 0) > 0) {
+          validationLogs.push({
+            text: `${stats!.review_items} ${stats!.review_items === 1 ? "item requires" : "items require"} attention in review.xml.`,
+            tone: "warning",
+          })
+        }
+        if (validation.sourceVerified !== true) {
+          validationLogs.push({
+            text: "Archive validity does not establish source transcription accuracy. Source verification remains pending.",
+            tone: "warning",
+          })
+        }
+        break
+      }
       validationLogs.push({
         text: stats
           ? `Corpus validated — ${(stats.max_slot ?? 0).toLocaleString()} slots, ${
@@ -220,7 +248,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
   const storageLogs: LogLine[] = []
   if (storage) {
     storageLogs.push({
-      text: "Publishing to Hugging Face Hub — POST /storage (uploading the .corpus archive)…",
+      text: `Publishing to Hugging Face Hub — POST /storage (uploading the .${outputFormat} archive)…`,
       tone: "info",
     })
   }
@@ -261,7 +289,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     })
   }
 
-  return [
+  const stages: Stage[] = [
     {
       id: "received",
       label: "File received",
@@ -323,13 +351,13 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
     },
     {
       id: "converting",
-      label: "Converting to .corpus",
+      label: `Converting to .${outputFormat}`,
       state: convertingState,
       logs: convertingLogs,
     },
     {
       id: "validation",
-      label: "Dataset validated",
+      label: tei ? "TEI archive validated" : "Dataset validated",
       state: validationState,
       logs: validationLogs,
     },
@@ -360,6 +388,7 @@ export const deriveStages = (entry: UploadEntry): Stage[] => {
       logs: storageLogs,
     },
   ]
+  return stages.filter((stage) => !tei || stage.id !== "storage")
 }
 
 /** The stage a failed run stopped at, for plain-language error reporting. */

@@ -44,17 +44,18 @@ const HOW_TO_STEPS = [
     ),
   },
   {
-    title: "Watch it become a .corpus archive",
+    title: "Choose .corpus or .ctei output",
     screenshot: "/screenshots/convert-done.png",
     span: "lg:col-span-2",
     alt: "A finished conversion showing completed processing stages, live logs, and a Download button for the .corpus archive",
     body: (
       <>
         Each processing stage reports its progress next to a live log console:
-        the file is validated, parsed into a Text-Fabric dataset, and packaged
-        as a Context-Fabric <code>.corpus</code> archive. When it finishes you
-        can download the archive, publish it to the Hugging Face Hub, or
-        convert another file.
+        choose Context-Fabric <code>.corpus</code> or a TEI <code>.ctei</code>
+        archive before uploading. When it finishes, download the archive or
+        convert another file. TEI output includes a separate review file;
+        archive validation does not establish source transcription accuracy.
+        Context-Fabric archives can also be published to the Hugging Face Hub.
       </>
     ),
   },

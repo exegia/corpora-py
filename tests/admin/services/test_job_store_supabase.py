@@ -303,15 +303,28 @@ class TestSupabaseResultStore:
         with pytest.raises(JobStoreError, match="Invalid result key"):
             results.materialize("../secret", "j1")
 
-    def test_save_snapshot_put_url(self, results, session, tmp_path):
-        src = tmp_path / "out.corpus"
+    @pytest.mark.parametrize("suffix", [".corpus", ".ctei"])
+    def test_save_snapshot_put_url(self, results, session, tmp_path, suffix):
+        src = tmp_path / ("out" + suffix)
         src.write_bytes(b"archive-bytes")
         results.save("j1", src)
         key = results.save_snapshot("j1", src, "v1.0")
-        assert key == "conversion-jobs/j1/v1.0.corpus"
+        assert key == "conversion-jobs/j1/v1.0" + suffix
         put_urls = [url for method, url, _ in session.calls if method == "PUT"]
-        assert any("v1.0.corpus" in url for url in put_urls)
+        assert any("v1.0" + suffix in url for url in put_urls)
         assert session.objects[key] == b"archive-bytes"
+
+    def test_ctei_snapshots_from_two_jobs_do_not_share_cache_file(self, results, tmp_path):
+        source = tmp_path / "source.ctei"
+        source.write_bytes(b"first archive")
+        first_key = results.save_snapshot("first", source, "v1.0")
+        source.write_bytes(b"second archive")
+        second_key = results.save_snapshot("second", source, "v1.0")
+        first = results.materialize(first_key, "first")
+        second = results.materialize(second_key, "second")
+        assert first != second
+        assert first.read_bytes() == b"first archive"
+        assert second.read_bytes() == b"second archive"
 
     def test_save_snapshot_failure_returns_none(self, results, session, tmp_path):
         src = tmp_path / "out.corpus"

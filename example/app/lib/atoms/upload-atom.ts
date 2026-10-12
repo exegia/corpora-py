@@ -1,4 +1,5 @@
 import { atomWithImmer } from "jotai-immer"
+import type { OutputFormat } from "~/lib/uploads/output-format"
 
 // "uploading"/"queued"/"converting" mirror the client-side upload phase and
 // the server's own queued/running states (see JobStatus in use-socket.ts) --
@@ -38,6 +39,8 @@ export type ValidationOutcome = {
   reasons?: string[]
   /** Corpus stats from a successful validation (see CorpusStats server-side). */
   stats?: Record<string, number>
+  /** Archive validation is separate from independent source verification. */
+  sourceVerified?: boolean
 }
 
 /**
@@ -77,6 +80,8 @@ export type UploadEntry = {
   uploadedAt?: number
   /** Source format sent as `source_format` to `POST /convert` (see source-format.ts). */
   sourceFormat?: string
+  /** Output requested for this job; absent in older .corpus history entries. */
+  outputFormat?: OutputFormat
   /**
    * Client-side pre-upload findings (ZIP contents inventory, extraction
    * notes -- see inspect-zip.ts), shown under the "File type validated"

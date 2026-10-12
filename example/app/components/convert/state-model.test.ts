@@ -39,6 +39,37 @@ const STORED: StorageOutcome = {
   sizeBytes: 57609,
 }
 
+describe("TEI archive stages", () => {
+  const entry = baseEntry({
+    outputFormat: "ctei",
+    corpusName: "book.ctei",
+    validation: {
+      status: "valid",
+      sourceVerified: false,
+      stats: { documents: 2, assets: 3, review_items: 1 },
+    },
+  })
+  test("reports TEI archive checks and review without claiming source acceptance", () => {
+    expect(stageById(entry, "converting").label).toBe("Converting to .ctei")
+    const validation = stageById(entry, "validation")
+    expect(validation.label).toBe("TEI archive validated")
+    expect(validation.state).toBe("warning")
+    const text = validation.logs.map((line) => line.text).join("\n")
+    expect(text).toContain("2 documents, 3 assets")
+    expect(text).toContain("1 item requires attention in review.xml")
+    expect(text).toContain("Source verification remains pending")
+    expect(text).not.toContain(".tf")
+    expect(text).not.toContain("slots")
+  })
+  test("infers .ctei from a saved filename and omits unsupported Hub publishing", () => {
+    const old = { ...entry, outputFormat: undefined }
+    expect(stageById(old, "converting").label).toBe("Converting to .ctei")
+    expect(deriveStages(old).some((stage) => stage.id === "storage")).toBe(
+      false
+    )
+  })
+})
+
 describe("manual publish in flight", () => {
   const entry = baseEntry({ storage: { status: "running" } })
 

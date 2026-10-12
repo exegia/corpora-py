@@ -1,6 +1,13 @@
 "use client"
 
-import { CircleAlert, CircleCheck, Download, LoaderCircle, RefreshCw, Undo2 } from "lucide-react"
+import {
+  CircleAlert,
+  CircleCheck,
+  Download,
+  LoaderCircle,
+  RefreshCw,
+  Undo2,
+} from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "~/components/reui/alert"
 import { HuggingFaceIcon } from "~/components/icons/icon-hugging-face"
 import { Button } from "~/components/ui/button"
@@ -9,12 +16,14 @@ import { useCapabilities } from "~/lib/capabilities"
 import { formatBytes } from "~/lib/hooks/use-file-upload"
 import { cn } from "~/lib/utils"
 import { FileTypeIcon } from "./file-icon"
+import type { OutputFormat } from "~/lib/uploads/output-format"
 
 interface CompletedResultProps {
   /** Human-readable title from the source (issue #109); falls back to corpusName. */
   displayName?: string
   corpusName: string
   corpusSize?: number
+  outputFormat?: OutputFormat
   /** Already saved to disk ("success") vs. downloaded and awaiting save ("ready"). */
   saved: boolean
   /**
@@ -35,6 +44,7 @@ export function CompletedResult({
   displayName,
   corpusName,
   corpusSize,
+  outputFormat = "corpus",
   saved,
   storage,
   onPublish,
@@ -48,7 +58,8 @@ export function CompletedResult({
   // publish button would 403 no matter what -- don't offer it. An
   // already-published archive still renders its link below.
   const capabilities = useCapabilities()
-  const canPublish = capabilities?.hubWritable === true
+  const canPublish =
+    outputFormat === "corpus" && capabilities?.hubWritable === true
   return (
     <div
       className={cn(
@@ -76,11 +87,17 @@ export function CompletedResult({
           iconClassName="size-5"
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" title={displayName ?? corpusName}>
+          <p
+            className="truncate text-sm font-medium"
+            title={displayName ?? corpusName}
+          >
             {displayName ?? corpusName}
           </p>
           {displayName && (
-            <p className="truncate text-xs text-muted-foreground" title={corpusName}>
+            <p
+              className="truncate text-xs text-muted-foreground"
+              title={corpusName}
+            >
               {corpusName}
             </p>
           )}
@@ -135,7 +152,7 @@ export function CompletedResult({
           data-cuelume-release
         >
           <Download className="size-4" aria-hidden="true" />
-          {saved ? "Saved" : "Download"}
+          {saved ? "Saved" : `Download .${outputFormat}`}
         </Button>
         {!published && canPublish && (
           <Button

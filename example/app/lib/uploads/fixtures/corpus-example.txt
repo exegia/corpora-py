@@ -1,0 +1,5 @@
+Example Corpus Conversion
+
+This synthetic source exercises the existing .corpus conversion flow.
+
+Greek text remains present: λόγος and ζωή.

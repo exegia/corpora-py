@@ -25,10 +25,16 @@ export const saveCorpusFile = async (
         suggestedName: filename,
         types: [
           {
-            description: "Corpus archive",
-            accept: { "application/octet-stream": [".corpus"] }
-          }
-        ]
+            description: filename.endsWith(".ctei")
+              ? "TEI archive"
+              : "Corpus archive",
+            accept: {
+              "application/zip": [
+                filename.endsWith(".ctei") ? ".ctei" : ".corpus",
+              ],
+            },
+          },
+        ],
       })
       const writable = await handle.createWritable()
       await writable.write(blob)

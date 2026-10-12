@@ -11,6 +11,7 @@
 create table if not exists public.conversion_jobs (
   id text primary key,
   source_format text not null,
+  output_format text not null default 'corpus',
   name text not null,
   status text not null,
   created_at double precision not null,
@@ -27,6 +28,8 @@ create table if not exists public.conversion_jobs (
 
 -- Existing deployments: add the column introduced by issue #177.
 alter table public.conversion_jobs add column if not exists validation jsonb;
+-- Preserve the selected archive extension for jobs hydrated by another API instance.
+alter table public.conversion_jobs add column if not exists output_format text not null default 'corpus';
 
 create index if not exists conversion_jobs_owner_created_at_idx
   on public.conversion_jobs (owner, created_at desc);
