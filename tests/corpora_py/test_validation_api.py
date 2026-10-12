@@ -313,3 +313,44 @@ def test_ctei_operational_failures_remain_server_errors(client, tmp_path, monkey
         response = server.post("/validate", json={"path": str(archive)})
     assert response.status_code == 500
     assert response.text == "Internal Server Error"
+
+
+@pytest.mark.parametrize("damage", ["encrypted", "unsupported_compression", "corrupt_deflate"])
+def test_unreadable_ctei_zip_members_return_invalid(client, tmp_path, damage):
+    import zipfile
+
+    from admin.converters.tei import convert_to_ctei
+    from admin.parsers.schema import SourceFormat
+
+    source = tmp_path / "source.txt"
+    source.write_text("Document text.", encoding="utf-8")
+    archive = tmp_path / "book.ctei"
+    convert_to_ctei(source, archive, source_format=SourceFormat.PLAIN)
+    data = bytearray(archive.read_bytes())
+    with zipfile.ZipFile(archive) as zf:
+        info = next(info for info in zf.infolist() if info.file_size)
+    local = info.header_offset
+    central = data.index(b"PK\x01\x02", local)
+    while True:
+        name_length = int.from_bytes(data[central + 28:central + 30], "little")
+        extra_length = int.from_bytes(data[central + 30:central + 32], "little")
+        comment_length = int.from_bytes(data[central + 32:central + 34], "little")
+        if data[central + 46:central + 46 + name_length] == info.filename.encode():
+            break
+        central += 46 + name_length + extra_length + comment_length
+    if damage == "encrypted":
+        data[local + 6] |= 1
+        data[central + 8] |= 1
+    elif damage == "unsupported_compression":
+        data[local + 8:local + 10] = (99).to_bytes(2, "little")
+        data[central + 10:central + 12] = (99).to_bytes(2, "little")
+    else:
+        name_length = int.from_bytes(data[local + 26:local + 28], "little")
+        extra_length = int.from_bytes(data[local + 28:local + 30], "little")
+        data[local + 30 + name_length + extra_length] = 0xFF
+    archive.write_bytes(data)
+
+    response = client.post("/validate", json={"path": str(archive)})
+    assert response.status_code == 200
+    assert response.json()["valid"] is False
+    assert response.json()["reasons"]
