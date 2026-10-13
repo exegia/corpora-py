@@ -1,0 +1,10 @@
+.hutch/
+.cottontail-tmp/
+node_modules/
+build/
+dist/
+artifacts/
+resources/python/
+*.tsbuildinfo
+# heroui-agents-md
+.heroui-docs/

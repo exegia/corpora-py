@@ -1,0 +1,81 @@
+/* Vite's root is mainview; include sibling components when scanning utilities. */
+@import "tailwindcss" source("../");
+@import "../css/globals.css";
+@import "../css/theme.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+    ::selection {
+        @apply bg-primary/80 text-primary-foreground;
+    }
+    * {
+        @apply border-border outline-ring/50 ring-ring;
+    }
+    html {
+        @apply antialiased;
+    }
+    body {
+        @apply bg-background text-foreground flex min-h-svh flex-col font-sans;
+    }
+    html,
+    body,
+    #root {
+        height: 100%;
+    }
+    body {
+        margin: 0;
+        overflow: hidden;
+    }
+    button:not(:disabled),
+    [role="button"]:not(:disabled) {
+        cursor: pointer;
+    }
+}
+
+/* Reserve the hidden-inset titlebar's native window controls. */
+.desktop-titlebar {
+    padding-inline-start: 5.5rem;
+    /* Custom properties survive WKWebView's CSS parser for SDK hit testing. */
+    --electrobun-app-region: drag;
+    -webkit-app-region: drag;
+}
+
+.electrobun-webkit-app-region-no-drag,
+.desktop-titlebar button {
+    --electrobun-app-region: no-drag;
+    -webkit-app-region: no-drag;
+}
+
+.desktop-shell button,
+.workspace-link {
+    transition-property: color, background-color, border-color, box-shadow, transform;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.workspace-link:hover {
+    background-color: var(--accent);
+    border-color: var(--input);
+}
+
+.workspace-link:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+}
+
+.desktop-shell button:not([role="tab"]):active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .desktop-shell *,
+    .desktop-shell *::before,
+    .desktop-shell *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+    .desktop-shell button:not([role="tab"]):active:not(:disabled) {
+        transform: none;
+    }
+}
