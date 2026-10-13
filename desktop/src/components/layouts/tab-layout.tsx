@@ -1,0 +1,368 @@
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRef, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { navigation } from "@/shared/navigation"
+import { PanelHeading } from "@/components/heading"
+import { Database, LockKeyhole, Radio, Terminal } from "lucide-react"
+import useBackend from "@/hooks/use-backend"
+import { Badge } from "@/components/ui/badge"
+import { Field, FieldHelper, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+
+export const TabLayout = () => {
+    const [activeTab, setActiveTab] = useState("dashboard")
+    const tabTriggers = useRef<Record<string, HTMLButtonElement | null>>({})
+    const navigateTo = (value: string) => {
+        setActiveTab(value)
+        tabTriggers.current[value]?.focus()
+    }
+    const { backend, isActive, isAutoEnabled, isChecking, pause, resume, refresh, lastCheckedAt, responseTimeMs } =
+        useBackend()
+    return (
+        <Tabs
+            value={activeTab}
+            onValueChange={({ value }) => setActiveTab(value)}
+            className="min-h-0 flex-1 gap-0">
+            <nav
+                aria-label="Workspace navigation"
+                className="shrink-0 border-b border-border bg-card px-4 sm:px-7">
+                <TabsList
+                    variant="underline"
+                    aria-label="Workspace sections"
+                    className="max-w-full">
+                    {navigation.map(({ value, label, icon: Icon }) => (
+                        <TabsTrigger
+                            key={value}
+                            value={value}
+                            ref={(node) => {
+                                tabTriggers.current[value] = node
+                            }}
+                            className="h-11 px-3 sm:px-4">
+                            <Icon
+                                aria-hidden="true"
+                                strokeWidth={1.5}
+                            />
+                            {label}
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+            </nav>
+            <main className="min-h-0 flex-1 overflow-y-auto">
+                <div className="mx-auto w-full px-5 py-8 sm:px-8">
+                    <TabsContent value="dashboard">
+                        <PanelHeading
+                            eyebrow="Workspace overview"
+                            title="Your corpus workspace.">
+                            Convert, inspect, and work with your texts. A managed Python runtime keeps the backend close
+                            to your desktop.
+                        </PanelHeading>
+                        <div className="grid gap-4 sm:grid-cols-3">
+                            <section className="rounded-xl border border-border bg-card p-5">
+                                <div className="mb-5 flex items-center justify-between">
+                                    <span className="text-xs font-medium text-muted-foreground">Python runtime</span>
+                                    <Database
+                                        className="size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                        strokeWidth={1.5}
+                                    />
+                                </div>
+                                <p className="text-lg font-semibold capitalize tracking-tight">{backend.state}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Desktop-owned sidecar</p>
+                            </section>
+                            <section className="rounded-xl border border-border bg-card p-5">
+                                <div className="mb-5 flex items-center justify-between">
+                                    <span className="text-xs font-medium text-muted-foreground">RPC response</span>
+                                    <Radio
+                                        className="size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                        strokeWidth={1.5}
+                                    />
+                                </div>
+                                <p className="text-lg font-semibold tabular-nums tracking-tight">
+                                    {responseTimeMs === null ? "—" : `${responseTimeMs} ms`}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    {isActive
+                                        ? "Retrying while offline · every 3 seconds"
+                                        : backend.state === "ready"
+                                          ? "Online · automatic checks stopped"
+                                          : "Automatic checks paused"}
+                                </p>
+                            </section>
+                            <section className="rounded-xl border border-border bg-card p-5">
+                                <div className="mb-5 flex items-center justify-between">
+                                    <span className="text-xs font-medium text-muted-foreground">Access policy</span>
+                                    <LockKeyhole
+                                        className="size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                        strokeWidth={1.5}
+                                    />
+                                </div>
+                                <p className="text-lg font-semibold tracking-tight">{authLabel}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    {backend.authRequired === true
+                                        ? "Bearer token required"
+                                        : backend.authRequired === false
+                                          ? "Authentication disabled"
+                                          : "Reported by the backend"}
+                                </p>
+                            </section>
+                        </div>
+                        <section className="mt-6 rounded-xl border border-border bg-card">
+                            <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+                                <div className="flex items-center gap-2">
+                                    <Terminal
+                                        className="size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                        strokeWidth={1.5}
+                                    />
+                                    <h2 className="text-sm font-semibold">Runtime connection</h2>
+                                </div>
+                                <Badge variant="outline">Loopback only</Badge>
+                            </header>
+                            <div className="flex flex-col gap-4 p-5">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <code className="break-all text-sm text-muted-foreground">
+                                        {backend.url ?? "Waiting for the local endpoint…"}
+                                    </code>
+                                    <span className="text-xs text-muted-foreground">
+                                        {lastCheckedAt === null
+                                            ? "No response yet"
+                                            : `Checked ${new Date(lastCheckedAt).toLocaleTimeString()}`}
+                                    </span>
+                                </div>
+                                {backend.error && (
+                                    <p
+                                        role="alert"
+                                        className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+                                        {backend.error}
+                                    </p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <RefreshSidecarButton
+                                        isChecking={isChecking}
+                                        onRefresh={() => void refresh()}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setEventsOpen(true)}>
+                                        <Activity aria-hidden="true" />
+                                        Inspect events
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => navigateTo("settings")}>
+                                        Connection settings
+                                        <ArrowUpRight aria-hidden="true" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </section>
+                        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                            <button
+                                type="button"
+                                onClick={() => navigateTo("jobs")}
+                                className="workspace-link flex items-center gap-4 rounded-xl border border-border bg-card p-5 text-left">
+                                <FolderClock
+                                    className="size-5 shrink-0 text-primary"
+                                    aria-hidden="true"
+                                    strokeWidth={1.5}
+                                />
+                                <span className="flex flex-1 flex-col gap-1">
+                                    <span className="text-sm font-semibold">Conversion jobs</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        A home for your document workflows.
+                                    </span>
+                                </span>
+                                <ArrowUpRight
+                                    className="size-4 text-muted-foreground"
+                                    aria-hidden="true"
+                                    strokeWidth={1.5}
+                                />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => navigateTo("explorer")}
+                                className="workspace-link flex items-center gap-4 rounded-xl border border-border bg-card p-5 text-left">
+                                <Compass
+                                    className="size-5 shrink-0 text-primary"
+                                    aria-hidden="true"
+                                    strokeWidth={1.5}
+                                />
+                                <span className="flex flex-1 flex-col gap-1">
+                                    <span className="text-sm font-semibold">Corpus explorer</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        Make room for a closer reading.
+                                    </span>
+                                </span>
+                                <ArrowUpRight
+                                    className="size-4 text-muted-foreground"
+                                    aria-hidden="true"
+                                    strokeWidth={1.5}
+                                />
+                            </button>
+                        </div>
+                    </TabsContent>
+                    <TabsContent value="jobs">
+                        <ConversionJobs
+                            backend={backend}
+                            conversions={conversions}
+                        />
+                    </TabsContent>
+                    <TabsContent value="explorer">
+                        <PanelHeading
+                            eyebrow="Texts & collections"
+                            title="Corpus explorer">
+                            A dedicated space to inspect the structure and content of your corpora.
+                        </PanelHeading>
+                        <section className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card p-8 text-center">
+                            <Compass
+                                className="mb-2 size-8 text-muted-foreground"
+                                aria-hidden="true"
+                                strokeWidth={1.5}
+                            />
+                            <h2 className="text-base font-semibold">A place for your texts</h2>
+                            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+                                Library browsing is not connected to this view yet. No collections have been loaded or
+                                counted.
+                            </p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigateTo("dashboard")}>
+                                Back to dashboard
+                            </Button>
+                        </section>
+                    </TabsContent>
+                    <TabsContent value="settings">
+                        <PanelHeading
+                            eyebrow="Workspace preferences"
+                            title="Settings">
+                            Adjust the desktop appearance and inspect your local connection.
+                        </PanelHeading>
+                        <div className="flex flex-col gap-4">
+                            <section className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-5">
+                                <div className="flex items-start gap-3">
+                                    <Monitor
+                                        className="mt-0.5 size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                        strokeWidth={1.5}
+                                    />
+                                    <div className="flex flex-col gap-1">
+                                        <h2 className="text-sm font-semibold">Appearance</h2>
+                                        <p className="text-sm capitalize text-muted-foreground">
+                                            {theme} theme{theme === "system" ? ` · currently ${resolvedTheme}` : ""}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Cycle system, light, and dark. Your preference is saved on this device.
+                                        </p>
+                                    </div>
+                                </div>
+                            </section>
+                            <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-5">
+                                <div className="flex items-start gap-3">
+                                    <Radio
+                                        className="mt-0.5 size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                        strokeWidth={1.5}
+                                    />
+                                    <div className="flex flex-col gap-1">
+                                        <h2 className="text-sm font-semibold">Connection monitoring</h2>
+                                        <p className="text-sm text-muted-foreground">
+                                            {isActive
+                                                ? "Retrying the offline sidecar every 3 seconds."
+                                                : backend.state === "ready"
+                                                  ? "Backend online. Automatic checks stop until a manual check observes it offline."
+                                                  : "Automatic status checks are paused."}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Pausing checks does not stop Python or any conversion jobs.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={isAutoEnabled ? pause : resume}>
+                                    {isAutoEnabled ? "Pause automatic checks" : "Enable automatic checks"}
+                                </Button>
+                            </section>
+                            <section className="rounded-xl border border-border bg-card p-5">
+                                <h2 className="mb-3 text-sm font-semibold">Backend access</h2>
+                                <dl className="grid gap-3 text-sm sm:grid-cols-[8rem_1fr]">
+                                    <dt className="text-muted-foreground">Endpoint</dt>
+                                    <dd className="break-all font-mono">{backend.url ?? "Not available"}</dd>
+                                    <dt className="text-muted-foreground">Authentication</dt>
+                                    <dd>{authLabel}</dd>
+                                </dl>
+                                <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+                                    Authentication is configured by the backend environment. Appearance and monitoring
+                                    preferences do not change its security policy.
+                                </p>
+                                <form
+                                    className="mt-5 flex flex-col gap-3"
+                                    onSubmit={(event) => {
+                                        event.preventDefault()
+                                        setRequestToken(tokenDraft.trim().replace(/^Bearer\s+/i, ""))
+                                        setTokenDraft("")
+                                    }}>
+                                    <Field>
+                                        <FieldLabel>Supabase request token</FieldLabel>
+                                        <Input
+                                            type="password"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            value={tokenDraft}
+                                            onChange={(event) => setTokenDraft(event.target.value)}
+                                            placeholder="Paste a Supabase JWT"
+                                        />
+                                        <FieldHelper>
+                                            Used only for conversion HTTP requests. Kept in memory, never saved or
+                                            logged. Applying a different token clears the visible job list.
+                                        </FieldHelper>
+                                    </Field>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            disabled={!tokenDraft.trim()}>
+                                            Apply token
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={!requestToken}
+                                            onClick={() => {
+                                                setRequestToken("")
+                                                setTokenDraft("")
+                                            }}>
+                                            Clear token
+                                        </Button>
+                                        <span
+                                            role="status"
+                                            className="text-xs text-muted-foreground">
+                                            {requestToken
+                                                ? "Request token applied for this session"
+                                                : "No request token applied"}
+                                        </span>
+                                    </div>
+                                </form>
+                                <p className="mt-3 text-xs text-muted-foreground">
+                                    Submitted jobs continue on Python when you change tabs; quitting the desktop stops
+                                    its sidecar.
+                                </p>
+                            </section>
+                        </div>
+                    </TabsContent>
+                </div>
+            </main>
+        </Tabs>
+    )
+}

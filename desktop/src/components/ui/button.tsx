@@ -1,57 +1,174 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
+import { ark } from "@ark-ui/react/factory";
+import type React from "react";
+import { tv, type VariantProps } from "tailwind-variants";
+import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
-const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
-      },
+export const buttonVariants = tv({
+  base: [
+    "relative",
+    "inline-flex shrink-0 items-center justify-center gap-2",
+    "whitespace-nowrap font-medium text-sm",
+    "rounded-lg",
+    "transition-all",
+    "outline-none focus-visible:ring-[3px] focus-visible:ring-ring/32",
+    "disabled:pointer-events-none disabled:opacity-64",
+    "data-disabled:pointer-events-none data-disabled:opacity-64",
+    "aria-disabled:pointer-events-none aria-disabled:opacity-64",
+    "data-[state=loading]:pointer-events-none",
+    "aria-invalid:border-destructive aria-invalid:ring-destructive/24",
+    "[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+    "motion-reduce:transition-none!",
+  ],
+  variants: {
+    variant: {
+      default: [
+        "bg-primary",
+        "border border-transparent shadow-primary/24 shadow-sm",
+        "text-primary-foreground",
+        "hover:bg-primary/90",
+        "focus-visible:border-background",
+      ],
+      outline: [
+        "bg-transparent",
+        "text-foreground",
+        "border border-input shadow-sm/5",
+        "hover:bg-accent hover:text-accent-foreground",
+        "dark:bg-input/32 dark:hover:bg-input/64",
+        "focus-visible:border-primary",
+      ],
+      destructive: [
+        "bg-destructive",
+        "text-white",
+        "border border-transparent shadow-destructive/24 shadow-sm",
+        "hover:bg-destructive/90",
+        "focus-visible:border-background focus-visible:ring-destructive-foreground/32",
+      ],
+      secondary: [
+        "bg-secondary",
+        "text-secondary-foreground",
+        "border border-transparent",
+        "focus-visible:border-primary",
+        "hover:bg-secondary/80",
+      ],
+      ghost: [
+        "hover:bg-accent hover:text-accent-foreground",
+        "border border-transparent",
+        "focus-visible:border-primary",
+      ],
+      link: [
+        "text-primary",
+        "underline-offset-4",
+        "border border-transparent",
+        "hover:underline",
+        "focus-visible:border-primary",
+      ],
     },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
+    size: {
+      xs: [
+        "h-6",
+        "gap-1.5",
+        "px-2",
+        "text-xs",
+        "rounded-sm",
+        "[&_svg:not([class*='size-'])]:size-2.5",
+      ],
+      sm: [
+        "h-7",
+        "px-2.5",
+        "gap-1.5",
+        "[&_svg:not([class*='size-'])]:size-3.5",
+      ],
+      md: ["h-8", "px-3", "py-2"],
+      lg: ["h-9", "px-3.5"],
+      xl: ["h-10", "text-base", "px-4"],
+      "icon-xs": "size-6 rounded-sm",
+      "icon-sm": "size-7",
+      "icon-md": "size-8",
+      "icon-lg": "size-9",
+      "icon-xl": "size-10 [&_svg:not([class*='size-'])]:size-5",
     },
-  }
-)
+    clickEffect: {
+      true: "active:not-aria-[haspopup]:scale-[0.98]",
+    },
+    pill: {
+      true: [
+        "rounded-full",
+        "has-[>svg]:data-[size=xs]:pe-3",
+        "has-[>svg]:data-[size=sm]:pe-3.5",
+        "has-[>svg]:data-[size=md]:pe-4",
+        "has-[>svg]:data-[size=lg]:pe-4.5",
+        "has-[>svg]:data-[size=xl]:pe-5",
+      ],
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+    size: "md",
+    clickEffect: true,
+    pill: false,
+  },
+});
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+export interface ButtonProps
+  extends React.ComponentProps<typeof ark.button>,
+    VariantProps<typeof buttonVariants> {
+  /**
+   * Apply a click effect to the button
+   *
+   * @default true
+   */
+  clickEffect?: boolean;
+  /**
+   * Show a loading indicator
+   *
+   * @default false
+   */
+  isLoading?: boolean;
 }
 
-export { Button, buttonVariants }
+export const Button = (props: ButtonProps) => {
+  const {
+    variant = "default",
+    size = "md",
+    clickEffect = true,
+    pill = false,
+    isLoading = false,
+    className,
+    children,
+    ...rest
+  } = props;
+
+  return (
+    <ark.button
+      className={cn(
+        buttonVariants({ variant, size, clickEffect, pill }),
+        className
+      )}
+      data-size={size}
+      data-slot="button"
+      data-state={isLoading ? "loading" : "idle"}
+      data-variant={variant}
+      type="button"
+      {...rest}
+      aria-busy={isLoading}
+      aria-disabled={isLoading}
+    >
+      {isLoading ? (
+        <>
+          <span aria-hidden className="invisible">
+            {children}
+          </span>
+
+          <span className="sr-only">{children}</span>
+
+          <span className="absolute inset-0 flex items-center justify-center">
+            <Spinner aria-hidden />
+          </span>
+        </>
+      ) : (
+        children
+      )}
+    </ark.button>
+  );
+};
