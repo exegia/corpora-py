@@ -448,7 +448,14 @@ cd example
 bunx shadcn@latest add <component-name>     # not `shadcn-ui`, which is the old package
 ```
 
-- Components land in `example/app/components/ui/` (ReUI ones in `components/reui/`)
+- shadcn components land in `example/app/components/ui/`; ReUI ones belong in `example/app/components/reui/`
+- **ReUI install trap:** `@reui/*` registry items carry a hard-coded `target: components/reui/...`, which the shadcn
+  CLI (4.21.4) resolves against the project root — it only auto-prefixes `src/`, not this project's `app/`. So
+  `bunx --bun shadcn@latest add @reui/<name> --yes` writes to `example/components/reui/`, where the rewritten
+  `~/components/reui/...` imports don't resolve; `--path` does not override it. After every ReUI install, move the
+  files: `cp -R components/reui/. app/components/reui/ && rm -r components` (from `example/`). The shadcn/ui parts the
+  same install pulls in resolve correctly, but show as `overwrite` against the customised ones already in
+  `components/ui/` — check `--dry-run` first and never pass `--overwrite` blind.
 - Tailwind CSS 4 — **no `tailwind.config.ts`**; theme and imports live in `example/app/app.css`
 - Import via the alias: `import { Button } from "~/components/ui/button"`
 

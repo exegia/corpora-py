@@ -3,6 +3,8 @@ path := .
 # ── Paths & images ────────────────────────────────────────────────────────────
 BIN                := ./bin
 DIST_DIR           ?= dist
+DESKTOP_DIR        ?= desktop
+HUTCH              ?= hutch
 GHCR_REGISTRY      ?= ghcr.io
 GHCR_OWNER         ?= exegia
 CORPORA_IMAGE      ?= $(GHCR_REGISTRY)/$(GHCR_OWNER)/corpora-py
@@ -584,6 +586,48 @@ rulesets-apply: ## Push .github/rulesets/*.json to GitHub (matched by name).
 	    echo "created $$name"; \
 	  fi; \
 	done
+
+# ── Desktop — Electrobun / Hutch ──────────────────────────────────────────────
+
+.PHONY: desktop-install desktop-setup desktop-start desktop-dev desktop-dev-hmr \
+        desktop-hmr desktop-typecheck desktop-test desktop-sidecar-bundle \
+        desktop-sidecar-check desktop-build desktop-build-canary
+
+desktop-install: ## Install desktop dependencies with Hutch's frozen lockfile.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run install
+
+desktop-setup: ## Sync the Python workspace used by the desktop sidecar.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run setup
+
+desktop-start: ## Launch the desktop app with bundled UI assets (no watcher).
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run start
+
+desktop-dev: ## Run the desktop app with bundled UI assets and Electrobun watch mode.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run dev
+
+desktop-dev-hmr: ## Run Vite HMR + Electrobun + the managed Python sidecar.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run dev:hmr
+
+desktop-hmr: ## Start only the desktop Vite HMR server on port 5173.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run hmr
+
+desktop-typecheck: ## Type-check the desktop TypeScript code.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run typecheck
+
+desktop-test: ## Run desktop sidecar lifecycle tests with Hutch.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run test
+
+desktop-sidecar-bundle: ## Build the standalone Python runtime for desktop packaging.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run sidecar:bundle
+
+desktop-sidecar-check: ## Check the bundled desktop Python runtime.
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run sidecar:check
+
+desktop-build: ## Build the stable desktop app (requires desktop-sidecar-bundle first).
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run build
+
+desktop-build-canary: ## Build the canary desktop app (requires desktop-sidecar-bundle first).
+	@cd "$(DESKTOP_DIR)" && $(HUTCH) run build:canary
 
 # ── Dev servers ───────────────────────────────────────────────────────────────
 
