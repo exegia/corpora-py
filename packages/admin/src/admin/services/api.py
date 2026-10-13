@@ -41,9 +41,12 @@ from ..parsers.schema import CorpusCategory, SourceFormat
 from .conversion import (
     ConversionError,
     CorpusValidationError,
+    EventLevel,
+    StepStatus,
     clean_filename_stem,
     derive_display_name,
     extract_source_title,
+    mentions_any_path,
     run_conversion,
     validate_archive,
 )
@@ -119,8 +122,10 @@ _TRANSPORT_GUIDANCE = (
     "job while a request is in flight** — so on any close before a terminal "
     "status (`succeeded`/`failed`), fall back to polling; do not build a "
     "WS-only client. Neither transport reports a percentage: the converters "
-    "have no progress hook, so `logs` carries a handful of coarse, "
-    "fixed-stage checkpoints."
+    "have no progress hook. `logs` retains coarse checkpoint strings; `events` "
+    "adds bounded, sequenced diagnostics and `steps` reports actual pipeline "
+    "boundaries (`metadata`, `convert`, `package`, `validate`). CTEI/CUSX skip "
+    "the separate package step because their converter already packages the output."
 )
 
 
@@ -128,6 +133,24 @@ class ErrorDetail(BaseModel):
     """FastAPI's standard error body, declared so error responses codegen."""
 
     detail: str
+
+
+class ConversionJobEvent(BaseModel):
+    """One structured checkpoint/diagnostic; no percentage or private exception detail."""
+
+    sequence: int = Field(
+        ge=1, description="Job-local, increasing; gaps mean older events were trimmed."
+    )
+    timestamp: float = Field(description="Unix epoch seconds.")
+    level: EventLevel
+    message: str
+    stage: str | None
+
+
+class ConversionJobStep(BaseModel):
+    id: str
+    title: str
+    status: StepStatus
 
 
 class ConversionJobStatus(BaseModel):
@@ -160,6 +183,18 @@ class ConversionJobStatus(BaseModel):
         "conversion pipeline has no percentage hook."
     )
     last_log: str | None
+    events: list[ConversionJobEvent] = Field(
+        default_factory=list,
+        description="Last 200 structured events, ordered by job-local sequence. "
+        "Empty for legacy records; not reconstructed from logs.",
+        json_schema_extra={"default": []},
+    )
+    steps: list[ConversionJobStep] = Field(
+        default_factory=list,
+        description="Pipeline stages in execution order, not a percentage. "
+        "Unreached stages are skipped on failure; legacy records have no steps.",
+        json_schema_extra={"default": []},
+    )
     validation: dict[str, Any] | None = Field(
         description="Post-conversion corpus validation summary "
         "(`corpus`/`valid`/`stats`/`reasons`/`checks`) — set once the "
@@ -347,6 +382,7 @@ def _run_conversion(
     with no other signal.
     """
     job = job_manager.get(job_id)
+    private_paths = (str(work_dir), tempfile.gettempdir(), str(_RESULTS_ROOT))
     try:
         return run_conversion(
             source_path=source_path,
@@ -367,18 +403,18 @@ def _run_conversion(
             # `job.error` round-trips to clients, so a converter message
             # naming any of these server-side paths keeps the sanitized
             # generic form instead of the verbatim passthrough (issue #184).
-            private_paths=(
-                str(work_dir),
-                tempfile.gettempdir(),
-                str(_RESULTS_ROOT),
+            private_paths=private_paths,
+            on_log=lambda message: job_manager.log(
+                job_id,
+                message,
+                event_message="Conversion checkpoint recorded (private path omitted)."
+                if mentions_any_path(message, private_paths)
+                else message,
             ),
-            on_log=lambda message: job_manager.log(job_id, message),
-            on_display_name=lambda display: job_manager.set_display_name(
-                job_id, display
-            ),
-            on_validation=lambda summary: job_manager.set_validation(
-                job_id, summary
-            ),
+            on_stage=lambda stage, status: job_manager.set_stage(job_id, stage, status),
+            on_event=lambda level, message, stage: job_manager.event(job_id, level, message, stage),
+            on_display_name=lambda display: job_manager.set_display_name(job_id, display),
+            on_validation=lambda summary: job_manager.set_validation(job_id, summary),
         )
     except CorpusValidationError as exc:
         raise ConversionValidationError(str(exc)) from exc
@@ -432,7 +468,8 @@ async def create_conversion(
     name: str = Form(...),
     description: str = Form(""),
     output_format: Literal["corpus", "cusx", "ctei"] = Form(
-        "corpus", description="Output archive: Corpus (.corpus), C-USX (.cusx) or owned TEI ZIP (.ctei). CTEI packages preserve unresolved items in review.xml."
+        "corpus",
+        description="Output archive: Corpus (.corpus), C-USX (.cusx) or owned TEI ZIP (.ctei). CTEI packages preserve unresolved items in review.xml.",
     ),
     category: CorpusCategory | None = Form(
         default=None,
@@ -458,8 +495,14 @@ async def create_conversion(
             f"Available: {sorted(f.value for f in CONVERTERS)}",
         )
 
-    if output_format in {"ctei", "cusx"} and source_format in {SourceFormat.TF_ZIP, SourceFormat.TEI_ZIP}:
-        raise HTTPException(status_code=422, detail="CTEI and C-USX require a source document; choose corpus output for dataset ZIPs")
+    if output_format in {"ctei", "cusx"} and source_format in {
+        SourceFormat.TF_ZIP,
+        SourceFormat.TEI_ZIP,
+    }:
+        raise HTTPException(
+            status_code=422,
+            detail="CTEI and C-USX require a source document; choose corpus output for dataset ZIPs",
+        )
 
     claims = _claims(request)
     owner = claims.get("sub") if claims else None
@@ -506,9 +549,7 @@ async def create_conversion(
             raise HTTPException(status_code=503, detail=str(extra)) from extra
         except JobStoreError as extra:
             logger.exception("Job store failed to accept conversion %s", job_id)
-            raise HTTPException(
-                status_code=503, detail="Job store unavailable"
-            ) from extra
+            raise HTTPException(status_code=503, detail="Job store unavailable") from extra
     except Exception:
         # The job never started (rejected upload, full queue, or some
         # unexpected failure mid-upload e.g. a full disk) -- nothing will
@@ -524,10 +565,11 @@ async def create_conversion(
     # the job log so a client watching the job sees them without a second
     # response channel.
     for warning in report.warnings:
-        job_manager.log(job.id, warning)
+        job_manager.log(job.id, warning, level="warning")
 
     if os.getenv("VERCEL") == "1" and job.completion is not None:
         completion = job.completion
+
         # Keep the serverless invocation active through terminal persistence.
         # FastAPI sends the 202 body before awaiting this response task.
         async def finish_conversion() -> None:
@@ -559,11 +601,9 @@ async def list_conversions(
     """
     claims = _claims(request)
     owner = claims.get("sub") if claims else None
-    jobs, total = _store_op(
-        lambda: job_manager.list_jobs(owner=owner, offset=offset, limit=limit)
-    )
+    jobs, total = _store_op(lambda: job_manager.list_jobs(owner=owner, offset=offset, limit=limit))
     return {
-        "jobs": [j.to_dict() for j in jobs],
+        "jobs": [job_manager.snapshot(j) for j in jobs],
         "total": total,
         "offset": offset,
         "limit": limit,
@@ -593,7 +633,7 @@ async def get_conversion(job_id: str, request: Request) -> dict[str, object]:
     an unknown id -- see `_not_found_unless_visible`.
     """
     job = _not_found_unless_visible(_store_op(lambda: job_manager.get(job_id)), request)
-    return job.to_dict()
+    return job_manager.snapshot(job)
 
 
 @router.get(
@@ -695,7 +735,10 @@ def _resolve_succeeded(job_id: str, request: Request) -> Path:
 
 def _require_tf_archive(archive: Path) -> None:
     if archive.suffix == ".ctei":
-        raise HTTPException(status_code=409, detail="This operation requires a Text-Fabric archive. CTEI supports download, manifest and versions reads.")
+        raise HTTPException(
+            status_code=409,
+            detail="This operation requires a Text-Fabric archive. CTEI supports download, manifest and versions reads.",
+        )
 
 
 def _ctei_metadata(archive: Path, member: str) -> dict[str, Any]:

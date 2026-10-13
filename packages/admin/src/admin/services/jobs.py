@@ -30,15 +30,17 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, TypedDict
 
 from common.utils.config import settings
 
 from ..parsers.schema import SourceFormat
+from .conversion import CONVERSION_STAGES, EventLevel, StageId, StepStatus
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,62 @@ _TERMINAL_STATUSES = (JobStatus.SUCCEEDED, JobStatus.FAILED)
 # `ConversionJob.logs`'s docstring) -- this cap is a defensive backstop, not
 # a real limit anything is expected to hit.
 _MAX_LOG_LINES = 50
+_MAX_JOB_EVENTS = 200
+_MAX_EVENT_MESSAGE_CHARS = 2000
+
+
+class JobEvent(TypedDict):
+    sequence: int
+    timestamp: float
+    level: EventLevel
+    message: str
+    stage: str | None
+
+
+class JobStep(TypedDict):
+    id: str
+    title: str
+    status: StepStatus
+
+
+def conversion_steps() -> list[JobStep]:
+    return [
+        {"id": stage, "title": title, "status": "pending"} for stage, title in CONVERSION_STAGES
+    ]
+
+
+def _append_event(
+    job: ConversionJob, level: EventLevel, message: str, stage: str | None = None
+) -> None:
+    """Caller holds the manager lock; copy-on-write keeps reader snapshots stable."""
+    event: JobEvent = {
+        "sequence": job.events[-1]["sequence"] + 1 if job.events else 1,
+        "timestamp": time.time(),
+        "level": level,
+        "message": message[:_MAX_EVENT_MESSAGE_CHARS],
+        "stage": stage,
+    }
+    job.events = [*job.events, event][-_MAX_JOB_EVENTS:]
+
+
+def _active_stage(job: ConversionJob) -> str | None:
+    return next((step["id"] for step in job.steps if step["status"] == "running"), None)
+
+
+def _finish_telemetry(job: ConversionJob, *, failed: bool, message: str) -> None:
+    stage = _active_stage(job)
+    if failed:
+        stage = stage or next(
+            (step["id"] for step in job.steps if step["status"] == "failed"), None
+        )
+        job.steps = [
+            {**step, "status": "failed" if step["status"] == "running" else "skipped"}
+            if step["status"] in ("running", "pending")
+            else step
+            for step in job.steps
+        ]
+    _append_event(job, "error" if failed else "info", message, stage)
+
 
 # Suffix per pipeline: `/convert` jobs package a `.corpus` archive, `/ingest`
 # jobs write a `graph.json`. `result_filename` (`to_dict` below) and the
@@ -265,9 +323,7 @@ class LocalResultStore(ResultStore):
             return None
         src = Path(path)
         if not src.is_file():
-            logger.warning(
-                "Local snapshot skipped for job %s: result file is missing", job_id
-            )
+            logger.warning("Local snapshot skipped for job %s: result file is missing", job_id)
             return None
         dest_dir = self._cache_dir if self._cache_dir is not None else src.parent
         try:
@@ -276,9 +332,7 @@ class LocalResultStore(ResultStore):
             if dest.resolve() != src.resolve():
                 shutil.copy2(src, dest)
         except OSError:
-            logger.warning(
-                "Local snapshot copy failed for job %s", job_id, exc_info=True
-            )
+            logger.warning("Local snapshot copy failed for job %s", job_id, exc_info=True)
             return None
         self._snapshots[key] = dest
         return key
@@ -292,7 +346,12 @@ class LocalResultStore(ResultStore):
             label = snapshot_label(Path(parts[2]).stem)
             dest_dir = self._cache_dir
             suffix = Path(parts[2]).suffix
-            if parts[1] == job_id and label and suffix in _ARCHIVE_SUFFIXES and dest_dir is not None:
+            if (
+                parts[1] == job_id
+                and label
+                and suffix in _ARCHIVE_SUFFIXES
+                and dest_dir is not None
+            ):
                 dest = dest_dir / f"{job_id}-{label}{suffix}"
                 if dest.is_file():
                     return dest
@@ -376,6 +435,10 @@ class ConversionJob:
     output_format: str = "corpus"
     # Local invocation completion only; never persisted or exposed in status.
     completion: Future[None] | None = field(default=None, repr=False, compare=False)
+    # Last 200 structured events; sequences are 1-based and never reset on trim.
+    # Old stored jobs have no telemetry (empty lists), not reconstructed history.
+    events: list[JobEvent] = field(default_factory=list)
+    steps: list[JobStep] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         # Older rows predate output_format; the stored result suffix remains authoritative.
@@ -415,7 +478,9 @@ class ConversionJob:
             "error": self.error,
             "logs": list(self.logs),
             "last_log": self.logs[-1] if self.logs else None,
-            "validation": self.validation,
+            "events": [dict(event) for event in self.events],
+            "steps": [dict(step) for step in self.steps],
+            "validation": deepcopy(self.validation),
             "result_filename": result_filename,
             "download_ready": self.status == JobStatus.SUCCEEDED
             and (self.result_path is not None or bool(self.result_key)),
@@ -492,9 +557,7 @@ class JobManager:
         self._store = store or MemoryJobStore()
         self._results = results or LocalResultStore()
         self._lock = Lock()
-        self._executor = ThreadPoolExecutor(
-            max_workers=max_workers, thread_name_prefix="convert"
-        )
+        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="convert")
         self._max_pending = max_pending
         self._stall_timeout_seconds = stall_timeout_seconds
         self._retention_seconds = retention_seconds
@@ -533,6 +596,7 @@ class JobManager:
             name=name,
             owner=owner,
             output_format=output_format,
+            steps=conversion_steps() if isinstance(source_format, SourceFormat) else [],
         )
         with self._lock:
             self._reap_expired()
@@ -543,14 +607,21 @@ class JobManager:
                 raise JobQueueFullError(
                     f"{pending} conversions already queued/running (limit {self._max_pending})"
                 )
+            _append_event(job, "info", "Conversion queued.")
             self._store.put(job)
         job.completion = self._executor.submit(self._run, job, fn)
         return job
 
     def _run(self, job: ConversionJob, fn: Callable[[], Path]) -> None:
         with self._lock:
+            # Shared stores return copies: keep diagnostics added while queued.
+            current = self._store.get(job.id)
+            if current is None or current.status in _TERMINAL_STATUSES:
+                return
+            job = current
             job.status = JobStatus.RUNNING
             job.started_at = time.time()
+            _append_event(job, "info", "Conversion started.")
             self._store.put(job)
         try:
             result_path = fn()
@@ -564,9 +635,7 @@ class JobManager:
                 # while it is still v1.0. Extra labels are for #149.
                 if Path(result_path).suffix in _ARCHIVE_SUFFIXES:
                     try:
-                        self._results.save_snapshot(
-                            job.id, Path(result_path), "v1.0"
-                        )
+                        self._results.save_snapshot(job.id, Path(result_path), "v1.0")
                     except Exception:
                         logger.warning(
                             "Conversion job %s snapshot save failed; job still succeeded",
@@ -632,6 +701,11 @@ class JobManager:
             current.error = error
             current.status = JobStatus.FAILED if error else JobStatus.SUCCEEDED
             current.finished_at = time.time()
+            _finish_telemetry(
+                current,
+                failed=bool(error),
+                message="Conversion failed." if error else "Conversion succeeded.",
+            )
             self._store.put(current)
 
     def _check_stall(self, job: ConversionJob) -> None:
@@ -658,8 +732,46 @@ class JobManager:
             job.error = f"Conversion timed out after {self._stall_timeout_seconds / 60:.0f} minutes"
             job.status = JobStatus.FAILED
             job.finished_at = time.time()
+            _finish_telemetry(job, failed=True, message="Conversion timed out.")
 
-    def log(self, job_id: str, message: str) -> None:
+    def event(
+        self, job_id: str, level: EventLevel, message: str, stage: StageId | None = None
+    ) -> None:
+        """Record an explicit safe diagnostic, without capturing global logging/stdout."""
+        with self._lock:
+            job = self._store.get(job_id)
+            if job is None or job.status in _TERMINAL_STATUSES:
+                return
+            _append_event(job, level, message, stage)
+            self._store.put(job)
+
+    def set_stage(self, job_id: str, stage: StageId, status: StepStatus) -> None:
+        """Record an actual pipeline boundary; late workers cannot undo a timeout."""
+        titles = dict(CONVERSION_STAGES)
+        if stage not in titles:
+            raise ValueError("Unknown conversion stage")
+        with self._lock:
+            job = self._store.get(job_id)
+            if job is None or job.status in _TERMINAL_STATUSES:
+                return
+            steps = job.steps or conversion_steps()
+            job.steps = [
+                {**step, "status": status} if step["id"] == stage else step for step in steps
+            ]
+            message = f"{titles[stage]}: {status}."
+            if stage == "package" and status == "skipped":
+                message = "Package archive: skipped (included in conversion call)."
+            _append_event(job, "error" if status == "failed" else "info", message, stage)
+            self._store.put(job)
+
+    def log(
+        self,
+        job_id: str,
+        message: str,
+        *,
+        level: EventLevel = "info",
+        event_message: str | None = None,
+    ) -> None:
         """Append a coarse stage message to a job's log, if it still exists.
 
         Called from a worker thread (see `_run_conversion` in `api.py`)
@@ -676,6 +788,13 @@ class JobManager:
                 return
             job.logs.append(message)
             del job.logs[:-_MAX_LOG_LINES]
+            if job.status not in _TERMINAL_STATUSES:
+                _append_event(
+                    job,
+                    level,
+                    event_message if event_message is not None else message,
+                    _active_stage(job),
+                )
             self._store.put(job)
 
     def set_display_name(self, job_id: str, display_name: str) -> None:
@@ -706,6 +825,21 @@ class JobManager:
             if job is None:
                 return
             job.validation = summary
+            if job.status not in _TERMINAL_STATUSES:
+                valid = bool(summary.get("valid"))
+                _append_event(
+                    job,
+                    "info" if valid else "error",
+                    "Archive validation passed." if valid else "Archive validation failed.",
+                    "validate",
+                )
+                _append_event(
+                    job,
+                    "debug",
+                    f"Validation reported {len(summary.get('checks') or [])} checks and "
+                    f"{len(summary.get('reasons') or [])} reasons.",
+                    "validate",
+                )
             self._store.put(job)
 
     def get(self, job_id: str) -> ConversionJob | None:
@@ -719,6 +853,15 @@ class JobManager:
                     # keep serving RUNNING to the next instance.
                     self._store.put(job)
             return job
+
+    def snapshot(self, job: ConversionJob) -> dict[str, Any]:
+        """Serialize under the writer lock so status and telemetry agree.
+
+        MemoryJobStore returns live objects. Copying just the event/step items
+        does not prevent observing a terminal status midway through its update.
+        """
+        with self._lock:
+            return job.to_dict()
 
     def materialize(self, job: ConversionJob) -> Path | None:
         """Ensure ``job.result_path`` is a readable local file.
@@ -768,9 +911,7 @@ class JobManager:
         try:
             return self._results.save_snapshot(job_id, Path(path), label)
         except Exception:
-            logger.warning(
-                "Snapshot %s for job %s failed", label, job_id, exc_info=True
-            )
+            logger.warning("Snapshot %s for job %s failed", label, job_id, exc_info=True)
             return None
 
     def replace_result(self, job_id: str, path: Path) -> str | None:
@@ -789,9 +930,7 @@ class JobManager:
             self._store.put(job)
         return key
 
-    def set_result_key(
-        self, job_id: str, key: str, path: Path | None = None
-    ) -> None:
+    def set_result_key(self, job_id: str, key: str, path: Path | None = None) -> None:
         """Point the job's HEAD at ``key`` (a snapshot object after mutation).
 
         Storage does not reliably replace ``conversion-jobs/{id}.corpus``
@@ -857,7 +996,9 @@ class JobManager:
                             exc_info=True,
                         )
                 for minor in range(33):
-                    suffix = Path(job.result_key or job.result_path or ("result." + job.output_format)).suffix
+                    suffix = Path(
+                        job.result_key or job.result_path or ("result." + job.output_format)
+                    ).suffix
                     snap_key = snapshot_key_for(job.id, f"v1.{minor}", suffix)
                     if not snap_key:
                         continue

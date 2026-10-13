@@ -9,7 +9,8 @@ HTTP, jobs, or threads: `admin.services.api._run_conversion` wraps it with
 The Tauri sidecar (issue #187) gets the same seam for free via the API.
 
 Progress is reported through the optional callbacks (`on_log`,
-`on_display_name`, `on_validation`) — coarse, fixed checkpoints, not real
+`on_display_name`, `on_validation`, `on_stage`, `on_event`) — actual pipeline
+boundaries and safe diagnostics, not real
 percentages (the converters have no mid-call progress hook, see
 `packages/admin/CLAUDE.md`).
 
@@ -30,7 +31,8 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
@@ -40,6 +42,16 @@ from ..parsers import PARSERS
 from ..parsers.schema import CorpusCategory, SourceFormat
 
 logger = logging.getLogger("corpora.admin.conversion")
+
+StageId = Literal["metadata", "convert", "package", "validate"]
+StepStatus = Literal["pending", "running", "completed", "failed", "skipped"]
+EventLevel = Literal["debug", "info", "warning", "error"]
+CONVERSION_STAGES: tuple[tuple[StageId, str], ...] = (
+    ("metadata", "Resolve metadata"),
+    ("convert", "Convert source"),
+    ("package", "Package archive"),
+    ("validate", "Validate archive"),
+)
 
 __all__ = [
     "ConversionError",
@@ -79,9 +91,7 @@ def clean_filename_stem(filename: str) -> str:
     return re.sub(r"\s+", " ", stem.replace("-", " ").replace("_", " ")).strip()
 
 
-def extract_source_title(
-    source_format: SourceFormat, source_path: Path
-) -> str | None:
+def extract_source_title(source_format: SourceFormat, source_path: Path) -> str | None:
     """Read the source document's own title, if a parser knows how.
 
     Uses the format parser's lightweight ``parse_metadata`` (headers only --
@@ -168,6 +178,18 @@ def _noop(*_args: Any) -> None:
     return None
 
 
+@contextmanager
+def _stage(on_stage: Callable[[StageId, StepStatus], None], stage: StageId) -> Iterator[None]:
+    on_stage(stage, "running")
+    try:
+        yield
+    except Exception:
+        on_stage(stage, "failed")
+        raise
+    else:
+        on_stage(stage, "completed")
+
+
 def run_conversion(
     *,
     source_path: Path,
@@ -185,6 +207,8 @@ def run_conversion(
     on_log: Callable[[str], None] = _noop,
     on_display_name: Callable[[str], None] = _noop,
     on_validation: Callable[[dict[str, Any]], None] = _noop,
+    on_stage: Callable[[StageId, StepStatus], None] = _noop,
+    on_event: Callable[[EventLevel, str, StageId | None], None] = _noop,
 ) -> Path:
     """Blocking pipeline: parse -> Text-Fabric -> .cfm -> .corpus -> validate.
 
@@ -202,121 +226,151 @@ def run_conversion(
 
     The display name (issue #109) is derived before the expensive TF walk
     and reported through ``on_display_name`` so a status surface can show it
-    while the job runs; `on_log` receives the coarse stage checkpoints.
+    while the job runs; `on_log` receives the unchanged legacy checkpoints.
+    `on_stage(id, status)` brackets actual calls, including failures; packaging
+    is skipped for CTEI/CUSX because it is inseparable from their converter.
+    `on_event(level, message, stage)` reports safe options/counts, never source
+    metadata values, private paths, tracebacks, or invented mid-call progress.
     """
     active_converters = converters if converters is not None else CONVERTERS
     active_convert = convert_fn if convert_fn is not None else convert_to_corpus
 
-    display_name = derive_display_name(
-        source_format=source_format, source_path=source_path, name=name
-    )
-    if output_format == "ctei" and source_format == SourceFormat.PLAIN:
-        # PlainTextParser's title is only the filename, not source metadata.
-        display_name = name.strip() or clean_filename_stem(source_path.name)
-    on_display_name(display_name)
     try:
+        with _stage(on_stage, "metadata"):
+            on_event(
+                "debug",
+                f"Options: source_format={source_format.value}, output_format={output_format}, "
+                f"category={category.value if category else 'auto'}, "
+                f"name_supplied={bool(name.strip())}, description_supplied={bool(description)}.",
+                "metadata",
+            )
+            display_name = derive_display_name(
+                source_format=source_format, source_path=source_path, name=name
+            )
+            if output_format == "ctei" and source_format == SourceFormat.PLAIN:
+                # PlainTextParser's title is only the filename, not source metadata.
+                display_name = name.strip() or clean_filename_stem(source_path.name)
+            on_display_name(display_name)
+            on_event(
+                "debug", f"Resolved display title: {len(display_name)} characters.", "metadata"
+            )
         if output_format == "ctei":
             from ..converters.tei import convert_to_ctei
 
-            on_log("Mapping source text, notes, tables and references to TEI...")
-            try:
-                result = convert_to_ctei(
-                    source_path, output_path_for(display_name),
-                    source_format=source_format, name=display_name,
-                    description=description, category=category, author_sub=author_sub,
+            with _stage(on_stage, "convert"):
+                on_log("Mapping source text, notes, tables and references to TEI...")
+                try:
+                    result = convert_to_ctei(
+                        source_path,
+                        output_path_for(display_name),
+                        source_format=source_format,
+                        name=display_name,
+                        description=description,
+                        category=category,
+                        author_sub=author_sub,
+                    )
+                except ValueError as exc:
+                    message = str(exc).strip()
+                    if message and not mentions_any_path(message, private_paths):
+                        raise ConversionError(message) from exc
+                    raise
+            on_stage("package", "skipped")
+            with _stage(on_stage, "validate"):
+                try:
+                    summary = validate_archive(result)
+                except ValueError as exc:
+                    message = str(exc).strip()
+                    if message and not mentions_any_path(message, private_paths):
+                        raise ConversionError(message) from exc
+                    raise
+                on_validation(summary)
+                if not summary.get("valid"):
+                    raise CorpusValidationError("Converted CTEI package failed validation", summary)
+                on_log(
+                    f"CTEI archive validated; {summary['stats']['review_items']} items require human review."
                 )
-                summary = validate_archive(result)
-            except ValueError as exc:
-                message = str(exc).strip()
-                if message and not mentions_any_path(message, private_paths):
-                    raise ConversionError(message) from exc
-                raise
-            on_validation(summary)
-            on_log(f"CTEI archive validated; {summary['stats']['review_items']} items require human review.")
             return result
         if output_format == "cusx":
             from ..converters.cusx import convert_to_cusx
 
-            on_log(f"Parsing {source_format.value} source for C-USX...")
-            try:
-                result = convert_to_cusx(
-                    source_path,
-                    output_path_for(display_name),
-                    source_format=source_format,
-                    name=display_name,
-                    description=description,
-                    author_sub=author_sub,
-                    category=category.value if category else "",
-                )
-            except ValueError as exc:
-                message = str(exc).strip()
-                if message and not mentions_any_path(message, private_paths):
-                    raise ConversionError(message) from exc
-                raise
-            on_log("C-USX XML compiled and compressed. Validating package...")
-            summary = validate_archive(result)
-            on_validation(summary)
-            if not summary.get("valid"):
-                raise CorpusValidationError(
-                    "Converted C-USX package failed validation", summary
-                )
+            with _stage(on_stage, "convert"):
+                on_log(f"Parsing {source_format.value} source for C-USX...")
+                try:
+                    result = convert_to_cusx(
+                        source_path,
+                        output_path_for(display_name),
+                        source_format=source_format,
+                        name=display_name,
+                        description=description,
+                        author_sub=author_sub,
+                        category=category.value if category else "",
+                    )
+                except ValueError as exc:
+                    message = str(exc).strip()
+                    if message and not mentions_any_path(message, private_paths):
+                        raise ConversionError(message) from exc
+                    raise
+            on_stage("package", "skipped")
+            with _stage(on_stage, "validate"):
+                on_log("C-USX XML compiled and compressed. Validating package...")
+                summary = validate_archive(result)
+                on_validation(summary)
+                if not summary.get("valid"):
+                    raise CorpusValidationError(
+                        "Converted C-USX package failed validation", summary
+                    )
             on_log("Conversion complete.")
             return result
         if output_format != "corpus":
             raise ConversionError("Unsupported conversion output format")
-        if source_format == SourceFormat.TF_ZIP:
-            on_log("Inspecting ZIP and importing Text-Fabric dataset...")
-        elif source_format == SourceFormat.TEI_ZIP:
-            on_log(
-                "Extracting TEI documents from ZIP and building Text-Fabric dataset..."
-            )
-        else:
-            on_log(
-                f"Parsing {source_format.value} source and building Text-Fabric dataset..."
-            )
-        converter = active_converters[source_format]
         tf_dir = work_dir / "tf"
-        try:
-            dataset = converter(str(source_path), tf_dir, category=category)
-        except ValueError as exc:
-            # Parsers/converters raise `ValueError` with deliberately
-            # user-facing messages ("ZIP contains multiple Text-Fabric
-            # datasets: ...", "not a valid ZIP archive") -- the sanctioned
-            # passthrough (issue #184). Messages that mention private
-            # server-side paths keep the caller's sanitized form.
-            message = str(exc).strip()
-            if message and not mentions_any_path(message, private_paths):
-                raise ConversionError(message) from exc
-            raise
-        # Converters return a `ConvertedDataset` carrying the resolved
-        # category (auto-detected, possibly downgrading the request -- issue
-        # #176) and human-readable warnings (skipped OCR pages, downgraded
-        # overrides) that belong on the caller's log.
-        resolved = getattr(dataset, "category", None) or category
-        for warning in getattr(dataset, "warnings", []):
-            on_log(warning)
-
-        on_log(
-            "Text-Fabric dataset ready. Compiling cache and packaging .corpus archive..."
-        )
-        result = active_convert(
-            tf_dir,
-            output_path_for(display_name),
-            name=display_name,
-            description=description,
-            author_sub=author_sub,
-            category=resolved.value if resolved else "",
-        )
-
-        on_log("Validating converted corpus...")
-        summary = validate_archive(result)
-        on_validation(summary)
-        if not summary.get("valid"):
-            reasons = [str(r) for r in summary.get("reasons") or []]
-            detail = "; ".join(reasons[:3]) or "corpus integrity checks failed"
-            raise CorpusValidationError(
-                f"Converted corpus failed validation: {detail}", summary
+        with _stage(on_stage, "convert"):
+            if source_format == SourceFormat.TF_ZIP:
+                on_log("Inspecting ZIP and importing Text-Fabric dataset...")
+            elif source_format == SourceFormat.TEI_ZIP:
+                on_log("Extracting TEI documents from ZIP and building Text-Fabric dataset...")
+            else:
+                on_log(f"Parsing {source_format.value} source and building Text-Fabric dataset...")
+            converter = active_converters[source_format]
+            try:
+                dataset = converter(str(source_path), tf_dir, category=category)
+            except ValueError as exc:
+                # Preserve the sanctioned user-facing converter error seam (#184).
+                message = str(exc).strip()
+                if message and not mentions_any_path(message, private_paths):
+                    raise ConversionError(message) from exc
+                raise
+            resolved = getattr(dataset, "category", None) or category
+            warnings = getattr(dataset, "warnings", [])
+            for warning in warnings:
+                on_log(warning)
+            if warnings:
+                on_event("warning", f"Converter reported {len(warnings)} warning(s).", "convert")
+            on_event(
+                "debug", f"Resolved category: {resolved.value if resolved else 'auto'}.", "convert"
             )
+
+        with _stage(on_stage, "package"):
+            on_log("Text-Fabric dataset ready. Compiling cache and packaging .corpus archive...")
+            result = active_convert(
+                tf_dir,
+                output_path_for(display_name),
+                name=display_name,
+                description=description,
+                author_sub=author_sub,
+                category=resolved.value if resolved else "",
+            )
+
+        with _stage(on_stage, "validate"):
+            on_log("Validating converted corpus...")
+            summary = validate_archive(result)
+            on_validation(summary)
+            if not summary.get("valid"):
+                reasons = [str(r) for r in summary.get("reasons") or []]
+                detail = "; ".join(reasons[:3]) or "corpus integrity checks failed"
+                raise CorpusValidationError(
+                    f"Converted corpus failed validation: {detail}", summary
+                )
         on_log("Conversion complete.")
         return result
     finally:

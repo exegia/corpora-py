@@ -39,7 +39,9 @@ from common.utils.config import settings
 from ..parsers.schema import SourceFormat
 from .jobs import (
     ConversionJob,
+    JobEvent,
     JobStatus,
+    JobStep,
     JobStore,
     JobStoreError,
     JobStoreNotConfiguredError,
@@ -85,7 +87,12 @@ def _source_format_from_row(value: str) -> SourceFormat | str:
 
 
 def job_to_row(job: ConversionJob) -> dict[str, Any]:
-    """Serialize a job for PostgREST. Local `result_path` is not stored."""
+    """Serialize without new columns; telemetry rides the existing `logs` JSONB.
+
+    Legacy rows contain a string array. New telemetry-bearing rows use an
+    internal envelope; the public job's `logs` remains a string array.
+    Local `result_path` and invocation completion are never stored.
+    """
     return {
         "id": job.id,
         "source_format": _source_format_to_row(job.source_format),
@@ -97,7 +104,13 @@ def job_to_row(job: ConversionJob) -> dict[str, Any]:
         "finished_at": job.finished_at,
         "result_key": job.result_key,
         "error": job.error,
-        "logs": list(job.logs),
+        "logs": {
+            "logs": list(job.logs),
+            "events": [dict(event) for event in job.events],
+            "steps": [dict(step) for step in job.steps],
+        }
+        if job.events or job.steps
+        else list(job.logs),
         "owner": job.owner,
         "display_name": job.display_name,
         "validation": job.validation,
@@ -109,6 +122,12 @@ def job_from_row(row: dict[str, Any]) -> ConversionJob:
     logs = row.get("logs") or []
     if isinstance(logs, str):
         logs = json.loads(logs)
+    events: list[JobEvent] = []
+    steps: list[JobStep] = []
+    if isinstance(logs, dict):
+        events = logs.get("events") or []
+        steps = logs.get("steps") or []
+        logs = logs.get("logs") or []
     validation = row.get("validation")
     if isinstance(validation, str):
         validation = json.loads(validation)
@@ -121,13 +140,13 @@ def job_from_row(row: dict[str, Any]) -> ConversionJob:
         status=JobStatus(status_raw),
         created_at=float(row["created_at"]),
         started_at=None if row.get("started_at") is None else float(row["started_at"]),
-        finished_at=None
-        if row.get("finished_at") is None
-        else float(row["finished_at"]),
+        finished_at=None if row.get("finished_at") is None else float(row["finished_at"]),
         result_path=None,
         result_key=row.get("result_key"),
         error=row.get("error"),
         logs=list(logs),
+        events=[event.copy() for event in events],
+        steps=[step.copy() for step in steps],
         owner=row.get("owner"),
         display_name=row.get("display_name"),
         validation=validation,
@@ -311,11 +330,7 @@ class SupabaseResultStore(ResultStore):
             raise JobStoreError("Conversion result file is missing")
         self._ensure_bucket()
         key = self._key_for(job_id, local)
-        content_type = (
-            "application/json"
-            if key.endswith(".json")
-            else "application/zip"
-        )
+        content_type = "application/json" if key.endswith(".json") else "application/zip"
         try:
             with local.open("rb") as fh:
                 # PUT + x-upsert overwrites HEAD (POST to an existing object
@@ -333,9 +348,7 @@ class SupabaseResultStore(ResultStore):
         except requests.RequestException as extra:
             raise JobStoreError("Job result upload failed") from extra
         if resp.status_code not in (200, 201):
-            raise JobStoreError(
-                f"Could not upload conversion result ({resp.status_code})"
-            )
+            raise JobStoreError(f"Could not upload conversion result ({resp.status_code})")
         logger.info("Uploaded conversion result %s to bucket %s", key, bucket)
         return key
 

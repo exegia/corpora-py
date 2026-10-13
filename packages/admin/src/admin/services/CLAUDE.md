@@ -220,19 +220,69 @@ re-patch that same seam.
 
 ## Transport-free pipeline seam (`conversion.py`, issue #188)
 
-The end-to-end orchestration (display-name derivation → converter → `convert_to_corpus` →
-post-conversion validation gate) lives in `conversion.run_conversion` — transport-free, reporting
-progress through `on_log`/`on_display_name`/`on_validation` callbacks and raising
-`ConversionError` (user-facing message, the issue #184 passthrough) / `CorpusValidationError`
-(carries the validation summary). Two callers: `api._run_conversion` (wraps it with `JobManager`
-bookkeeping and maps the errors to `JobFailedError`/`ConversionValidationError`) and the
-`corpora` CLI (`corpora_py.cli` — terminal conversions with no server). Seams that must not
-break: `api._run_conversion` passes `converters=CONVERTERS` / `convert_fn=convert_to_corpus`
-from its own module globals at call time so the tests' `monkeypatch.setattr(api_module, ...)` /
-`setitem(api_module.CONVERTERS, ...)` patches keep working, and the validator import stays lazy
-inside `conversion.validate_archive` (the `corpora_mcp.validate.validate_corpus_archive`
-call-time attribute the services conftest stubs). A converter `ValueError` naming a path in
-`private_paths` is re-raised unwrapped so it stays behind the sanitized generic message.
+The end-to-end orchestration (display-name derivation → converter → `convert_to_corpus` → post-conversion validation
+gate) lives in `conversion.run_conversion` — transport-free, reporting checkpoints through optional
+`on_log`/`on_display_name`/`on_validation`/`on_stage`/`on_event` callbacks and raising `ConversionError` (user-facing
+message, the issue #184 passthrough) / `CorpusValidationError` (carries the validation summary). Two callers:
+`api._run_conversion` (wraps it with `JobManager` bookkeeping and maps the errors to
+`JobFailedError`/`ConversionValidationError`) and the `corpora` CLI (`corpora_py.cli` — terminal conversions with no
+server). Seams that must not break: `api._run_conversion` passes `converters=CONVERTERS` /
+`convert_fn=convert_to_corpus` from its own module globals at call time so the tests'
+`monkeypatch.setattr(api_module, ...)` / `setitem(api_module.CONVERTERS, ...)` patches keep working, and the validator
+import stays lazy inside `conversion.validate_archive` (the `corpora_mcp.validate.validate_corpus_archive` call-time
+attribute the services conftest stubs). A converter `ValueError` naming a path in `private_paths` is re-raised unwrapped
+so it stays behind the sanitized generic message.
+
+## Structured conversion job telemetry (`jobs.py`, `conversion.py`, `api.py`, `websocket.py`)
+
+Poll (`GET /convert/{id}`), list (`GET /convert`) and WebSocket snapshots all expose the same additive fields through
+`ConversionJob.to_dict()` and the typed `ConversionJobStatus` model:
+
+- `events: list[{sequence: int, timestamp: float, level: "debug" | "info" | "warning" | "error", message: str, stage: str | null}]`.
+  Timestamps are Unix epoch seconds. Sequences start at 1, are job-local and strictly increasing, and **do not reset
+  when the buffer trims**. Retain only the latest 200 events, each message capped at 2,000 characters. Clients should
+  identify new events by `sequence`, not by list length or timestamp (timestamps may tie).
+- `steps: list[{id: str, title: str, status: "pending" | "running" | "completed" | "failed" | "skipped"}]`, ordered
+  `metadata` (Resolve metadata), `convert` (Convert source), `package` (Package archive), `validate` (Validate archive).
+  Queued conversion jobs start with pending steps. `/ingest` has no conversion-stage plan. Historical jobs default to
+  empty telemetry; do not reconstruct imaginary history from their old logs. Both fields have independent empty list
+  defaults in Python and OpenAPI, so a consumer can still deserialize an older payload.
+
+`conversion.run_conversion` remains transport-free: `on_stage(id, status)` brackets actual metadata, converter,
+packaging and validation calls, including exceptions. CTEI/CUSX build their archives inside the converter call, so their
+separate `package` step is `skipped` after that call returns; do not pretend to observe packaging inside it. A failed
+stage is attributed to the call that raised; a returned `valid=false` summary fails validation for all three output
+formats and remains attached to the failed job. Later pending stages are skipped when the job fails. The stall watchdog
+also fails the currently running stage; late worker telemetry cannot change that verdict. Result-store failures after
+the pipeline have a null stage, not a falsely failed validation step.
+
+`JobManager` records queued/running/terminal events, stage transitions, legacy checkpoint events and validation
+pass/fail events. `on_event(level, message, stage)` adds safe diagnostic options, counts and warning counts. Debug
+messages contain only enum options, supplied/not-supplied flags, title length and validation check/reason counts — not
+title/description contents, identity, paths, secrets or traceback text. Stage/terminal failures use fixed messages;
+existing `job.error` sanitation/passthrough rules remain unchanged. Legacy `logs: list[str]` and `last_log` retain their
+contents and 50-line cap; checkpoint events omit known private work/temp/result paths without rewriting the legacy
+strings. Never capture global stdout or attach a global logger handler to collect per-job logs: conversions run
+concurrently. All telemetry writes and sequence allocation are guarded by the manager lock; event/step updates are
+copy-on-write and `to_dict()` returns independent item dictionaries and a deep copy of validation. Poll/list/WS use
+`JobManager.snapshot()` to serialize under that same writer lock: the memory store returns live objects, and otherwise a
+terminal status can be observed before its terminal event is appended. WebSockets compare detached payloads, so
+telemetry-only changes and new events at buffer capacity still trigger pushes. This is **not a percentage** or a count
+of units converted mid-call, and the existing polling fallback guidance still applies.
+
+Supabase needs **no telemetry migration**: `conversion_jobs.logs` is already unrestricted JSONB. `job_to_row` stores
+`{logs: [...strings], events: [...], steps: [...]}` there for telemetry-bearing jobs; `job_from_row` decodes that
+envelope or the previous string-array shape (including either shape serialized as a JSON string). No `events`/`steps`
+columns are sent to PostgREST; validation, output format, owner and result-key fields keep their existing locations.
+Public `logs` stays a string array. Readers of raw database rows must understand the envelope; older server versions
+that only read array rows should not be mixed with new writers. Worker startup and terminal persistence re-read shared
+rows so callback/queued updates are not clobbered by stale objects. The manager lock is per instance, not a distributed
+transactional lock or work queue.
+
+Focused coverage: `tests/admin/services/test_job_telemetry.py` checks the callback boundaries, all-stage failure
+attribution, combined outputs, validation failures, private debug data, bounded concurrent writes, parallel conversion
+isolation, legacy/envelope round trips, shared-row updates, OpenAPI defaults, poll/list/WS equivalence and WebSocket
+pushes at event-buffer capacity.
 
 ## Converter errors reach `job.error` (issue #184)
 
@@ -298,13 +348,10 @@ title and `result_filename` for the stored filename.
 TTL reap for the Hub caches. Shared job metadata + result bytes ship behind `JOB_STORE=supabase` (issue #140); the
 default in-memory store is still per-process. (Converter-side gaps live in `src/admin/converters/CLAUDE.md`.)
 
-- **`ConversionJob.logs`/`last_log` (`jobs.py`) are fixed checkpoint strings, not real progress.**
-  `_run_conversion` (`api.py`) calls
-  `job_manager.log()` three times per job (parse start, TF-dataset-built, done) so `/convert/{id}/ws` clients have
-  *something* to show besides a status stuck on `"running"` for minutes. `converter()` and
-  `convert_to_corpus()` still have no mid-call progress hook — adding real per-unit progress needs threading a callback
-  through every
-  `_{format}_to_tf.py` converter and `_walker.convert_document()`, not just more log calls here.
+- **`logs`/`last_log`, `events` and `steps` are checkpoints, not real progress.** The structured telemetry above exposes
+  actual call boundaries and safe diagnostics. `converter()` and `convert_to_corpus()` still have no mid-call progress
+  hook — adding real per-unit progress needs threading a callback through every `_{format}_to_tf.py` converter and
+  `_walker.convert_document()`, not just more log calls here.
 - **Tracked-job retention is TTL-reaped; orphaned files and Hub caches are not.** `JobManager` lazily reaps
   terminal jobs older than `JOB_RETENTION_SECONDS` (0 = keep forever, the default) on each `list_jobs`/`submit`,
   deleting the job entry *and* its `result_path` file — so `_RESULTS_ROOT` and the in-memory registry stay bounded

@@ -35,7 +35,7 @@ _UNKNOWN_JOB_CLOSE_CODE = 4404  # application-defined range (4000-4999)
 
 @router.websocket("/convert/{job_id}/ws")
 async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
-    """Push `ConversionJob.to_dict()` snapshots whenever the job's status changes.
+    """Push `ConversionJob.to_dict()` snapshots on status, logs or telemetry changes.
 
     Closes automatically once the job reaches a terminal state
     (`succeeded`/`failed`), or immediately with 4404 if `job_id` is unknown
@@ -56,8 +56,7 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
         return
 
     await websocket.accept()
-    last_status: JobStatus | None = None
-    last_log_count = 0
+    last_snapshot = None
     try:
         while True:
             try:
@@ -66,16 +65,13 @@ async def conversion_status_ws(websocket: WebSocket, job_id: str) -> None:
                 break
             if job is None:
                 break
-            # Also re-send on a new log line even when `status` hasn't
-            # changed -- `job.logs` grows during a single `running` stretch
-            # (see `_run_conversion` in `api.py`) and a client watching for
-            # "is this still alive" needs those in-between pushes, not just
-            # the coarse queued/running/succeeded/failed transitions.
-            if job.status != last_status or len(job.logs) != last_log_count:
-                await websocket.send_json(job.to_dict())
-                last_status = job.status
-                last_log_count = len(job.logs)
-            if job.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
+            # Compare detached payloads, not buffer lengths: capped logs/events
+            # still change, and a stage boundary need not add a legacy log line.
+            snapshot = job_manager.snapshot(job)
+            if snapshot != last_snapshot:
+                await websocket.send_json(snapshot)
+                last_snapshot = snapshot
+            if snapshot["status"] in (JobStatus.SUCCEEDED, JobStatus.FAILED):
                 break
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)
     except WebSocketDisconnect:
