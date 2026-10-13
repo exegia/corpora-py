@@ -79,3 +79,14 @@
         transform: none;
     }
 }
+
+/* ReUI's additional tokens; status colors remain owned by globals.css. */
+:root {
+    --invert: var(--foreground);
+    --invert-foreground: var(--background);
+}
+
+@theme inline {
+    --color-invert: var(--invert);
+    --color-invert-foreground: var(--invert-foreground);
+}

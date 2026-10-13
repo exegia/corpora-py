@@ -8,6 +8,7 @@ import type { SidecarStatus } from "@/shared/rpc"
 interface StatusBarProps {
     backend: SidecarStatus
     isPolling: boolean
+    isAutoEnabled?: boolean
     isChecking: boolean
     onRefresh: () => void
     responseTimeMs: number | null
@@ -28,6 +29,7 @@ const labels = {
 export function StatusBar({
     backend,
     isPolling,
+    isAutoEnabled = true,
     isChecking,
     onRefresh,
     responseTimeMs,
@@ -38,6 +40,23 @@ export function StatusBar({
     toggleRef
 }: StatusBarProps) {
     const AuthIcon = backend.authRequired ? LockKeyhole : ShieldOff
+    const pollingLabel = isChecking
+        ? "Checking sidecar…"
+        : backend.state === "ready"
+          ? "Online · idle"
+          : !isAutoEnabled
+            ? "Auto-check paused"
+            : isPolling
+              ? "Offline · auto-check"
+              : "Offline · waiting"
+    const pollingDetail =
+        backend.state === "ready"
+            ? "Automatic checks stop while the backend is online."
+            : !isAutoEnabled
+              ? "Automatic checks are paused by your preference."
+              : isPolling
+                ? "Checking the offline sidecar every 3 seconds after each response until it is online or automatic checks are paused."
+                : "Waiting to start automatic offline checks."
     return (
         <footer
             aria-label="Workspace status"
@@ -99,22 +118,19 @@ export function StatusBar({
                 </span>
                 <span
                     className="hidden items-center gap-1.5 md:flex"
-                    title={
+                    title={`${
                         lastCheckedAt === null
-                            ? "No RPC response yet"
-                            : `Last checked ${new Date(lastCheckedAt).toLocaleTimeString()}. Polling every 3 seconds after each response.`
-                    }>
+                            ? "No RPC response yet."
+                            : `Last checked ${new Date(lastCheckedAt).toLocaleTimeString()}.`
+                    } ${pollingDetail} Manual checks are always available.`}>
                     <Radio
                         className="size-3.5"
                         aria-hidden="true"
                         strokeWidth={1.5}
                     />
                     <span className="font-mono tabular-nums">
-                        {isPolling
-                            ? responseTimeMs === null
-                                ? "RPC —"
-                                : `RPC ${responseTimeMs} ms`
-                            : "Polling paused"}
+                        {pollingLabel}
+                        {responseTimeMs !== null && ` · RPC ${responseTimeMs} ms`}
                     </span>
                 </span>
                 <RefreshSidecarButton

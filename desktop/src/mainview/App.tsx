@@ -14,6 +14,10 @@ import {
 } from "lucide-react"
 import useBackend from "@/hooks/use-backend"
 import { useBackendEvents } from "@/hooks/use-backend-events"
+import { useConversionJobs } from "@/hooks/use-conversion-jobs"
+import { ConversionJobs } from "@/components/conversion-jobs"
+import { Field, FieldHelper, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { useTheme } from "@/hooks/use-theme"
 import { TitleBar } from "@/components/title-bar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -42,7 +46,11 @@ function PanelHeading({ eyebrow, title, children }: { eyebrow: string; title: st
 }
 
 function App() {
-    const { backend, isActive, isChecking, pause, resume, refresh, lastCheckedAt, responseTimeMs } = useBackend()
+    const { backend, isActive, isAutoEnabled, isChecking, pause, resume, refresh, lastCheckedAt, responseTimeMs } =
+        useBackend()
+    const [requestToken, setRequestToken] = useState("")
+    const [tokenDraft, setTokenDraft] = useState("")
+    const conversions = useConversionJobs(backend, requestToken)
     const { events, clearEvents } = useBackendEvents(backend)
     const { theme, resolvedTheme } = useTheme()
     const [activeTab, setActiveTab] = useState("dashboard")
@@ -128,7 +136,11 @@ function App() {
                                         {responseTimeMs === null ? "—" : `${responseTimeMs} ms`}
                                     </p>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        {isActive ? "Monitoring every 3 seconds" : "Monitoring paused"}
+                                        {isActive
+                                            ? "Retrying while offline · every 3 seconds"
+                                            : backend.state === "ready"
+                                              ? "Online · automatic checks stopped"
+                                              : "Automatic checks paused"}
                                     </p>
                                 </section>
                                 <section className="rounded-xl border border-border bg-card p-5">
@@ -250,30 +262,10 @@ function App() {
                             </div>
                         </TabsContent>
                         <TabsContent value="jobs">
-                            <PanelHeading
-                                eyebrow="Document workflows"
-                                title="Conversion jobs">
-                                A dedicated view for document conversions and their results.
-                            </PanelHeading>
-                            <section className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card p-8 text-center">
-                                <FolderClock
-                                    className="mb-2 size-8 text-muted-foreground"
-                                    aria-hidden="true"
-                                    strokeWidth={1.5}
-                                />
-                                <h2 className="text-base font-semibold">Your job workspace</h2>
-                                <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                                    Job submission and tracking are not connected to this view yet. Backend availability
-                                    is shown in the status bar below.
-                                </p>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setEventsOpen(true)}>
-                                    Inspect backend connection
-                                </Button>
-                            </section>
+                            <ConversionJobs
+                                backend={backend}
+                                conversions={conversions}
+                            />
                         </TabsContent>
                         <TabsContent value="explorer">
                             <PanelHeading
@@ -338,8 +330,10 @@ function App() {
                                             <h2 className="text-sm font-semibold">Connection monitoring</h2>
                                             <p className="text-sm text-muted-foreground">
                                                 {isActive
-                                                    ? "Polling the sidecar every 3 seconds."
-                                                    : "Status polling is paused."}
+                                                    ? "Retrying the offline sidecar every 3 seconds."
+                                                    : backend.state === "ready"
+                                                      ? "Backend online. Automatic checks stop until a manual check observes it offline."
+                                                      : "Automatic status checks are paused."}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 Pausing checks does not stop Python or any conversion jobs.
@@ -350,8 +344,8 @@ function App() {
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        onClick={isActive ? pause : resume}>
-                                        {isActive ? "Pause checks" : "Resume checks"}
+                                        onClick={isAutoEnabled ? pause : resume}>
+                                        {isAutoEnabled ? "Pause automatic checks" : "Enable automatic checks"}
                                     </Button>
                                 </section>
                                 <section className="rounded-xl border border-border bg-card p-5">
@@ -365,6 +359,59 @@ function App() {
                                     <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
                                         Authentication is configured by the backend environment. Appearance and
                                         monitoring preferences do not change its security policy.
+                                    </p>
+                                    <form
+                                        className="mt-5 flex flex-col gap-3"
+                                        onSubmit={(event) => {
+                                            event.preventDefault()
+                                            setRequestToken(tokenDraft.trim().replace(/^Bearer\s+/i, ""))
+                                            setTokenDraft("")
+                                        }}>
+                                        <Field>
+                                            <FieldLabel>Supabase request token</FieldLabel>
+                                            <Input
+                                                type="password"
+                                                autoComplete="off"
+                                                spellCheck={false}
+                                                value={tokenDraft}
+                                                onChange={(event) => setTokenDraft(event.target.value)}
+                                                placeholder="Paste a Supabase JWT"
+                                            />
+                                            <FieldHelper>
+                                                Used only for conversion HTTP requests. Kept in memory, never saved or
+                                                logged. Applying a different token clears the visible job list.
+                                            </FieldHelper>
+                                        </Field>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Button
+                                                type="submit"
+                                                size="sm"
+                                                disabled={!tokenDraft.trim()}>
+                                                Apply token
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={!requestToken}
+                                                onClick={() => {
+                                                    setRequestToken("")
+                                                    setTokenDraft("")
+                                                }}>
+                                                Clear token
+                                            </Button>
+                                            <span
+                                                role="status"
+                                                className="text-xs text-muted-foreground">
+                                                {requestToken
+                                                    ? "Request token applied for this session"
+                                                    : "No request token applied"}
+                                            </span>
+                                        </div>
+                                    </form>
+                                    <p className="mt-3 text-xs text-muted-foreground">
+                                        Submitted jobs continue on Python when you change tabs; quitting the desktop
+                                        stops its sidecar.
                                     </p>
                                 </section>
                             </div>
@@ -382,6 +429,7 @@ function App() {
             <StatusBar
                 backend={backend}
                 isPolling={isActive}
+                isAutoEnabled={isAutoEnabled}
                 isChecking={isChecking}
                 onRefresh={() => void refresh()}
                 responseTimeMs={responseTimeMs}
