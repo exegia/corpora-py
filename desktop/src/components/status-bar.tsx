@@ -60,7 +60,7 @@ export function StatusBar({
     return (
         <footer
             aria-label="Workspace status"
-            className="flex min-h-10 shrink-0 items-center gap-3 border-t border-border bg-card px-4 text-xs text-muted-foreground">
+            className=" h-10 inline-flex  row-span-1 items-center gap-3 px-4 text-xs text-muted-foreground">
             <div
                 role="status"
                 aria-live="polite"

@@ -1,6 +1,6 @@
-import { Settings, StarIcon } from "lucide-react"
+import { Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { cn } from "tailwind-variants"
+import { cn } from "@/lib/utils"
 
 export interface SettingsButtonProps {
     className?: string
@@ -9,10 +9,12 @@ export interface SettingsButtonProps {
 
 export const SettingsButton = ({ className, onClick }: SettingsButtonProps) => (
     <Button
+        type="button"
+        aria-label="Open settings"
         size="icon-md"
         variant="ghost"
         className={cn("rounded-full", className)}
         onClick={onClick}>
-        <Settings />
+        <Settings aria-hidden="true" />
     </Button>
 )

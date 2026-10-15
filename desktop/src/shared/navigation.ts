@@ -1,22 +1,27 @@
+import { ExploreTab } from "@/mainview/views/explore-tab"
 import { HomeTab } from "@/mainview/views/home-tab"
-import { UUID } from "crypto"
-import { Compass, FolderSyncIcon, Home, type icons } from "lucide-react"
-import React, { FC } from "react"
+import { JobTab } from "@/mainview/views/jobs-tab"
+import { SettingsTab } from "@/mainview/views/settings-tab"
+import { BookSearch, House, type LucideIcon } from "lucide-react"
+import type { WorkspaceTab } from "@/lib/workspace-tabs"
 
-export const navigation: TTabItem[] = [
-    { id: "dashboard", label: "Home", icon: "House", content: HomeTab },
-    { id: "jobs", label: "Jobs", icon: "FolderSync", content: Job },
-    { value: "explorer", label: "Explorer", icon: "Compass" }
+export type TabID = "tab:home" | "tab:explorer" | "jobs" | "settings"
+export type TTabItem = { id: TabID; label: string; icon: LucideIcon; content: WorkspaceTab["view"] }
+
+export const destinations: TTabItem[] = [
+    { id: "tab:home", label: "Home", content: HomeTab, icon: House },
+    { id: "tab:explorer", label: "Explorer", content: ExploreTab, icon: BookSearch }
 ]
 
-export type TNavigationItem = (typeof navigation)[number]
-export type TabID = "dashboard" | "jobs" | "explorer" | UUID
-export type TabItemBase<ID extends TabID> = {
-  readonly id: ID
-  label: string
-  content: FC
-  icon: keyof typeof icons
+export function navigationTab(id: TabID): WorkspaceTab {
+    switch (id) {
+        case "tab:home":
+            return { id, title: "Home", view: HomeTab, pinned: true }
+        case "tab:explorer":
+            return { id, title: "Explorer", view: ExploreTab, pinned: false }
+        case "jobs":
+            return { id, title: "Conversion jobs", view: JobTab, pinned: false }
+        case "settings":
+            return { id, title: "Settings", view: SettingsTab, pinned: false }
+    }
 }
-export type TTabItem<ID extends TabID = TabID, Base extends TabItemBase<ID> = TabItemBase<ID>> = ID extends UUID ? Base & {
-    closable: Readonly<true>
-} : Base

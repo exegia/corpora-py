@@ -1,20 +1,44 @@
-import { Button } from "@/components"
+import { Button } from "@/components/ui/button"
 import { PanelHeading } from "@/components/heading"
 import { RefreshSidecarButton } from "@/components/refresh-sidecar-button"
 import { Badge } from "@/components/reui/badge"
-import { TabsContent } from "@/components/ui/tabs"
-import { Activity, ArrowUpRight, Database, LockKeyhole, Radio, Terminal } from "lucide-react"
+import type { TabID } from "@/shared/navigation"
+import type { SidecarStatus } from "@/shared/rpc"
+import { Activity, ArrowUpRight, Compass, Database, FolderClock, LockKeyhole, Radio, Terminal } from "lucide-react"
 
-export const HomeTab = () => {
+export interface HomeTabProps {
+    backend: SidecarStatus
+    isActive: boolean
+    isChecking: boolean
+    responseTimeMs: number | null
+    lastCheckedAt: number | null
+    onRefresh: () => void
+    onShowEvents: () => void
+    onNavigate: (id: TabID) => void
+}
+
+export function HomeTab({
+    backend,
+    isActive,
+    isChecking,
+    responseTimeMs,
+    lastCheckedAt,
+    onRefresh,
+    onShowEvents,
+    onNavigate
+}: HomeTabProps) {
+    const authLabel =
+        backend.authRequired === null ? "Awaiting policy" : backend.authRequired ? "JWT protected" : "Local development"
+
     return (
-        <TabsContent value="dashboard">
+        <>
             <PanelHeading
                 eyebrow="Workspace overview"
                 title="Your corpus workspace.">
                 Convert, inspect, and work with your texts. A managed Python runtime keeps the backend close to your
                 desktop.
             </PanelHeading>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 @xl:grid-cols-3">
                 <section className="rounded-xl border border-border bg-card p-5">
                     <div className="mb-5 flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">Python runtime</span>
@@ -24,7 +48,7 @@ export const HomeTab = () => {
                             strokeWidth={1.5}
                         />
                     </div>
-                    {/*<p className="text-lg font-semibold capitalize tracking-tight">{backend.state}</p>*/}
+                    <p className="text-lg font-semibold capitalize tracking-tight">{backend.state}</p>
                     <p className="mt-1 text-xs text-muted-foreground">Desktop-owned sidecar</p>
                 </section>
                 <section className="rounded-xl border border-border bg-card p-5">
@@ -36,16 +60,16 @@ export const HomeTab = () => {
                             strokeWidth={1.5}
                         />
                     </div>
-                    {/*<p className="text-lg font-semibold tabular-nums tracking-tight">
-                      {responseTimeMs === null ? "—" : `${responseTimeMs} ms`}
-                  </p>*/}
-                    {/*<p className="mt-1 text-xs text-muted-foreground">
-                      {isActive
-                          ? "Retrying while offline · every 3 seconds"
-                          : backend.state === "ready"
-                            ? "Online · automatic checks stopped"
-                            : "Automatic checks paused"}
-                  </p>*/}
+                    <p className="text-lg font-semibold tabular-nums tracking-tight">
+                        {responseTimeMs === null ? "—" : `${responseTimeMs} ms`}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {isActive
+                            ? "Retrying while offline · every 3 seconds"
+                            : backend.state === "ready"
+                              ? "Online · automatic checks stopped"
+                              : "Automatic checks paused"}
+                    </p>
                 </section>
                 <section className="rounded-xl border border-border bg-card p-5">
                     <div className="mb-5 flex items-center justify-between">
@@ -81,31 +105,31 @@ export const HomeTab = () => {
                 <div className="flex flex-col gap-4 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <code className="break-all text-sm text-muted-foreground">
-                            {/*{backend.url ?? "Waiting for the local endpoint…"}*/}
+                            {backend.url ?? "Waiting for the local endpoint…"}
                         </code>
-                        {/*<span className="text-xs text-muted-foreground">
-                          {lastCheckedAt === null
-                              ? "No response yet"
-                              : `Checked ${new Date(lastCheckedAt).toLocaleTimeString()}`}
-                      </span>*/}
+                        <span className="text-xs text-muted-foreground">
+                            {lastCheckedAt === null
+                                ? "No response yet"
+                                : `Checked ${new Date(lastCheckedAt).toLocaleTimeString()}`}
+                        </span>
                     </div>
-                    {/*{backend.error && (
-                      <p
-                          role="alert"
-                          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
-                          {backend.error}
-                      </p>
-                  )}*/}
+                    {backend.error && (
+                        <p
+                            role="alert"
+                            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+                            {backend.error}
+                        </p>
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
                         <RefreshSidecarButton
                             isChecking={isChecking}
-                            onRefresh={() => void refresh()}
+                            onRefresh={onRefresh}
                         />
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => setEventsOpen(true)}>
+                            onClick={onShowEvents}>
                             <Activity aria-hidden="true" />
                             Inspect events
                         </Button>
@@ -113,17 +137,17 @@ export const HomeTab = () => {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => navigateTo("settings")}>
+                            onClick={() => onNavigate("settings")}>
                             Connection settings
                             <ArrowUpRight aria-hidden="true" />
                         </Button>
                     </div>
                 </div>
             </section>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid gap-4 @lg:grid-cols-2">
                 <button
                     type="button"
-                    onClick={() => navigateTo("jobs")}
+                    onClick={() => onNavigate("jobs")}
                     className="workspace-link flex items-center gap-4 rounded-xl border border-border bg-card p-5 text-left">
                     <FolderClock
                         className="size-5 shrink-0 text-primary"
@@ -142,7 +166,7 @@ export const HomeTab = () => {
                 </button>
                 <button
                     type="button"
-                    onClick={() => navigateTo("explorer")}
+                    onClick={() => onNavigate("tab:explorer")}
                     className="workspace-link flex items-center gap-4 rounded-xl border border-border bg-card p-5 text-left">
                     <Compass
                         className="size-5 shrink-0 text-primary"
@@ -160,6 +184,6 @@ export const HomeTab = () => {
                     />
                 </button>
             </div>
-        </TabsContent>
+        </>
     )
 }

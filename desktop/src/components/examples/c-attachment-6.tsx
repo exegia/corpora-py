@@ -84,7 +84,7 @@ export function ConversionSourceAttachment({
                     <AttachmentActions>
                         <AttachmentAction
                             type="button"
-                            size="icon"
+                            size="icon-md"
                             disabled={disabled}
                             aria-label={`Remove source file ${entry.file.name}`}
                             onClick={() => actions.removeFile(entry.id)}>

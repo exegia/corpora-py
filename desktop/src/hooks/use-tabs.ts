@@ -1,12 +1,8 @@
-
-import { TTabItem } from "@/shared/navigation"
-import { useRef, useState } from "react"
+import { useAtomValue, useSetAtom } from "jotai"
+import { workspaceActionAtom, workspaceAtom } from "@/shared/store"
 
 export const useTabs = () => {
-  const [activeTab, setActiveTab] = useState <TTabItem['id']>("dashboard")
-  const tabTriggers = useRef<Record<string, HTMLButtonElement | null>>({})
-  const navigateTo = (value: string) => {
-      setActiveTab(value)
-      tabTriggers.current[value]?.focus()
-  }
+    const workspace = useAtomValue(workspaceAtom)
+    const dispatch = useSetAtom(workspaceActionAtom)
+    return { workspace, dispatch }
 }

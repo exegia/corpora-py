@@ -1,17 +1,23 @@
-import { BackendPolling } from "@/lib/backend-polling"
-import { getSidecarStatus } from "@/mainview/backend"
-import { useEffect, useRef, useSyncExternalStore } from "react"
+import { useAtomValue, useStore } from "jotai"
+import { useEffect } from "react"
+import { backendControllerAtom, backendSnapshotAtom } from "@/shared/store"
 
 const useBackend = () => {
-    const controller = useRef<BackendPolling | null>(null)
-    if (controller.current === null) controller.current = new BackendPolling(getSidecarStatus)
-    const polling = controller.current
-    const snapshot = useSyncExternalStore(polling.subscribe, polling.getSnapshot, polling.getSnapshot)
+    const store = useStore()
+    const polling = useAtomValue(backendControllerAtom)
+    const snapshot = useAtomValue(backendSnapshotAtom)
 
     useEffect(() => {
+        const publish = () => store.set(backendSnapshotAtom, polling.getSnapshot())
+        const unsubscribe = polling.subscribe(publish)
+        publish()
         polling.start()
-        return polling.stop
-    }, [polling])
+        return () => {
+            unsubscribe()
+            polling.stop()
+            publish()
+        }
+    }, [polling, store])
 
     return {
         ...snapshot,

@@ -4,18 +4,35 @@ import { resolve } from "node:path"
 
 export default {
     app: {
-        name: "react-tailwind-vite",
-        identifier: "reacttailwindvite.electrobun.dev",
-        version: "0.0.1"
+        name: "Corpora",
+        identifier: "desktop.corpora.exegia.dev",
+        version: "0.0.1",
+        description: "Corpora Desktop app + Python sidecar to perform proof of concept and reliability",
+        fileAssociations: [
+            {
+                name: "corpora",
+                role: "Editor",
+                ext: ["csux", "ctei", "corpus"]
+            },
+            {
+                name: "conversion",
+                role: "Viewer",
+                ext: ["epub", "txt", "pdf"]
+            }
+        ]
     },
+
     build: {
         mainProcess: "cottontail",
+
         cottontail: {
             entrypoint: "src/bun/index.ts",
+
             define: {
                 CORPORA_WORKSPACE_ROOT: JSON.stringify(resolve(import.meta.dir, ".."))
             }
         },
+
         // Vite builds to dist/, we copy from there
         copy: {
             "dist/index.html": "views/mainview/index.html",

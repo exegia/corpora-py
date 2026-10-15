@@ -1,20 +1,19 @@
 import { ConversionJobs } from "@/components/conversion-jobs"
-import { TabsContent } from "@/components/ui/tabs"
-import { ConversionJobsController } from "@/shared/conversion"
-import { SidecarStatus } from "@/shared/rpc"
+import type { ConversionJob, ConversionJobsController } from "@/shared/conversion"
+import type { SidecarStatus } from "@/shared/rpc"
 
-interface IJobTabProps {
+export interface JobTabProps {
     backend: SidecarStatus
     conversions: ConversionJobsController
+    onOpenJob?: (job: ConversionJob) => void
 }
 
-export const JobTab = ({ backend, conversions }: IJobTabProps) => {
+export function JobTab({ backend, conversions, onOpenJob }: JobTabProps) {
     return (
-        <TabsContent value="jobs">
-            <ConversionJobs
-                backend={backend}
-                conversions={conversions}
-            />
-        </TabsContent>
+        <ConversionJobs
+            backend={backend}
+            conversions={conversions}
+            onOpenJob={onOpenJob}
+        />
     )
 }

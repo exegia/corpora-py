@@ -1,0 +1,470 @@
+# AGENTS.md
+
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+
+## Commands
+
+```bash
+# Install all workspace packages in editable/dev mode
+uv sync
+
+# Install dependencies (dotenvx for encrypted .env, example deps, embedded Python)
+make setup
+
+# Run tests
+uv run pytest
+make test
+
+# Run a single test file or test
+uv run pytest path/to/test_file.py::test_name
+
+# Everything a PR runs (uv sync + lint-check + test)
+make ci
+
+# Every target, with its purpose
+make help
+
+# Build individual workspace wheels
+uv build --package corpora-common --wheel --out-dir dist/
+uv build --package corpora-mcp    --wheel --out-dir dist/
+uv build --package corpora-admin  --wheel --out-dir dist/
+
+# Build all workspace wheels at once into dist/
+make build-wheel
+
+# Bump version, commit, tag, and trigger the PyPI publish workflow
+make publish                       # patch (default)
+make publish PUBLISH_ARGS=minor
+make publish PUBLISH_ARGS=1.2.3
+
+# Clean caches and build artifacts
+make clean
+
+# Start MCP server only (stdio — for Codex Desktop)
+uv run cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA
+
+# Start MCP server only (SSE on port 8000 — for remote clients)
+uv run cf-mcp --corpus ~/.exegia/datasets/bibles/BHSA --sse 8000
+
+# Multiple corpora
+uv run cf-mcp \
+  --corpus ~/.exegia/datasets/bibles/BHSA --name BHSA \
+  --corpus ~/.exegia/datasets/bibles/GNT  --name GNT
+
+# Start the combined FastAPI app (MCP at /mcp + conversion API at /convert)
+uv run corpora-api
+
+# The `corpora` terminal CLI (convert/validate/library over the same
+# pipeline as POST /convert) lives in exegia/corpora-cli — a separate
+# package that depends on this distribution from PyPI. End users install
+# it via Homebrew from that repo:
+brew tap exegia/corpora-cli https://github.com/exegia/corpora-cli && brew install corpora
+
+# Docker — MCP-only image
+docker build -f dockerfiles/Dockerfile.client -t corpora-mcp .
+docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro \
+  corpora-mcp cf-mcp --corpus /data/datasets/BHSA --name BHSA --sse 8000
+
+# Docker — admin/conversion-only image (Python API, no HTTP server)
+docker build -f dockerfiles/Dockerfile.admin -t corpora-admin .
+docker run -it -v ~/.exegia/datasets:/data/datasets \
+  corpora-admin python -c "from admin.converters import convert_epub_to_tf; ..."
+
+# Docker — combined app image (MCP + conversion HTTP API on :8000)
+docker build -f dockerfiles/Dockerfile -t corpora-py .
+docker run -p 8000:8000 -v ~/.exegia/datasets:/data/datasets:ro corpora-py
+
+# Docker Compose (see dockerfiles/docker-compose.yml for exact service names)
+docker compose -f dockerfiles/docker-compose.yml up corpora
+
+# ── Publish the combined image to Vercel Container Registry (VCR) ─────────────
+# Image ref: vcr.vercel.com/<team-slug>/<project-slug>/<repository>:<tag>
+# Override VCR_TEAM / VCR_PROJECT / VCR_REPOSITORY in the makefile to match your project.
+
+# 1. Link the local dir to a Vercel project and pull env vars (provides VERCEL_OIDC_TOKEN)
+make vercel-env          # runs: vercel link && vercel env pull .env.local
+
+# 2. Authenticate Docker to VCR (auto-sources .env.local; OIDC by default)
+make docker-login-vcr    # OIDC: docker login vcr.vercel.com --username oidc
+                         # token fallback: set VERCEL_TOKEN + VERCEL_TEAM_ID instead
+
+# 3. Build a multi-arch image with zstd compression and push (needs docker buildx)
+make docker-publish-vcr
+
+# Equivalent raw commands (what the targets run):
+source .env.local
+printf '%s' "$VERCEL_OIDC_TOKEN" | docker login vcr.vercel.com --username oidc --password-stdin
+docker buildx build --platform linux/amd64,linux/arm64 \
+  --output "type=image,name=vcr.vercel.com/team-slug/project-slug/corpora-py:latest,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" .
+# Without buildx (no zstd): docker build -t vcr.vercel.com/.../corpora-py:latest . && docker push vcr.vercel.com/.../corpora-py:latest
+
+# ── Deploy to Vercel (Python runtime / Vercel Functions) ─────────────────────
+# Automatic deploys: Vercel's Git integration (repo linked to the
+# corpora-apps/corpora-py project) — every push → preview, production branch →
+# production. No repo secrets needed. Do NOT set a Build Command in the Vercel
+# dashboard: vercel.json pins "buildCommand": "" because the dashboard's old
+# `make build-wheel` broke every deploy (the makefile is deliberately not
+# uploaded — see .vercelignore).
+# Manual redeploys: .github/workflows/vercel.yml (workflow_dispatch only, with
+# a preview/production picker) — needs repo secrets VERCEL_TOKEN /
+# VERCEL_ORG_ID / VERCEL_PROJECT_ID (from `vercel link`).
+# Entrypoint: [tool.vercel] entrypoint in pyproject.toml → src/corpora_py/app.py.
+# Bundle hygiene (Python functions have no tree-shaking; this project's
+# enforced function-size limit is 225 MB): .vercelignore is an ALLOWLIST of
+# build inputs (pyproject/uv.lock/src/packages/README/LICENSE), vercel.json's
+# functions.excludeFiles trims the bundle further, and the installCommand is
+# `uv sync --frozen --no-dev --no-editable && uv pip uninstall <heavy pkgs>`
+# (uninstall, not --no-install-package flags: vercel.json caps installCommand
+# at 256 chars). Removed as runtime-unreachable weight: the docling-core
+# chain (docling-core, pandas, python-dateutil, pillow — /ingest 503s on
+# Vercel anyway; admin/__init__.py and services/ingest_api.py import it
+# lazily/guarded specifically so this is safe) and REPL/serving extras
+# (jedi, parso, uvloop, watchfiles). Verified: 145 MB site-packages, app
+# imports, full suite green.
+# Caveats on Vercel Functions: WebSockets half-work (/convert/{id}/ws
+# handshakes and pushes the current status, but the idle socket is killed
+# mid-job on long conversions — clients must fall back to polling on any
+# pre-terminal close, which also keeps a request in flight so the frozen
+# instance keeps advancing the job; see trackJob in
+# example/app/lib/uploads/manager.ts). Set JOB_STORE=supabase so poll and
+# job-scoped detail survive instance recycle (issue #140); the executor is
+# still per-instance. The container image (above) remains the deployment for
+# heavy/long-running conversion work.
+vercel deploy          # manual preview deploy from a linked checkout
+vercel deploy --prod   # manual production deploy
+
+# ── TWO Vercel projects deploy from this repo (team corpora-apps) ─────────────
+# Verified 2026-08-08 via `vercel project ls` + the GitHub deployments API:
+#   1. corpora-py         prj_B4qhl4nI3D6QQ41vPcRwLCUUipk9  Root Directory `.`
+#      Python/FastAPI API. Production Branch: `main` (repointed 2026-08-08 from
+#      `next`). Aliases: api.exegia.co, corpora-api.vercel.app,
+#      corpora-py-corpora-apps.vercel.app.
+#   2. corpora-py-example prj_2GHE9fFRa2Ap2Dn9RdnTQ28ZBv6a  Root Directory
+#      `example`. The React Router SPA, live at corpora-py-example.vercel.app.
+#      Production Branch: `main` (same as the API). `dev` and `next` are
+#      integration lanes, not production branches — deleting them would not
+#      drop production, but do not point either project's Production Branch
+#      at them.
+# Both share the repo's Git integration, so one push builds both — no GitHub
+# Actions, no chaining. VITE_API_URL (build-time, Vite-inlined) points the SPA
+# at the API's prod URL. `next` is the staging URL; an in-flight release/v*
+# also gets a preview.
+#
+# TOOLING TRAP: the Vercel *MCP* `list_projects` returns only `corpora-py`, and
+# `get_project` 404s on corpora-py-example by both id and name. Those answers
+# are wrong — the project is live. Use the `vercel` CLI (`vercel project ls`,
+# `vercel project inspect <name> --scope corpora-apps`) or
+# `gh api repos/exegia/corpora-py/deployments --jq '.[]|"\(.environment) \(.ref)"'`
+# to see which branch feeds which environment.
+# Public-demo backend config (set on the corpora-py API project):
+# AUTH_REQUIRED=false opens conversion/reads/queries to
+# anonymous visitors, and HF_READ_ONLY=true locks the Hub so the now-tokenless
+# public can't mutate it (see "Auth"/HF_READ_ONLY below). Both must be set
+# together -- AUTH_REQUIRED=false without HF_READ_ONLY=true would hand the
+# public Hub uploads and deletes. Also set HF_HOME=/tmp/huggingface on the
+# API project: huggingface_hub's cache (incl. the xet chunk store) defaults
+# to ~/.cache/huggingface, which is read-only on Vercel Functions, so without
+# it every stored-corpus read (GET /storage/{f}/manifest|index|content|
+# download) 500s with OSError 30 the moment hf_hub_download runs. See
+# example/README.md ("Deploy the web example to Vercel") for the one-time
+# project setup.
+```
+
+## Architecture
+
+This is a **uv workspace** of independently buildable Python packages plus an umbrella package.
+The linking core is independently published from exegia/corpora-linking; this
+repository publishes the umbrella distribution:
+
+| Package  | PyPI name        | Source                          | Purpose                                                                                 |
+|----------|------------------|---------------------------------|-----------------------------------------------------------------------------------------|
+| Common   | `corpora-common` | `packages/common/src/common/`   | Settings, logging, shared utilities                                                     |
+| MCP      | `corpora-mcp`    | `packages/mcp/src/corpora_mcp/` | FastMCP server + `cf-mcp` CLI                                                           |
+| Admin    | `corpora-admin`  | `packages/admin/src/admin/`     | EPUB/HTML/PDF/TEI → Text-Fabric converters + conversion HTTP API                        |
+| Linking | `corpora-linking` | `exegia/corpora-linking` (PyPI dependency) | Isolated reference/selection values and adapter ports |
+| Umbrella | `corpora-py`     | `src/corpora_py/`               | Depends on all three; combined FastAPI app (`corpora-api` CLI); used by sidecar/example |
+
+- **Install everything** (dev / example / sidecar): `uv sync` or install `corpora-py`
+- **Deploy only MCP server**: install `corpora-mcp` (pulls `corpora-common`)
+- **Run conversion tools**: install `corpora-admin` (pulls `corpora-common` + text-fabric)
+- **Deploy MCP + conversion API together**: install `corpora-py` and run `corpora-api`
+- **Docker MCP-only image**: `dockerfiles/Dockerfile.client`; combined app: `dockerfiles/Dockerfile`
+
+Code is organized into decoupled workspace packages under `packages/`:
+
+- `packages/common/src/common/` — code used by both admin and mcp: `utils/` (`pydantic-settings`
+  config, logging, SSL/cert helpers, `jwt_auth.py` — framework-agnostic Supabase JWKS verification, see "Auth" below).
+  **Does not** currently include a Supabase client, sign-in flows, or git-based corpus fetching — see "Dropped/missing
+  functionality" below (that's a different thing from request-level JWT verification, which does exist now).
+- `packages/mcp/src/corpora_mcp/` — client/consumer surface (FastMCP server + query tools for AI + desktop apps). Named
+  `corpora_mcp`, not `mcp` — the importable module was renamed because `mcp` collides with the real
+  `modelcontextprotocol` SDK package that `fastmcp`
+  itself depends on; `import mcp` inside this workspace will resolve to the SDK, not this package.
+- `packages/admin/src/admin/` — admin / full-feature tooling: `parsers/` (source format → shared `Document`/`Unit`
+  schema), `converters/` (schema → Text-Fabric → `.cfm` → `.corpus`),
+  `ingest/` (Docling → Context Fabric v1 canonical graph — a second pipeline, separate from `Unit`; heavy converter
+  behind the `[docling]` extra),
+  `services/` (FastAPI router + WebSocket + background job manager exposing conversion over HTTP — see
+  `packages/admin/AGENTS.md`).
+- `src/corpora_py/` — umbrella package. `app.py` builds the combined FastAPI app that mounts the MCP server at `/mcp`
+  and the admin conversion router at `/convert`; lives here (not in
+  `admin` or `mcp`) because it's the only package that already depends on both, and putting it in either would create a
+  dependency between packages that otherwise don't know about each other.
+
+### Module layers
+
+**`corpora_mcp.server`** — The primary user-facing surface. A FastMCP server exposing **15** tools in a standalone
+`cf-mcp` process (Codex Desktop, etc.) — 12 defined here (11 query tools plus `validate_corpus`) and the
+`reference_*` trio registered from `corpora_mcp.reference`. Mounted in the combined app
+(`corpora_py.app`) the same server carries **30** tools, or **26** with `HF_READ_ONLY=true`, because `admin` registers
+`storage_*`, `corpus_*` and `corpus_reference_*` onto it and skips the 4 write tools when the Hub is locked. Count them
+with `asyncio.run(mcp._list_tools())` rather than trusting this line. The `cf-mcp` CLI entry point
+(`corpora_mcp.server:main`) lives here. **`corpora_mcp.corpus`** holds the singleton `CorpusManager` that loads/manages
+`context-fabric` (`cfabric.Fabric`) corpora at runtime.
+
+**`admin.parsers`** — Format-specific parsers (EPUB/HTML/XML/TEI/PDF/plain text), each reducing its source into the same
+`Document`/`Unit` schema (see `packages/admin/AGENTS.md`).
+
+**`admin.converters`** — `Document`/`Unit` tree → Text-Fabric dataset → `.cfm` cache →
+`.corpus` archive. One shared TF-walker (`_walker.py`) is reused by every
+`_{format}_to_tf.py` converter.
+
+**`admin.services`** — HTTP surface over the conversion pipeline: `api.py` (upload/poll/download via
+`POST/GET /convert`), `websocket.py` (`/convert/{id}/ws` coarse status push), `jobs.py`
+(`JobManager` — `ThreadPoolExecutor`-backed job registry over a pluggable `JobStore`; the default
+`MemoryJobStore` keeps job state in one process's memory, `JOB_STORE=supabase` is the shared
+implementation — PostgREST metadata + Storage result bytes, issue #140). Also hosts the stored-`.corpus`
+surfaces — Hub storage (`/storage`) and its detail layer (read/patch manifest, section index, paginated content at
+`/storage/{filename}/...`, plus matching `corpus_*` MCP tools); see `packages/admin/AGENTS.md`.
+
+**`corpora_py.app`** — Combines the above into one FastAPI app. Mounting a FastMCP ASGI app requires forwarding its
+`lifespan` into the parent app or its session manager never starts; see that module's docstring.
+
+### Dropped/missing functionality (do not assume this exists)
+
+Earlier revisions of this repo (and of this file) described a `shared` package with
+`shared.supabase` (a synchronous Supabase client using the service-role key),
+`shared.auth` (sign-in/up/out, `CurrentUser`/`SignInResult` dataclasses, JWT-based per-user context), `shared.corpus` (a
+git-based Text-Fabric dataset fetcher), and `shared.models` /
+`shared.schemas` (shared enums and Pydantic schemas). **None of this exists in the current
+`packages/common/src/common/` tree** — it was not carried over during the `shared`→`common`
+package rename/consolidation. There is still no `supabase`/`auth`/`corpus`/`models`/`schemas` submodule under
+`common/` and nothing defines an `auth` module, so if you need that functionality it has to be rebuilt, not just
+imported — don't write code that assumes `common.auth` or similar exists without checking first.
+
+**What `common` does have** (an earlier version of this section undercounted it): `utils/` — settings, logging,
+`jwt_auth`, `tfref`/`refdisplay`/`refcompact`, request context — and `schemas/` (the Context Fabric v1 JSON Schemas).
+And Supabase *is* referenced in the repo, just never as a client SDK: `supabase/migrations/` holds the SQL, and
+`admin.services.storage_supabase` / `job_store_supabase` are the opt-in REST backends selected by `STORAGE_BACKEND`
+and `JOB_STORE` (see "Auth" below). Grep before assuming either way.
+
+### Environment / config
+
+Config is loaded by `pydantic-settings` from `.env.{ENVIRONMENT}` (defaults to
+`.env.development`). The active file is resolved at import time by
+`common/utils/constant.py`. All constants are re-exported from that module.
+
+`.env.*` files are encrypted with `dotenvx`. Run `dotenvx run -- <command>` when env vars need to be decrypted at
+runtime outside of `uv run`.
+
+(The previous "Supabase URLs constructed from `PROJECT_REF`" note has been removed along with the rest of the Supabase
+integration — see "Dropped/missing functionality" above.)
+
+### Corpus data flow
+
+1. Datasets live locally under `~/.exegia/datasets/` as Text-Fabric directories.
+2. `CorpusManager.load(path)` (in `corpora_mcp.corpus`) wraps `cfabric.Fabric` and holds
+   `(Fabric, api)` pairs keyed by name.
+3. All the query MCP tools call `corpus_manager.get_api(corpus_name)` to get the TF API and then use `api.S`, `api.F`, `api.T`,
+   etc.
+4. Pagination state for `search()` / `search_continue()` is held in a module-level dict with 5-minute cursor TTL.
+
+### Reference identifiers (`common.utils.tfref`, `/refs`, `reference_*` / `corpus_reference_*` tools)
+
+One schema-agnostic grammar for citing any node in any corpus:
+`[corpus[@version]/]Sec1[:Sec2...][!<otype><i>[-<j>]]` (e.g. `bhsa@2021/Deut:4:2!clause1`,
+`mobydick@1.0/Moby-Dick:3!word12`) plus a `urn:tf:` twin. The section path is whatever `T.sectionTypes` declares; the
+selector is the node's 1-based position among nodes of its type that **start** in that section (anchor-to-first-slot, so
+a clause spilling into the next verse is counted once). `@version` is optional on input and always emitted on output.
+
+- **`common.utils.tfref`** — grammar + resolution, byte-identical to `skills/tf-reference-id/scripts/tfref.py`
+  (`tests/common/test_tfref.py` pins this; edit one, copy over the other). Works on a live `tf`/`cfabric` api or straight
+  from a `.tf` directory (stdlib loader). It also papers over two cfabric gaps on one-level corpora (`T.nodeFromSection`
+  / `T.sectionFromNode` raise there) by falling back to the section features.
+- **`common.utils.refdisplay`** — label (`Deut 4:2 · clause 1`), compact pill token (`Deut 4:2 cl1`), share URL from
+  `REFERENCE_URL_TEMPLATE` (`{ref}` placeholder; default `/refs/resolve?ref={ref}`), and the `corpus` metadata block
+  (title/authors/year/corpusId/version from `manifest.yml` + `toc.yml`).
+- **`admin.services.reference`** (+ `reference_api` at `/refs`, `reference_mcp` → `corpus_reference_*`) — over stored
+  archives; the corpus id in a reference is the library filename stem (`bhsa.corpus` → `bhsa`), the version is the
+  manifest's. `POST /refs` (node → ref), `GET /refs/resolve?ref=` (ref → node + metadata; 400 bad grammar, 404 unknown,
+  409 version mismatch), `GET|POST /refs/shortcode` (presentation bundle).
+- **`corpora_mcp.reference`** (`reference_create` / `reference_resolve` / `reference_shortcode`) — the same over
+  `CorpusManager` corpora in a standalone `cf-mcp`; corpus id = the loaded name, metadata from a `manifest.yml` beside
+  or above the dataset dir when present.
+- **`common.utils.refcompact`** — the compact positional token of `docs/architecture/inter-corpus-refs.md`
+  (`cobhsa_bk005_ch004_pa002_cl001`) as a *serialization* of a resolved node: emitted as `token` on every `/refs`
+  payload, accepted by `/refs/resolve`. Not a citation — `docs/architecture/reference-forms.md` records the decision:
+  tfref short form = the UI's canonical citation string; compact token = serialization; the canonical Reference of
+  `context-fabric/03-references.md` = future edition-independent address (no resolver in the repo yet).
+
+Agent skills checked into the repo live under `skills/` (`skills/tf-reference-id` is the first); `skills-lock.json`
+tracks the externally sourced ones only.
+
+### Conversion job flow (admin, exposed at `/convert`)
+
+1. `POST /convert` streams an uploaded document to a per-job work directory and hands the blocking parse → Text-Fabric →
+   `.cfm` → `.corpus` pipeline to `JobManager` (a background
+   `ThreadPoolExecutor`), returning a job id immediately — conversion of a large document (a full Bible, a big EPUB) can
+   take minutes and pins a CPU core the whole time.
+2. `GET /convert/{job_id}` polls status; `/convert/{job_id}/ws` pushes the same status (queued/running/succeeded/failed)
+   over a WebSocket as it changes. Neither reports a real percentage — the converters have no progress hook (see
+   `packages/admin/AGENTS.md`).
+3. `GET /convert/{job_id}/download` serves the finished `.corpus` archive once the job succeeds.
+
+### Auth (`corpora_py.auth`)
+
+`corpora_py.app` ships as a sidecar spawned by a Tauri+Supabase desktop app — a locally reachable port, not a public
+multi-tenant service, but still gated by default: every path except `/health`/`/`/docs requires a
+`Authorization: Bearer <supabase-jwt>` header (or, for the
+`/convert/{id}/ws` WebSocket, a `?token=` query param instead — browser/webview `WebSocket`
+clients can't set custom headers on the handshake).
+
+- **`common.utils.jwt_auth`** — framework-agnostic verification: fetches Supabase's JWKS
+  (`<project_ref>.supabase.co/auth/v1/.well-known/jwks.json`, or `SUPABASE_JWKS_URL` for a self-hosted/local instance)
+  via `PyJWKClient`, verifies signature + expiry + audience, raises
+  `AuthError` on any failure. This is the one network dependency this otherwise-offline sidecar has, and only when a
+  token actually needs checking.
+- **`corpora_py.auth.AuthMiddleware`** — raw ASGI middleware (not a FastAPI `Depends`)
+  applied to the whole app. `Depends` doesn't cover `app.mount("/mcp", ...)` (a plain ASGI sub-app, invisible to
+  FastAPI's dependency system) or WebSocket routes (`BaseHTTPMiddleware`/`@app.middleware("http")` only sees `http`
+  scope) — a raw ASGI middleware sitting above Starlette's router is the only thing that sees every scope type
+  uniformly, which is why this isn't just a router-level dependency.
+- **`AUTH_REQUIRED`** (`common.utils.config.Settings.auth_required`, default `True`) — set to
+  `false` for local dev. When `True` with no JWKS URL configured (`PROJECT_REF` /
+  `SUPABASE_JWKS_URL` unset), requests fail closed (401), not open.
+- **`HF_READ_ONLY`** (`common.utils.config.Settings.hf_read_only`, default `False`) — the *write* guard, deliberately
+  **decoupled** from `AUTH_REQUIRED`. Turning auth off (public demo) would otherwise open Hub *writes* to everyone;
+  setting `HF_READ_ONLY=true` refuses every Hub mutation across both API surfaces at once. Enforced in three layers: (1)
+  the authoritative chokepoint — `CorpusStorage.upload`/`.delete`
+  (`admin.services.storage`) raise `ReadOnlyStorageError`, and *every* write funnels through them (the
+  manifest/annotation PATCHes re-upload via `_republish`), so all write paths are blocked by construction; (2) a fast
+  `require_writable` FastAPI dependency (`storage_api`) returns **403** on the write routes before any Hub I/O; (3)
+  `register_storage_tools`/`register_corpus_detail_tools` skip the 4 **write** MCP tools (`storage_upload_corpus`,
+  `storage_delete_corpus`, `corpus_manifest_update`, `corpus_node_annotate`) so a public client never sees a tool it
+  could mutate with. Left `False` on the desktop sidecar and local dev (including `AUTH_REQUIRED=false` local dev),
+  which stay fully writable — so the owner keeps publishing locally to the same Hub repo the public demo reads. See
+  `packages/admin/src/admin/services/AGENTS.md`. There is deliberately **no** per-case exception to this — the public
+  demo converts, downloads, and explores, and never writes to the Hub at all.
+- **By default, nothing in this repo writes to Supabase.** Supabase appears as a JWT *issuer* whose signatures
+  `common.utils.jwt_auth` verifies against the public JWKS. Two opt-in exceptions, both server-side
+  (`SUPABASE_SERVICE_ROLE_KEY`, never `VITE_*`): **Supabase Storage** (`STORAGE_BACKEND=supabase`, issue #129) for
+  the library `/storage` surfaces, and **the shared JobStore** (`JOB_STORE=supabase`, issue #140) for conversion
+  job metadata (`conversion_jobs` via PostgREST) plus result bytes (`conversion-jobs/` prefix). Neither uses the
+  `supabase` Python SDK — both talk REST with `requests`. On the default `huggingface` / `memory` settings an
+  anonymous deployment still has no Supabase write surface to lock down.
+- Decoded JWT claims land in `scope["state"]["user"]` and are used by
+  `ConversionJob.is_visible_to()` (`admin.services.jobs`) to scope `GET /convert/{id}`,
+  `/download`, and `/ws` to the job's own submitter (the JWT `sub` claim, recorded on the job at
+  `POST /convert` time). A job created while auth was disabled has no owner and stays visible to everyone; a request
+  with no claims (auth currently disabled) can see any job — ownership is only enforced when there's an identity on both
+  sides to compare. Mismatches return the same 404 as an unknown job id (not 403), so a client can't use the distinction
+  to enumerate other users' job ids.
+
+### Pull requests
+
+CI runs `make pr-guard` over the base, the branch name and the **PR title**.
+Commit *subjects* in this family may carry an emoji (`🔧 ci: …`) — a PR title
+must not. The guard matches `<type>: summary` from the first character.
+
+Branches into `dev` (or an in-flight `release/v*`) must read `<type>/<slug>`,
+lowercase; `next` only accepts `dev` (or `chore/sync-main-into-next`); `main`
+only accepts `release/vX.Y.Z` matching the root `pyproject.toml` version.
+
+**Retitling a red PR does not re-run the guard.** `.github/workflows/pr.yml`
+fires on `opened / reopened / ready_for_review / synchronize` — not `edited`.
+Close and reopen the PR to get a fresh payload.
+
+### CI/CD
+
+**The branch and release model lives in `.github/WORKFLOW.md` — read that first.** In short:
+`<type>/<slug>` → PR → `dev` → (daily/manual promote) → `next` → cut `release/vX.Y.Z` → PR → `main` → tag `vX.Y.Z`.
+Feature PRs target `dev`. **Promote to next** (22:00 UTC or manual) classifies the bump from line-count churn
+and cuts the next `release/v*`. `main` does not cut the next version. Every CI step is a `make` target —
+`make ci`, `make pack`, `make pr-guard` — so the pipeline is reproducible locally.
+
+`make tag-release` pushes the tag that drives everything downstream, and it **must** run as the automation GitHub App:
+events raised by `GITHUB_TOKEN` do not start workflow runs, and the `Publishing` tag ruleset separately refuses tag
+creation from any actor not on its bypass list. Both are handled — see WORKFLOW.md.
+
+The tag then runs `publish.yml`, which builds and publishes to PyPI via OIDC trusted publishing (no stored token).
+**Only `corpora-py` is published**: its wheel is self-contained —
+`[tool.hatch.build.targets.wheel]` in the root `pyproject.toml` bundles the source of `corpora-common`,
+`corpora-mcp` and `corpora-admin` into the single `corpora-py` distribution, and the three packages' third-party deps
+are flattened into `corpora-py`'s own `[project.dependencies]` (there are no `corpora-*`
+runtime deps). The three remain workspace members — installed editable via the `dev` dependency-group for local
+dev/tests, and still independently buildable — but are **not** published to PyPI (so
+`pip install corpora-mcp`/`-admin`/`-common` from PyPI is intentionally not a thing; install `corpora-py`). Only a
+`corpora-py` trusted publisher (PyPI project + workflow `publish.yml` + environment `pypi`) is needed.
+
+The `build-sidecar` workflow builds the same four wheels, then bundles them per-platform (macOS arm64/x64, Windows) into
+a signed, notarized standalone Python archive for embedding in Tauri/ElectroBun apps. The bundle step runs
+`make build-bundle` (`bin/build/build.sh`) and resolves workspace deps from `dist/` via `--find-links` (no PyPI
+needed).
+
+Testing runs in two places. The `check` job in `pr.yml` runs `make ci` (`uv sync` + `make lint-check` +
+`make test` — 719 tests as of 2026-09-06) on one runner, single-job on purpose: it is a *required status check* on
+`main`, `dev`, `next` and `release/v*`, and a matrixed job reports contexts like `check (macos-latest, 3.14)` instead of the plain
+`check` the ruleset names, which would leave every PR unmergeable. The breadth that used to live in
+`test.yml` (ubuntu + macOS × 3.13/3.14) moved to `matrix.yml`, which runs on every push to `next` or a release branch, and weekly.
+
+## Example app (`example/`)
+
+The React Router 8 + Electrobun app that exercises the whole API — convert, explore, corpus detail/reader, and a
+browser-side chat agent over `/mcp`. It ships two ways from one codebase: an Electrobun desktop bundle, and a static
+SPA deployed to `corpora-py-example.vercel.app`. See `example/README.md`.
+
+```bash
+cd example
+bun install
+bun run vite:dev      # web dev server
+bun run desktop:dev   # Electrobun app, watch mode
+# or from the repo root: make dev  (Vite + Electrobun together)
+```
+
+It talks to `corpora-api` over HTTP + WebSocket; `VITE_API_URL` (build-time, Vite-inlined) picks the backend and
+defaults to `http://127.0.0.1:8000`.
+
+> **`demo/` is a dead leftover** — 34 tracked files, no `package.json`, nothing builds it. An earlier version of this
+> file documented it as the demo app with `demo/src/components/ui/` and a `demo/tailwind.config.ts`; none of that is
+> real. Work in `example/`, and delete `demo/` when convenient.
+
+## UI Components (shadcn)
+
+`example/` uses [shadcn/ui](https://ui.shadcn.com) on **Base UI** (`@base-ui/react`, not Radix), plus the ReUI
+registry. Config is `example/components.json` (style `base-vega`, Lucide icons, `~/*` aliases).
+
+```bash
+cd example
+bunx shadcn@latest add <component-name>     # not `shadcn-ui`, which is the old package
+```
+
+- shadcn components land in `example/app/components/ui/`; ReUI ones belong in `example/app/components/reui/`
+- **ReUI install trap:** `@reui/*` registry items carry a hard-coded `target: components/reui/...`, which the shadcn
+  CLI (4.21.4) resolves against the project root — it only auto-prefixes `src/`, not this project's `app/`. So
+  `bunx --bun shadcn@latest add @reui/<name> --yes` writes to `example/components/reui/`, where the rewritten
+  `~/components/reui/...` imports don't resolve; `--path` does not override it. After every ReUI install, move the
+  files: `cp -R components/reui/. app/components/reui/ && rm -r components` (from `example/`). The shadcn/ui parts the
+  same install pulls in resolve correctly, but show as `overwrite` against the customised ones already in
+  `components/ui/` — check `--dry-run` first and never pass `--overwrite` blind.
+- Tailwind CSS 4 — **no `tailwind.config.ts`**; theme and imports live in `example/app/app.css`
+- Import via the alias: `import { Button } from "~/components/ui/button"`
+
+## Reference linking scaffold
+
+`corpora-linking>=0.1.0,<0.2` is installed from PyPI and maintained in
+[exegia/corpora-linking](https://github.com/exegia/corpora-linking).
+`packages/linking` keeps Corpora-specific examples and integration guidance;
+the root wheel never bundles the core namespace. Read its [agent instructions](packages/linking/AGENTS.md)
+and [implementation specification](specs/reference-linking/spec.md). Detection,
+CUSX/Supabase adapters and management UI remain staged. It does not replace the
+v0.4 corpus-document contract or the scoped CUSX reference proposal.

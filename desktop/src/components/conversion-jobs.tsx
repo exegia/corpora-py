@@ -1,4 +1,5 @@
-import { useRef, useState } from "react"
+import { useEffect, useId, useRef } from "react"
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { KeyRound, LoaderCircle, Plus, RefreshCw, Search, Server } from "lucide-react"
 import { ConversionForm } from "@/components/conversion-form"
 import { ConversionJobDetail } from "@/components/conversion-job-detail"
@@ -13,6 +14,18 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { cn } from "@/lib/utils"
 import type { ConversionJob, ConversionJobsController } from "@/shared/conversion"
 import type { SidecarStatus } from "@/shared/rpc"
+import {
+    conversionClientAtom,
+    conversionSessionAtom,
+    jobsAnnouncementAtom,
+    jobsCreatingAtom,
+    jobsLocalErrorAtom,
+    jobsQueryAtom,
+    jobsRefreshingAtom,
+    jobsSelectedIdAtom,
+    jobsStatusFilterAtom,
+    resetConversionFormAtom
+} from "@/shared/store"
 
 const statuses: { value: ConversionJob["status"]; label: string }[] = [
     { value: "queued", label: "Queued" },
@@ -23,19 +36,31 @@ const statuses: { value: ConversionJob["status"]; label: string }[] = [
 
 export function ConversionJobs({
     backend,
-    conversions
+    conversions,
+    onOpenJob
 }: {
     backend: SidecarStatus
     conversions: ConversionJobsController
+    onOpenJob?: (job: ConversionJob) => void
 }) {
-    const [creating, setCreating] = useState(conversions.jobs.length === 0)
-    const [selectedId, setSelectedId] = useState<string | null>(null)
-    const [query, setQuery] = useState("")
-    const [statusFilter, setStatusFilter] = useState<ConversionJob["status"] | "all">("all")
-    const [refreshing, setRefreshing] = useState(false)
-    const [localError, setLocalError] = useState<string | null>(null)
-    const [announcement, setAnnouncement] = useState("")
-    const refreshingRef = useRef(false)
+    const headingId = useId()
+    const historyHeadingId = useId()
+    const workspaceId = useId()
+    const store = useStore()
+    const session = useAtomValue(conversionSessionAtom)
+    const client = useAtomValue(conversionClientAtom)
+    const [creatingValue, setCreating] = useAtom(jobsCreatingAtom)
+    const creating = creatingValue ?? conversions.jobs.length === 0
+    const [selectedId, setSelectedId] = useAtom(jobsSelectedIdAtom)
+    const [query, setQuery] = useAtom(jobsQueryAtom)
+    const [statusFilter, setStatusFilter] = useAtom(jobsStatusFilterAtom)
+    const [refreshing, setRefreshing] = useAtom(jobsRefreshingAtom)
+    const [localError, setLocalError] = useAtom(jobsLocalErrorAtom)
+    const [announcement, setAnnouncement] = useAtom(jobsAnnouncementAtom)
+    const resetForm = useSetAtom(resetConversionFormAtom)
+    const refreshingRef = useRef<symbol | null>(null)
+    const currentController = useRef(conversions)
+    currentController.current = conversions
     const detailRef = useRef<HTMLDivElement>(null)
     const backendReady = backend.state === "ready" && Boolean(backend.url)
     const jobs = [...conversions.jobs].sort((left, right) => right.created_at - left.created_at)
@@ -51,6 +76,22 @@ export function ConversionJobs({
     const requestError = localError ?? conversions.error
     const listBusy = refreshing || conversions.isLoading
 
+    useEffect(() => {
+        if (
+            store.get(conversionSessionAtom) === session &&
+            store.get(conversionClientAtom) === client &&
+            store.get(jobsCreatingAtom) === null
+        )
+            setCreating(conversions.jobs.length === 0)
+    }, [store, setCreating, creatingValue, conversions.jobs.length, session, client])
+
+    useEffect(() => {
+        refreshingRef.current = null
+    }, [client, session, conversions.refresh])
+
+    function isCurrentSession() {
+        return store.get(conversionSessionAtom) === session && store.get(conversionClientAtom) === client
+    }
     function focusDetail() {
         requestAnimationFrame(() => detailRef.current?.focus())
     }
@@ -62,41 +103,54 @@ export function ConversionJobs({
     }
     function selectJob(job: ConversionJob) {
         setSelectedId(job.id)
-        setCreating(false)
         setLocalError(null)
+        if (onOpenJob) {
+            onOpenJob(job)
+            return
+        }
+        setCreating(false)
         focusDetail()
     }
     function submitted(job: ConversionJob) {
+        if (!isCurrentSession() || currentController.current.submit !== conversions.submit) return
+        resetForm()
         setSelectedId(job.id)
-        setCreating(false)
         setAnnouncement(`Conversion submitted: ${job.display_name || job.name}.`)
+        setCreating(false)
+        if (onOpenJob) {
+            onOpenJob(job)
+            return
+        }
         focusDetail()
     }
     async function refresh() {
-        if (!backendReady || refreshingRef.current || conversions.isLoading) return
-        refreshingRef.current = true
+        if (!backendReady || refreshingRef.current || store.get(jobsRefreshingAtom) || conversions.isLoading) return
+        const request = Symbol()
+        refreshingRef.current = request
         setRefreshing(true)
         setLocalError(null)
         conversions.clearError()
         try {
             await conversions.refresh()
         } catch (cause) {
-            setLocalError(cause instanceof Error ? cause.message : "Could not refresh conversion jobs.")
+            if (isCurrentSession() && currentController.current.refresh === conversions.refresh) {
+                setLocalError(cause instanceof Error ? cause.message : "Could not refresh conversion jobs.")
+            }
         } finally {
-            refreshingRef.current = false
-            setRefreshing(false)
+            if (refreshingRef.current === request) refreshingRef.current = null
+            if (isCurrentSession() && currentController.current.refresh === conversions.refresh) setRefreshing(false)
         }
     }
 
     return (
         <section
-            aria-labelledby="conversion-jobs-heading"
+            aria-labelledby={headingId}
             className="flex min-w-0 flex-col gap-5">
             <header className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-3">
                         <h1
-                            id="conversion-jobs-heading"
+                            id={headingId}
                             className="text-2xl font-semibold tracking-tight">
                             Conversion jobs
                         </h1>
@@ -192,13 +246,13 @@ export function ConversionJobs({
                 className="sr-only">
                 {announcement}
             </p>
-            <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+            <div className="grid min-w-0 items-start gap-5 @3xl:grid-cols-[18rem_minmax(0,1fr)]">
                 <aside
-                    aria-labelledby="conversion-history-heading"
+                    aria-labelledby={historyHeadingId}
                     className="flex min-w-0 flex-col rounded-xl border border-border bg-card shadow-xs">
                     <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                         <h2
-                            id="conversion-history-heading"
+                            id={historyHeadingId}
                             className="text-sm font-semibold">
                             Jobs
                         </h2>
@@ -257,14 +311,14 @@ export function ConversionJobs({
                     ) : filtered.length ? (
                         <ul
                             aria-label="Conversion jobs"
-                            className="flex max-h-64 flex-col gap-1 overflow-y-auto p-2 lg:max-h-[36rem]">
+                            className="flex max-h-64 flex-col gap-1 overflow-y-auto p-2 @3xl:max-h-[36rem]">
                             {filtered.map((job) => (
                                 <li key={job.id}>
                                     <button
                                         type="button"
                                         onClick={() => selectJob(job)}
                                         aria-pressed={!creating && selected?.id === job.id}
-                                        aria-controls="conversion-workspace"
+                                        aria-controls={workspaceId}
                                         className={cn(
                                             "flex w-full flex-col gap-2 rounded-lg border px-3 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                             !creating && selected?.id === job.id
@@ -311,7 +365,7 @@ export function ConversionJobs({
                     )}
                 </aside>
                 <div
-                    id="conversion-workspace"
+                    id={workspaceId}
                     ref={detailRef}
                     tabIndex={-1}
                     className="min-w-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">

@@ -21,6 +21,7 @@
   },
   "registries": {
     "@reui": "https://reui.io/r/{style}/{name}.json",
-    "@shark": "https://shark.vini.one/r/{name}.json"
+    "@shark": "https://shark.vini.one/r/{name}.json",
+    "@coss": "https://coss.com/ui/r/{name}.json"
   }
 }

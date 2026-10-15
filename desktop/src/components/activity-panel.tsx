@@ -7,11 +7,12 @@ interface ActivityPanelProps {
     events: BackendEvent[]
     onClear: () => void
     onClose: () => void
+    fill?: boolean
 }
 
-export function ActivityPanel({ events, onClear, onClose }: ActivityPanelProps) {
+export function ActivityPanel({ events, onClear, onClose, fill = false }: ActivityPanelProps) {
     return (
-        <section id="workspace-events" aria-labelledby="events-heading" className="flex max-h-60 shrink-0 flex-col border-t border-border bg-card">
+        <section id="workspace-events" aria-labelledby="events-heading" className={cn("flex flex-col border-t border-border bg-card", fill ? "h-full min-h-0" : "max-h-60 shrink-0")}>
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-2">
                 <div className="flex items-center gap-2">
                     <Terminal className="size-3.5 text-muted-foreground" aria-hidden="true" strokeWidth={1.5} />
@@ -23,7 +24,7 @@ export function ActivityPanel({ events, onClear, onClose }: ActivityPanelProps) 
                     <Button type="button" variant="ghost" size="icon-xs" aria-label="Close connection events" onClick={onClose}><X aria-hidden="true" /></Button>
                 </div>
             </header>
-            <div className="overflow-y-auto px-5 py-2">
+            <div className={cn("overflow-y-auto px-5 py-2 select-text [&_*]:select-text", fill && "min-h-0 flex-1")}>
                 {events.length === 0 ? <p className="py-5 text-xs text-muted-foreground">No events. Backend state changes will appear here.</p> : (
                     <ol className="flex flex-col gap-1">
                         {events.map(event => (

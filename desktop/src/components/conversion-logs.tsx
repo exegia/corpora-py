@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react"
+import { useId, useMemo, useRef } from "react"
+import { useAtom, useAtomValue, useStore } from "jotai"
 import { Check, Copy, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -6,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { cn } from "@/lib/utils"
 import type { ConversionJob } from "@/shared/conversion"
+import { conversionLogAtomsFor, conversionSessionAtom } from "@/shared/store"
 
 export type ConversionLogLevel = ConversionJob["events"][number]["level"] | "unclassified"
 export interface ConversionLogLine {
@@ -69,17 +71,27 @@ export function conversionLogsText(lines: ConversionLogLine[]): string {
 export function ConversionLogs({
     job,
     stage,
-    onClearStage
+    onClearStage,
+    fill = false,
+    scope = "detail"
 }: {
     job: ConversionJob
     stage: string | null
     onClearStage: () => void
+    fill?: boolean
+    scope?: string
 }) {
-    const [search, setSearch] = useState("")
-    const [selectedLevels, setSelectedLevels] = useState<string[]>(levels)
-    const [copyState, setCopyState] = useState<"idle" | "copying" | "copied">("idle")
-    const [copyError, setCopyError] = useState<string | null>(null)
-    const [copiedText, setCopiedText] = useState<string | null>(null)
+    const headingId = useId()
+    const store = useStore()
+    const session = useAtomValue(conversionSessionAtom)
+    const key = `${session}:${scope}:${job.id}`
+    const atoms = conversionLogAtomsFor(key)
+    const [search, setSearch] = useAtom(atoms.search)
+    const [selectedLevels, setSelectedLevels] = useAtom(atoms.selectedLevels)
+    const [copyState, setCopyState] = useAtom(atoms.copyState)
+    const [copyError, setCopyError] = useAtom(atoms.copyError)
+    const [copiedText, setCopiedText] = useAtom(atoms.copiedText)
+    const copyLock = useRef<string | null>(null)
     const lines = useMemo(() => conversionLogLines(job), [job])
     const filtered = useMemo(
         () => filterConversionLogs(lines, selectedLevels, search, stage),
@@ -90,24 +102,32 @@ export function ConversionLogs({
     const hasLegacy = lines.some((line) => line.level === "unclassified")
 
     async function copyLogs() {
-        if (copyState === "copying") return
+        if (copyLock.current === key || store.get(atoms.copyState) === "copying") return
+        copyLock.current = key
         setCopyState("copying")
         setCopyError(null)
         try {
             await navigator.clipboard.writeText(visibleText)
+            if (store.get(conversionSessionAtom) !== session) return
             setCopiedText(visibleText)
             setCopyState("copied")
         } catch {
-            setCopyError("Clipboard access is unavailable. You can select and copy the log text below.")
-            setCopyState("idle")
+            if (store.get(conversionSessionAtom) === session) {
+                setCopyError("Clipboard access is unavailable. You can select and copy the log text below.")
+            }
+        } finally {
+            if (copyLock.current === key) copyLock.current = null
+            if (store.get(conversionSessionAtom) === session && store.get(atoms.copyState) === "copying") {
+                setCopyState("idle")
+            }
         }
     }
 
     return (
         <section
-            aria-labelledby="conversion-logs-heading"
-            className="flex min-w-0 flex-col gap-3">
-            <header className="flex flex-wrap items-center justify-between gap-3">
+            aria-labelledby={headingId}
+            className={cn("flex min-w-0 flex-col gap-3", fill && "h-full min-h-0 overflow-y-auto")}>
+            <header className={cn("flex flex-wrap items-center justify-between gap-3", fill && "shrink-0")}>
                 <div className="flex items-center gap-2">
                     <Terminal
                         className="size-4 text-muted-foreground"
@@ -115,7 +135,7 @@ export function ConversionLogs({
                         strokeWidth={1.5}
                     />
                     <h3
-                        id="conversion-logs-heading"
+                        id={headingId}
                         className="text-sm font-semibold">
                         Job logs
                     </h3>
@@ -133,7 +153,7 @@ export function ConversionLogs({
                     {showCopied ? "Copied" : "Copy visible logs"}
                 </Button>
             </header>
-            <div className="flex flex-wrap items-end gap-3">
+            <div className={cn("flex flex-wrap items-end gap-3", fill && "shrink-0")}>
                 <Field className="min-w-40 flex-1">
                     <FieldLabel className="sr-only">Search conversion logs</FieldLabel>
                     <Input
@@ -169,7 +189,7 @@ export function ConversionLogs({
                 </ToggleGroup>
             </div>
             {stage && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", fill && "shrink-0")}>
                     <span className="min-w-0 break-all">
                         Stage: {job.steps.find((step) => step.id === stage)?.title ?? stage}
                     </span>
@@ -187,13 +207,16 @@ export function ConversionLogs({
                 aria-label={`Logs for ${job.display_name || job.name}`}
                 aria-live="off"
                 tabIndex={0}
-                className="max-h-80 min-h-36 overflow-auto rounded-xl border border-border bg-muted/30 p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                className={cn(
+                    "overflow-auto rounded-xl border border-border bg-muted/30 p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    fill ? "min-h-28 flex-1 shrink-0" : "max-h-80 min-h-36"
+                )}>
                 {filtered.length ? (
                     <ol className="flex flex-col gap-1">
                         {filtered.map((line) => (
                             <li
                                 key={line.key}
-                                className="grid grid-cols-[auto_4.5rem_minmax(0,1fr)] items-baseline gap-x-3 rounded-sm py-1">
+                                className="grid select-text grid-cols-[auto_4.5rem_minmax(0,1fr)] items-baseline gap-x-3 rounded-sm py-1 [&_*]:select-text">
                                 <span className="tabular-nums text-muted-foreground">
                                     {line.timestamp === null ? (
                                         "—"
@@ -227,13 +250,13 @@ export function ConversionLogs({
                 )}
             </div>
             {hasLegacy && (
-                <p className="text-xs text-muted-foreground">
+                <p className={cn("text-xs text-muted-foreground", fill && "shrink-0")}>
                     Unclassified logs have no reported level, stage, or timestamp.
                 </p>
             )}
             <p
                 role="status"
-                className={cn("text-xs", copyError ? "text-destructive-foreground" : "sr-only")}>
+                className={cn("text-xs", copyError ? "text-destructive-foreground" : "sr-only", fill && "shrink-0")}>
                 {copyError ?? (showCopied ? "Visible log lines copied to clipboard." : "")}
             </p>
         </section>

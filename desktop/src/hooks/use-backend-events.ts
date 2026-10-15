@@ -1,20 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { describeBackendEvent, type BackendEvent } from "@/lib/backend-events"
+import { useAtomValue, useSetAtom } from "jotai"
+import { useEffect } from "react"
 import type { SidecarStatus } from "@/shared/rpc"
+import { backendEventsAtom, clearBackendEventsAtom, recordBackendEventAtom } from "@/shared/store"
 
 export function useBackendEvents(backend: SidecarStatus) {
-    const [events, setEvents] = useState<BackendEvent[]>([])
-    const previous = useRef<SidecarStatus | null>(null)
-    const sequence = useRef(0)
+    const events = useAtomValue(backendEventsAtom)
+    const recordEvent = useSetAtom(recordBackendEventAtom)
+    const clearEvents = useSetAtom(clearBackendEventsAtom)
 
     useEffect(() => {
-        const description = describeBackendEvent(previous.current, backend)
-        previous.current = backend
-        if (!description) return
-        const event: BackendEvent = { ...description, id: ++sequence.current, timestamp: Date.now() }
-        setEvents(current => [event, ...current].slice(0, 50))
-    }, [backend])
+        recordEvent(backend)
+    }, [backend, recordEvent])
 
-    const clearEvents = useCallback(() => setEvents([]), [])
     return { events, clearEvents }
 }

@@ -2,12 +2,13 @@ import {
     useCallback,
     useEffect,
     useRef,
-    useState,
     type ChangeEvent,
     type DragEvent,
     type InputHTMLAttributes,
     type Ref
 } from "react"
+import { useAtom, useStore } from "jotai"
+import { fileUploadAtom } from "@/shared/store"
 
 export type FileMetadata = { name: string; size: number; type: string; url: string; id: string }
 export type FileWithPreview = { file: File | FileMetadata; id: string; preview?: string }
@@ -60,55 +61,60 @@ export function validateUploadFile(
     return accepted ? null : `“${file.name}” is not a supported source file.`
 }
 
-export function useFileUpload(options: FileUploadOptions = {}): [FileUploadState, FileUploadActions] {
-    const { multiple = false, maxFiles = Infinity, onFilesChange, onFilesAdded, onError } = options
-    const [state, setState] = useState<FileUploadState>(() => ({
-        files: (options.initialFiles ?? []).map((file) => ({ file, id: file.id, preview: file.url })),
-        isDragging: false,
-        errors: []
-    }))
-    const filesRef = useRef(state.files)
-    const inputRef = useRef<HTMLInputElement>(null)
-    const previewsRef = useRef(new Set<string>())
+// Initialization belongs to the Provider store lifetime, not a tab's mount lifetime.
+const initializedUploadStores = new WeakSet<ReturnType<typeof useStore>>()
 
-    useEffect(
-        () => () => {
-            for (const url of previewsRef.current) URL.revokeObjectURL(url)
-            previewsRef.current.clear()
-        },
-        []
-    )
+export function useFileUpload(options: FileUploadOptions = {}): [FileUploadState, FileUploadActions] {
+    const { multiple = false, maxFiles = Infinity, initialFiles, onFilesChange, onFilesAdded, onError } = options
+    const [state, setState] = useAtom(fileUploadAtom)
+    const store = useStore()
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        if (initializedUploadStores.has(store)) return
+        initializedUploadStores.add(store)
+        if (!initialFiles?.length) return
+        setState((previous) =>
+            previous.files.length
+                ? previous
+                : {
+                      ...previous,
+                      files: initialFiles.map((file) => ({ file, id: file.id, preview: file.url }))
+                  }
+        )
+    }, [initialFiles, setState, store])
 
     const revoke = useCallback((entries: FileWithPreview[]) => {
+        // The atom retains previews across unmounts; only discarded files release their URLs.
         for (const entry of entries) {
-            if (entry.preview && previewsRef.current.delete(entry.preview)) URL.revokeObjectURL(entry.preview)
+            if (entry.preview?.startsWith("blob:")) URL.revokeObjectURL(entry.preview)
         }
     }, [])
 
     const replaceFiles = useCallback(
         (files: FileWithPreview[], errors: string[] = []) => {
-            filesRef.current = files
             setState((previous) => ({ ...previous, files, errors }))
-            // Notify outside the React state updater: the consumer can update its own form.
+            // Notify outside the atom updater: the consumer can update its own form.
             onFilesChange?.(files)
             if (inputRef.current) inputRef.current.value = ""
         },
-        [onFilesChange]
+        [onFilesChange, setState]
     )
 
     const clearFiles = useCallback(() => {
-        revoke(filesRef.current)
+        revoke(store.get(fileUploadAtom).files)
         replaceFiles([])
-    }, [replaceFiles, revoke])
+    }, [replaceFiles, revoke, store])
 
     const addFiles = useCallback(
         (incoming: FileList | File[]) => {
             if (inputRef.current?.disabled) return
             const files = Array.from(incoming)
             if (!files.length) return
+            const currentFiles = store.get(fileUploadAtom).files
             const errors: string[] = []
             if (!multiple && files.length > 1) errors.push("Choose one source file per conversion.")
-            if (multiple && filesRef.current.length + files.length > maxFiles)
+            if (multiple && currentFiles.length + files.length > maxFiles)
                 errors.push(`Choose no more than ${maxFiles} files.`)
             for (const file of files) {
                 const error = validateUploadFile(file, options)
@@ -124,46 +130,50 @@ export function useFileUpload(options: FileUploadOptions = {}): [FileUploadState
                 .filter(
                     (file) =>
                         !multiple ||
-                        !filesRef.current.some(
-                            (entry) => entry.file.name === file.name && entry.file.size === file.size
-                        )
+                        !currentFiles.some((entry) => entry.file.name === file.name && entry.file.size === file.size)
                 )
                 .map((file) => {
                     // Documents don't need blob previews; only allocate URLs for images.
                     const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined
-                    if (preview) previewsRef.current.add(preview)
                     return { file, id: crypto.randomUUID(), preview }
                 })
-            if (!multiple) revoke(filesRef.current)
-            replaceFiles(multiple ? [...filesRef.current, ...additions] : additions)
+            if (!multiple) revoke(currentFiles)
+            replaceFiles(multiple ? [...currentFiles, ...additions] : additions)
             onFilesAdded?.(additions)
         },
-        [multiple, maxFiles, options, onError, onFilesAdded, replaceFiles, revoke]
+        [multiple, maxFiles, options, onError, onFilesAdded, replaceFiles, revoke, setState, store]
     )
 
     const removeFile = useCallback(
         (id: string) => {
-            revoke(filesRef.current.filter((entry) => entry.id === id))
-            replaceFiles(filesRef.current.filter((entry) => entry.id !== id))
+            const currentFiles = store.get(fileUploadAtom).files
+            revoke(currentFiles.filter((entry) => entry.id === id))
+            replaceFiles(currentFiles.filter((entry) => entry.id !== id))
         },
-        [replaceFiles, revoke]
+        [replaceFiles, revoke, store]
     )
-    const clearErrors = useCallback(() => setState((previous) => ({ ...previous, errors: [] })), [])
+    const clearErrors = useCallback(() => setState((previous) => ({ ...previous, errors: [] })), [setState])
     const handleDragOver = useCallback((event: DragEvent<HTMLElement>) => {
         event.preventDefault()
         event.stopPropagation()
     }, [])
-    const handleDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
-        event.preventDefault()
-        event.stopPropagation()
-        if (!inputRef.current?.disabled) setState((previous) => ({ ...previous, isDragging: true }))
-    }, [])
-    const handleDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
-        event.preventDefault()
-        event.stopPropagation()
-        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
-        setState((previous) => ({ ...previous, isDragging: false }))
-    }, [])
+    const handleDragEnter = useCallback(
+        (event: DragEvent<HTMLElement>) => {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!inputRef.current?.disabled) setState((previous) => ({ ...previous, isDragging: true }))
+        },
+        [setState]
+    )
+    const handleDragLeave = useCallback(
+        (event: DragEvent<HTMLElement>) => {
+            event.preventDefault()
+            event.stopPropagation()
+            if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+            setState((previous) => ({ ...previous, isDragging: false }))
+        },
+        [setState]
+    )
     const handleDrop = useCallback(
         (event: DragEvent<HTMLElement>) => {
             event.preventDefault()
@@ -171,7 +181,7 @@ export function useFileUpload(options: FileUploadOptions = {}): [FileUploadState
             setState((previous) => ({ ...previous, isDragging: false }))
             if (!inputRef.current?.disabled) addFiles(event.dataTransfer.files)
         },
-        [addFiles]
+        [addFiles, setState]
     )
     const handleFileChange = useCallback(
         (event: ChangeEvent<HTMLInputElement>) => {

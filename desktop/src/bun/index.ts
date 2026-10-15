@@ -61,13 +61,14 @@ try {
         titleBarStyle: "hiddenInset",
         allowedProtocols: { views: true, appData: true },
         url: await getMainViewUrl(),
+        trafficLightOffset: { x: 5, y: 5 },
         rpc,
-        frame: { width: 900, height: 700, x: 200, y: 200 }
+        frame: { width: 900, height: 700 }
     })
     if (process.platform === "darwin") {
         // Electrobun 2.0.2 uses absolute left/top insets, not deltas. Native
-        // buttons are 14pt tall: a 19pt top inset centers them in our 52pt bar.
-        mainWindow.setWindowButtonPosition(16, (52 - 14) / 2)
+        // buttons are 14pt tall: a 15pt top inset centers them in our 44pt bar.
+        //  mainWindow.setWindowButtonPosition(16, (44 - 14) / 2)
     }
     mainWindow.webview.setNavigationRules(["^*", "views://mainview/*", ...(development ? [`${DEV_SERVER_URL}/*`] : [])])
 } catch (error) {

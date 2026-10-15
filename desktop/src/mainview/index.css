@@ -1,7 +1,10 @@
 /* Vite's root is mainview; include sibling components when scanning utilities. */
-@import "tailwindcss" source("../");
+/*@import "tailwindcss" source("../"); <-- DO NOT RESTORE */
+@import "tailwindcss";
 @import "../css/globals.css";
 @import "../css/theme.css";
+
+@source "../"; /** DO NOT REMOVE */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -10,18 +13,18 @@
         @apply bg-primary/80 text-primary-foreground;
     }
     * {
-        @apply border-border outline-ring/50 ring-ring ring-0 select-none;
+        @apply ring-0 select-none;
     }
     html {
         @apply antialiased;
     }
     body {
-        @apply bg-linear-to-bl from-20% to-secondary to-80% bg-sidebar text-foreground flex min-h-svh flex-col font-sans;
+        @apply bg-linear-to-bl from-20% to-secondary to-80% bg-sidebar font-sans;
     }
     html,
     body,
     #root {
-        height: 100%;
+        margin: 0;
     }
     body {
         margin: 0;
@@ -78,6 +81,48 @@
     .desktop-shell button:not([role="tab"]):active:not(:disabled) {
         transform: none;
     }
+}
+
+/* Motion Panels owns extent animation; seams have a 14px keyboard/pointer target. */
+.motion-workspace .workspace-separator {
+    position: relative;
+    align-self: stretch;
+    outline: none;
+}
+.motion-workspace .workspace-separator[aria-orientation="vertical"] {
+    width: 14px;
+}
+.motion-workspace .workspace-separator[aria-orientation="horizontal"] {
+    height: 14px;
+}
+.motion-workspace .workspace-separator::before {
+    content: "";
+    position: absolute;
+    /*background: var(--border);*/
+    pointer-events: none;
+}
+.motion-workspace .workspace-separator[aria-orientation="vertical"]::before {
+    inset: 0 auto 0 50%;
+    width: 1px;
+}
+.motion-workspace .workspace-separator[aria-orientation="horizontal"]::before {
+    inset: 50% 0 auto 0;
+    height: 1px;
+}
+.motion-workspace .workspace-separator:hover::before,
+.motion-workspace .workspace-separator:focus-visible::before,
+.motion-workspace .workspace-separator[data-resizing]::before,
+.motion-workspace .workspace-separator[data-crossing]::before {
+    /*background: var(--primary);*/
+}
+.motion-workspace .workspace-separator:focus-visible,
+.motion-workspace [data-motion-panels-edge]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+}
+/* Clipped panels retain state, but must not retain keyboard-accessible controls. */
+.motion-workspace [inert] {
+    pointer-events: none;
 }
 
 /* ReUI's additional tokens; status colors remain owned by globals.css. */

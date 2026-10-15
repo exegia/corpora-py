@@ -32,22 +32,60 @@ localhost:5173 in a standalone browser: the latter has no native RPC bridge or o
 
 ## Desktop workspace
 
-The shell uses Shark UI's Ark-based **underline tabs**: Dashboard, Jobs, Explorer and Settings. Dashboard displays real
-sidecar status, the loopback endpoint, auth policy and RPC response time. Jobs submits real conversions to the managed
-Python API and tracks them across tab switches. Explorer remains a scaffold; library browsing is not wired up yet.
+The shell uses **Motion Panels** for three resizable plugin panels: **sidebar** (left), **inspector** (right), and
+**dock** (below the editors). Each panel contains an ordered, multi-expand accordion. Navigation and recent jobs start
+in the sidebar; job details and sidecar status start in the inspector; connection events and job logs start in the dock.
+Use a section's options menu to reorder, move it to another panel, or remove its placement. The panel's **+** menu adds
+any removed plugin. Several sections can remain expanded together.
 
-- The 52-point titlebar is a native drag region. On macOS, hidden-inset window controls use a 16-point left / 19-point
-  top inset to center their 14-point native buttons. Theme buttons remain clickable.
-- The appearance button cycles **system → light → dark**. Preferences are stored in webview local storage; system mode
-  follows OS appearance changes. Settings exposes the same control.
-- The bottom status bar stays visible while content scrolls. **Events** expands the latest 50 observed backend state
-  changes in this session; it is not a Python console-log stream. Repeated identical poll responses are not logged.
-- Automatic sidecar checks run every three seconds only while starting/offline, and stop as soon as Python is ready.
-  Background retries do not animate the check button. **Check sidecar** still works while online or paused; observing an
-  offline state rearms enabled automatic checks. Because online polling stops, a later sidecar crash is observed by a
-  manual check, not a continuous health probe.
-- Settings can pause/resume automatic status checks without stopping Python or job tracking. RPC timing is reported only
-  for successful responses, not failed connection attempts.
+The central primary/secondary editor groups remain separate from plugin placement. Home is pinned in the primary
+group. Explorer starts in the secondary group and remains a scaffold; no library is connected to it yet. Other views
+and jobs open as globally deduplicated, closable tabs. The tab menu selects overflowed tabs or moves the active tab
+between editor groups. Delete closes an unpinned tab.
+
+- The titlebar is a native drag region; panel toggles and Settings stay clickable. Resize seams with the pointer or
+  keyboard arrows (Shift for larger steps); Home/End set bounds, double-click resets the default size, and Enter folds
+  or reopens a panel. Open sizes and plugin arrangement survive folding. Layout stays in memory for this session.
+- **Events** in the status bar opens and expands the connection-events plugin wherever it is currently placed. Opening
+  a job expands its logs plugin, and the inspector follows the focused job. Events show the latest 50 observed backend
+  status changes, not an unrestricted Python console stream.
+- Automatic sidecar checks run every three seconds while starting/offline, then stop when Python is ready. **Check
+  sidecar** remains available while online or paused. A later crash is observed by a manual check. Settings can pause
+  checks without stopping Python or conversion tracking.
+- Settings cycles **system → light → dark**. Only this appearance preference persists on the device. Tokens, files,
+  jobs, tabs, and panel sizes stay in memory.
+
+### Shared renderer state and plugin contract
+
+`src/shared/store.ts` owns the application state. `main.tsx` supplies one Jotai `Provider` store, and App owns the
+backend, conversion, event, and appearance controllers above every plugin. Closing, removing, moving, or folding a
+plugin never cancels a conversion or unsubscribes those controllers.
+
+Plugin definitions register in `src/mainview/panel-plugins.tsx` through `PanelPluginRegistry` in `src/lib/panel.ts`.
+Register before mounting the workspace. A definition supplies a stable ID, name, default area, and component. Its ID
+never changes when moved; the area prefix on built-in IDs records their default location only. Registration is separate
+from the user's ordered `{ id, area, expanded }` placements in `pluginPlacementsAtom`.
+
+Dispatch `panelActionAtom` with these actions:
+
+| Action | Behavior |
+| --- | --- |
+| `set-open { area, open }` / `toggle { area }` | Open or fold the whole panel while retaining its size and placement state. |
+| `add { id, area?, index? }` | Add a registered plugin, expanded, and reveal its panel. An existing placement is unchanged. |
+| `open { id, area?, index? }` / `close { id }` | Open expands the existing placement and reveals its panel; a removed plugin is re-added at the specified or default area. Close folds the section but retains its header and position. |
+| `move { id, area, index? }` | Move an existing placement, retaining ID and expansion, and reveal the destination. `index` is zero-based within that panel; omitted appends, out-of-range values clamp. |
+| `remove { id }` / `set-expanded { area, ids }` | Remove only the placement, or set that panel's independently expanded sections. Unknown/unplaced IDs cannot create phantom sections. |
+
+Removing a plugin preserves its keyed domain state. Re-adding uses its default location unless an area is supplied;
+its former position is intentionally discarded. Moves across React parents can remount the view: retain application
+state in Jotai keyed by stable plugin ID, not current area. The logs plugin uses its stable ID and job ID for its search
+and level filters, independently of detail-view filters. Arbitrary React local state and DOM scroll/focus are not
+promised to survive a move.
+
+Drafts and selected files survive tab closes, moves, and panel folds. Removing/replacing a file, clearing the form, or
+successful submission releases retained previews. Token/endpoint changes reset conversion state and remove all
+identity-bound job tabs. **Reset panel layout** in the Corpora menu restores the default tabs, sizes, and plugin
+placements without discarding a draft or stopping jobs.
 
 ### Conversion jobs
 
