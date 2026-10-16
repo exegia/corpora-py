@@ -11,7 +11,9 @@ createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <Provider store={store}>
             <App />
-            {process.env.NODE_ENV === "development" && <Agentation />}
+            {process.env.NODE_ENV === "development" && (
+                <Agentation endpoint={import.meta.env.VITE_AGENTATION_ENDPOINT || "http://127.0.0.1:4747"} />
+            )}
         </Provider>
     </StrictMode>
 )

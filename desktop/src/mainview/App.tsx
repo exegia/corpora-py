@@ -74,7 +74,7 @@ function App() {
         )
     }
     return (
-        <div className="size-auto resize-none box-border block-screen grid grid-rows-2 gap-1">
+        <div className="motion-workspace flex h-dvh min-h-0 flex-col gap-1">
             <WorkspaceLayout
                 workspace={workspace}
                 dispatch={dispatch}

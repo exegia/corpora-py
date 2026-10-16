@@ -1,4 +1,3 @@
-import { ExploreTab } from "@/mainview/views/explore-tab"
 import { HomeTab } from "@/mainview/views/home-tab"
 import type { ComponentType } from "react"
 import { JobDetailTab } from "@/mainview/views/job-detail-tab"
@@ -13,6 +12,10 @@ export interface WorkspaceTab {
     view: ComponentType<WorkspaceViewProps>
     pinned: boolean
     jobId?: string
+}
+
+export function isTopNavigationTab(tab: Pick<WorkspaceTab, "id">): boolean {
+    return tab.id === "tab:home" || tab.id === "tab:explorer"
 }
 
 export function isJobWorkspaceTab(tab: WorkspaceTab): boolean {
@@ -77,8 +80,8 @@ export function createWorkspaceState(): WorkspaceState {
                 activeId: "tab:home"
             },
             secondary: {
-                tabs: [{ id: "tab:explorer", title: "Explorer", view: ExploreTab, pinned: false }],
-                activeId: "tab:explorer"
+                tabs: [],
+                activeId: null
             }
         },
         activeGroup: "primary"
@@ -122,7 +125,11 @@ export function workspaceReducer(state: WorkspaceState, action?: WorkspaceAction
 
     switch (action.type) {
         case "open": {
-            const target = action.target === undefined ? state.activeGroup : action.target
+            const target = isTopNavigationTab(action.tab ?? { id: "" })
+                ? "primary"
+                : action.target === undefined
+                  ? state.activeGroup
+                  : action.target
             if (!isGroupId(target) || !isWorkspaceTab(action.tab)) return state
             for (const group of groupIds) {
                 if (state.groups[group].tabs.some((tab) => tab.id === action.tab.id)) {
@@ -149,10 +156,11 @@ export function workspaceReducer(state: WorkspaceState, action?: WorkspaceAction
             const group = state.groups[action.group]
             const index = group.tabs.findIndex((tab) => tab.id === action.tabId)
             const tab = group.tabs[index]
-            if (!tab || tab.pinned || tab.id === "tab:home") return state
+            if (!tab || tab.pinned || isTopNavigationTab(tab)) return state
             return {
                 ...state,
-                groups: { ...state.groups, [action.group]: removeTab(group, index) }
+                groups: { ...state.groups, [action.group]: removeTab(group, index) },
+                activeGroup: action.group === "secondary" && group.tabs.length === 1 ? "primary" : state.activeGroup
             }
         }
         case "move": {
@@ -161,7 +169,7 @@ export function workspaceReducer(state: WorkspaceState, action?: WorkspaceAction
             const target = state.groups[action.target]
             const index = source.tabs.findIndex((tab) => tab.id === action.tabId)
             const tab = source.tabs[index]
-            if (!tab || tab.pinned || tab.id === "tab:home") return state
+            if (!tab || tab.pinned || isTopNavigationTab(tab)) return state
             if (target.tabs.some((existing) => existing.id === tab.id)) return state
             return {
                 ...state,

@@ -206,20 +206,20 @@ function withRevocationSpy(run: (revoke: ReturnType<typeof revocationSpy>) => vo
 }
 
 describe("store workspace and shared tab derivations", () => {
-    test("starts with the primary dashboard, secondary explorer and default panels", () => {
+    test("starts on unsplit Home with fixed 470px side panels", () => {
         const store = createStore()
         expect(store.get(atoms.workspaceAtom)).toEqual(createWorkspaceState())
         expect(store.get(atoms.activeTabAtom)).toBe("tab:home")
         expect(store.get(atoms.activeWorkspaceTabAtom)?.view).toBe(HomeTab)
         expect(panelState(store)).toEqual({
-            leftWidth: 180,
-            rightWidth: 200,
+            leftWidth: 470,
+            rightWidth: 470,
             secondaryWidth: "45%",
             bottomHeight: 210,
             leftCollapsed: false,
             rightCollapsed: false,
-            secondaryCollapsed: false,
-            dockCollapsed: false,
+            secondaryCollapsed: true,
+            dockCollapsed: true,
             plugins: defaultPluginPlacements(),
             titlebarPopoverOpen: false
         })
@@ -228,8 +228,8 @@ describe("store workspace and shared tab derivations", () => {
 
     test("reopening the selected secondary tab reveals its editor even when selection is unchanged", () => {
         const store = createStore()
-        const tab = navigationTab("tab:explorer")
-        store.set(atoms.workspaceActionAtom, { type: "open", tab })
+        const tab = jobWorkspaceTab(job("a"))
+        store.set(atoms.workspaceActionAtom, { type: "open", tab, target: "secondary" })
         const previous = store.get(atoms.workspaceAtom)
         store.set(atoms.secondaryCollapsedAtom, true)
         store.set(atoms.workspaceActionAtom, { type: "open", tab })
@@ -239,17 +239,15 @@ describe("store workspace and shared tab derivations", () => {
 
     test("open, focus and activeTab writes share the same workspace selection", () => {
         const store = createStore()
-        store.set(atoms.workspaceActionAtom, { type: "open", tab: jobWorkspaceTab(job("a")), target: "secondary" })
-        expect(store.get(atoms.activeTabAtom)).toBe("job:a")
+        for (const id of ["a", "b"])
+            store.set(atoms.workspaceActionAtom, { type: "open", tab: jobWorkspaceTab(job(id)), target: "secondary" })
+        store.set(atoms.activeTabAtom, "job:a")
         expect(store.get(atoms.activeWorkspaceTabAtom)?.jobId).toBe("a")
         expectWorkspaceDerived(store)
-        store.set(atoms.activeTabAtom, "tab:explorer")
-        expect(store.get(atoms.activeWorkspaceTabAtom)?.view).toBe(ExploreTab)
         store.set(atoms.workspaceActionAtom, { type: "focus", group: "primary" })
         expect(store.get(atoms.activeTabAtom)).toBe("tab:home")
-        expectWorkspaceDerived(store)
         store.set(atoms.workspaceActionAtom, { type: "focus", group: "secondary" })
-        expect(store.get(atoms.activeTabAtom)).toBe("tab:explorer")
+        expect(store.get(atoms.activeTabAtom)).toBe("job:a")
         const before = store.get(atoms.workspaceAtom)
         store.set(atoms.activeTabAtom, "tab:home")
         expect(store.get(atoms.workspaceAtom)).toBe(before)
@@ -295,15 +293,15 @@ describe("store workspace and shared tab derivations", () => {
         for (const [tabId, nextId] of [
             ["job:b", "job:c"],
             ["job:c", "job:a"],
-            ["job:a", "tab:explorer"],
-            ["tab:explorer", null]
+            ["job:a", null]
         ]) {
             store.set(atoms.workspaceActionAtom, { type: "close", group: "secondary", tabId: tabId! })
-            expect(store.get(atoms.activeTabAtom)).toBe(nextId)
+            expect(store.get(atoms.workspaceAtom).groups.secondary.activeId).toBe(nextId)
             expectWorkspaceDerived(store)
         }
-        expect(store.get(atoms.tabItemsAtom)).toEqual([])
-        expect(store.get(atoms.activeWorkspaceTabAtom)).toBeNull()
+        expect(store.get(atoms.workspaceAtom).groups.secondary.tabs).toEqual([])
+        expect(store.get(atoms.activeTabAtom)).toBe("tab:home")
+        expect(store.get(atoms.secondaryCollapsedAtom)).toBe(true)
     })
 
     test("moving a job updates both selections and retains the moved tab and job state", () => {
@@ -330,25 +328,18 @@ describe("store workspace and shared tab derivations", () => {
         expectWorkspaceDerived(store)
     })
 
-    test("moving the sole secondary tab empties its source and selects its destination", () => {
+    test("moving the sole secondary tab empties and folds its source and selects its destination", () => {
         const store = createStore()
-        store.set(atoms.workspaceActionAtom, {
-            type: "move",
-            group: "secondary",
-            tabId: "tab:explorer",
-            target: "primary"
-        })
+        store.set(atoms.workspaceActionAtom, { type: "open", tab: jobWorkspaceTab(job("a")), target: "secondary" })
+        expect(store.get(atoms.secondaryCollapsedAtom)).toBe(false)
+        store.set(atoms.workspaceActionAtom, { type: "move", group: "secondary", tabId: "job:a", target: "primary" })
         expect(store.get(atoms.workspaceAtom).groups.secondary).toEqual({ tabs: [], activeId: null })
-        expect(store.get(atoms.activeTabAtom)).toBe("tab:explorer")
-        expectWorkspaceDerived(store)
-        store.set(atoms.workspaceActionAtom, {
-            type: "move",
-            group: "primary",
-            tabId: "tab:explorer",
-            target: "secondary"
-        })
+        expect(store.get(atoms.secondaryCollapsedAtom)).toBe(true)
+        expect(store.get(atoms.activeTabAtom)).toBe("job:a")
+        store.set(atoms.workspaceActionAtom, { type: "move", group: "primary", tabId: "job:a", target: "secondary" })
         expect(store.get(atoms.workspaceAtom).groups.primary.activeId).toBe("tab:home")
-        expect(store.get(atoms.tabItemsAtom).map((tab) => tab.id)).toEqual(["tab:explorer"])
+        expect(store.get(atoms.tabItemsAtom).map((tab) => tab.id)).toEqual(["job:a"])
+        expect(store.get(atoms.secondaryCollapsedAtom)).toBe(false)
         expectWorkspaceDerived(store)
     })
 
@@ -534,7 +525,7 @@ describe("workspace and conversion reset boundaries", () => {
         expect(reset).not.toBe(original)
         expect(reset.groups.primary.tabs).not.toBe(original.groups.primary.tabs)
         expect(panelState(store)).toEqual(panelState(createStore()))
-        expect(store.get(atoms.eventsOpenAtom)).toBe(true)
+        expect(store.get(atoms.eventsOpenAtom)).toBe(false)
         expect(store.get(atoms.conversionDraftAtom)).toBe(retainedDraft)
         expect(store.get(atoms.fileUploadAtom)).toBe(retainedUpload)
         expect(store.get(atoms.conversionStepAtom)).toBe(2)
@@ -558,6 +549,8 @@ describe("workspace and conversion reset boundaries", () => {
 
     test("events visibility follows its placement and expansion, and showEvents reveals its panel", () => {
         const store = createStore()
+        expect(store.get(atoms.eventsOpenAtom)).toBe(false)
+        store.set(atoms.showEventsAtom)
         expect(store.get(atoms.eventsOpenAtom)).toBe(true)
         store.set(atoms.panelActionAtom, { type: "close", id: "dock-events" })
         expect(store.get(atoms.eventsOpenAtom)).toBe(false)
@@ -667,6 +660,12 @@ describe("identity reset job-tab privacy", () => {
             store.set(atoms.lastEndpointAtom, ready.url)
             store.set(atoms.applyRequestTokenAtom, "previous-identity")
             const initial = createWorkspaceState()
+            const reference: WorkspaceTab = {
+                id: "document:reference",
+                title: "Reference",
+                view: ExploreTab,
+                pinned: false
+            }
             const settings = navigationTab("settings")
             const jobs = navigationTab("jobs")
             const retainedExplorer: WorkspaceTab = {
@@ -701,7 +700,7 @@ describe("identity reset job-tab privacy", () => {
                     },
                     secondary: {
                         tabs: [
-                            initial.groups.secondary.tabs[0],
+                            reference,
                             {
                                 id: "private-secondary",
                                 title: "Previous user's other job",
@@ -737,7 +736,7 @@ describe("identity reset job-tab privacy", () => {
             }
             const workspace = store.get(atoms.workspaceAtom)
             expect(workspace.groups.primary.tabs).toEqual([initial.groups.primary.tabs[0], settings, jobs])
-            expect(workspace.groups.secondary.tabs).toEqual([initial.groups.secondary.tabs[0], retainedExplorer])
+            expect(workspace.groups.secondary.tabs).toEqual([reference, retainedExplorer])
             expect(workspace.groups.primary.activeId).toBe("jobs")
             expect(workspace.groups.secondary.activeId).toBe("retained-explorer")
             expect(workspace.activeGroup).toBe("secondary")
@@ -789,9 +788,10 @@ describe("identity reset job-tab privacy", () => {
                 expect(workspace.groups.primary).toEqual(initial.groups.primary)
                 expect(workspace.groups.secondary.tabs).toEqual(selection === "empty" ? [] : [explorer, settings])
                 expect(workspace.groups.secondary.activeId).toBe(chosen.expectedId)
-                expect(workspace.activeGroup).toBe("secondary")
-                expect(store.get(atoms.activeTabAtom)).toBe(chosen.expectedId)
-                expect(store.get(atoms.activeWorkspaceTabAtom)).toBe(selection === "empty" ? null : settings)
+                expect(workspace.activeGroup).toBe(selection === "empty" ? "primary" : "secondary")
+                expect(store.get(atoms.secondaryCollapsedAtom)).toBe(selection === "empty")
+                expect(store.get(atoms.activeTabAtom)).toBe(selection === "empty" ? "tab:home" : chosen.expectedId)
+                expect(store.get(atoms.activeWorkspaceTabAtom)).toBe(selection === "empty" ? initial.groups.primary.tabs[0] : settings)
                 expect(store.get(atoms.inspectedJobIdAtom)).toBeNull()
                 expectWorkspaceDerived(store)
             }

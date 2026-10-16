@@ -21,9 +21,9 @@ interface StatusBarProps {
 
 const labels = {
     starting: "Connecting",
-    ready: "Backend online",
-    failed: "Backend unavailable",
-    stopped: "Backend stopped"
+    ready: " online",
+    failed: " unavailable",
+    stopped: " stopped"
 } as const
 
 export function StatusBar({
@@ -67,6 +67,7 @@ export function StatusBar({
                 className="flex shrink-0 items-center gap-2">
                 <Status
                     size="sm"
+                    className="animate-ping"
                     variant={
                         backend.state === "ready"
                             ? "success"

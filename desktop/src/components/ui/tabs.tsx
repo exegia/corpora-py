@@ -1,10 +1,10 @@
 "use client"
 
-import { Tabs as ArkTabs, useTabsContext, tabsAnatomy } from "@ark-ui/react/tabs"
-import { useMemo, useRef, type ComponentProps } from "react"
+import { Tabs as ArkTabs, useTabsContext } from "@ark-ui/react/tabs"
+import { type ComponentProps } from "react"
 import { tv, type VariantProps } from "tailwind-variants"
 import { cn } from "@/lib/utils"
-import { Glass, GlassProps } from "@samasante/liquid-glass"
+import { Glass } from "@samasante/liquid-glass"
 
 export const useTabs = useTabsContext
 
@@ -24,7 +24,7 @@ export const Tabs = (props: React.ComponentProps<typeof ArkTabs.Root>) => {
 const tabsListVariants = tv({
     slots: {
         base: [
-            "relative z-0",
+            "relative isolate",
             "w-fit",
             "text-muted-foreground",
             "flex items-center justify-center gap-x-0.5",
@@ -33,7 +33,7 @@ const tabsListVariants = tv({
         indicator: [
             "absolute inset-s-0 bottom-0",
             "h-(--height) w-(--width)",
-            "transition-[width,translate] duration-200 ease-in-out",
+            "pointer-events-none transition-[width,height,translate] duration-200 ease-in-out",
             "motion-reduce:transition-none!"
         ]
     },
@@ -44,8 +44,8 @@ const tabsListVariants = tv({
                 indicator: ["-z-1 rounded-lg bg-accent"]
             },
             glass: {
-                base: ["relative!"],
-                indicator: ["z-1 bg-black"]
+                base: ["rounded-lg"],
+                indicator: ["z-0 rounded-lg border border-border/60 bg-background/20 shadow-sm"]
             },
             underline: {
                 base: [
@@ -71,21 +71,6 @@ interface TabsListProps extends ComponentProps<typeof ArkTabs.List>, VariantProp
 export const TabsList = (props: TabsListProps) => {
     const { variant = "default", className, children, ...rest } = props
     const { base, indicator } = tabsListVariants({ variant })
-    const indicarorRef = useRef<HTMLDivElement>(null)
-
-    const origin = useMemo<GlassProps["center"]>(
-        () => ({
-            x: (indicarorRef.current?.clientWidth ?? 0) / 2,
-            y: (indicarorRef.current?.clientHeight ?? 0) / 2
-        }),
-        [indicarorRef.current]
-    )
-
-    const size = useMemo<DOMRect>(() => {
-        if (!indicarorRef.current) return new DOMRect()
-        const rect = indicarorRef.current.getBoundingClientRect()
-        return rect
-    }, [indicarorRef.current])
 
     return (
         <ArkTabs.List
@@ -94,28 +79,19 @@ export const TabsList = (props: TabsListProps) => {
 
             {...rest}>
             {children}
-            {/*<ArkTabs.Indicator
-                ref={indicarorRef}
+            <ArkTabs.Indicator
                 className={cn(indicator())}
                 data-slot="tab-indicator"
-            />*/}
-            <Glass
-                height={24}
-                width={300}
-                data-slot="tab-indicator"
-                className={cn(indicator())}
-                style={{ minWidth: 60 }}
-                radius={12}
-                // lenses={[
-                //   {
-                //       i
-                //         h: size.height,
-                //         w: size.width,
-                //         x: size.x,
-                //         y: size.y
-                //     }
-                // ]}
-            />
+                aria-hidden="true">
+                {variant === "glass" && (
+                    <Glass
+                        className="absolute inset-0 size-full min-h-5 rounded-[inherit]"
+                        radius={6}
+                        aria-hidden="true">
+                        <span aria-hidden="true" />
+                    </Glass>
+                )}
+            </ArkTabs.Indicator>
         </ArkTabs.List>
     )
 }
@@ -125,7 +101,7 @@ export const TabsTrigger = (props: React.ComponentProps<typeof ArkTabs.Trigger>)
     return (
         <ArkTabs.Trigger
             className={cn(
-                "relative",
+                "relative z-10",
                 "h-6 sm:h-6",
                 "flex shrink-0 grow items-center justify-center gap-1.5",
                 "px-[calc(--spacing(2.5)-1px)]",

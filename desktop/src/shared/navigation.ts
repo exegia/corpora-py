@@ -18,7 +18,7 @@ export function navigationTab(id: TabID): WorkspaceTab {
         case "tab:home":
             return { id, title: "Home", view: HomeTab, pinned: true }
         case "tab:explorer":
-            return { id, title: "Explorer", view: ExploreTab, pinned: false }
+            return { id, title: "Explorer", view: ExploreTab, pinned: true }
         case "jobs":
             return { id, title: "Conversion jobs", view: JobTab, pinned: false }
         case "settings":

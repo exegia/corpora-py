@@ -4,8 +4,33 @@ import { JobTab } from "../mainview/views/jobs-tab"
 import { JobDetailTab } from "../mainview/views/job-detail-tab"
 import { SettingsTab } from "../mainview/views/settings-tab"
 import { describe, expect, test } from "bun:test"
-import { activeWorkspaceTab, createWorkspaceState, jobWorkspaceTab, workspaceReducer } from "./workspace-tabs"
-import type { WorkspaceAction, WorkspaceType, WorkspaceState, WorkspaceTab } from "./workspace-tabs"
+import {
+    activeWorkspaceTab,
+    createWorkspaceState as createInitialWorkspaceState,
+    jobWorkspaceTab,
+    workspaceReducer
+} from "./workspace-tabs"
+import type {
+    WorkspaceAction,
+    TWorkspaceGroupType as WorkspaceType,
+    WorkspaceState,
+    WorkspaceTab
+} from "./workspace-tabs"
+
+// A non-navigation document explicitly populates secondary for reducer transition coverage.
+function createWorkspaceState(): WorkspaceState {
+    const state = createInitialWorkspaceState()
+    return {
+        ...state,
+        groups: {
+            ...state.groups,
+            secondary: {
+                tabs: [{ id: "document:reference", title: "Reference", view: ExploreTab, pinned: false }],
+                activeId: "document:reference"
+            }
+        }
+    }
+}
 
 const groupIds: readonly WorkspaceType[] = ["primary", "secondary"]
 
@@ -50,21 +75,14 @@ function expectInvariants(state: WorkspaceState): void {
 }
 
 describe("workspace initial state and active tab", () => {
-    test("starts with a pinned primary dashboard and an unpinned secondary explorer", () => {
-        const state = createWorkspaceState()
-        expect(state).toEqual({
-            groups: {
-                primary: {
-                    tabs: [{ id: "tab:home", title: "Home", view: HomeTab, pinned: true }],
-                    activeId: "tab:home"
-                },
-                secondary: {
-                    tabs: [{ id: "tab:explorer", title: "Explorer", view: ExploreTab, pinned: false }],
-                    activeId: "tab:explorer"
-                }
-            },
-            activeGroup: "primary"
+    test("starts on Home with an empty secondary editor", () => {
+        const state = createInitialWorkspaceState()
+        expect(state.groups.primary).toEqual({
+            tabs: [{ id: "tab:home", title: "Home", view: HomeTab, pinned: true }],
+            activeId: "tab:home"
         })
+        expect(state.groups.secondary).toEqual({ tabs: [], activeId: null })
+        expect(state.activeGroup).toBe("primary")
         expectInvariants(state)
     })
 
@@ -91,7 +109,7 @@ describe("workspace initial state and active tab", () => {
 
     test("returns null for an empty group, missing selection or invalid group", () => {
         const state = createWorkspaceState()
-        const empty = workspaceReducer(state, { type: "close", group: "secondary", tabId: "tab:explorer" })
+        const empty = workspaceReducer(state, { type: "close", group: "secondary", tabId: "document:reference" })
         expect(activeWorkspaceTab(empty, "secondary")).toBeNull()
         const stale: WorkspaceState = {
             ...state,
@@ -113,7 +131,7 @@ describe("opening workspace tabs", () => {
         expect(next.groups.primary).toBe(state.groups.primary)
         expect(next.groups.secondary.tabs[0]).toBe(state.groups.secondary.tabs[0])
         expect(next.groups.secondary.tabs[1]).not.toBe(tab)
-        expect(state.groups.secondary.activeId).toBe("tab:explorer")
+        expect(state.groups.secondary.activeId).toBe("document:reference")
     })
 
     test("uses the focused group when no target is supplied", () => {
@@ -205,10 +223,10 @@ describe("selecting and focusing workspace groups", () => {
 
     test("selecting the selected tab in another group only changes focus", () => {
         const state = createWorkspaceState()
-        const next = workspaceReducer(state, { type: "select", group: "secondary", tabId: "tab:explorer" })
+        const next = workspaceReducer(state, { type: "select", group: "secondary", tabId: "document:reference" })
         expect(next.activeGroup).toBe("secondary")
         expect(next.groups).toBe(state.groups)
-        expect(workspaceReducer(next, { type: "select", group: "secondary", tabId: "tab:explorer" })).toBe(next)
+        expect(workspaceReducer(next, { type: "select", group: "secondary", tabId: "document:reference" })).toBe(next)
     })
 
     test("focus preserves both selections and all group references", () => {
@@ -223,7 +241,7 @@ describe("selecting and focusing workspace groups", () => {
         const empty = workspaceReducer(createWorkspaceState(), {
             type: "close",
             group: "secondary",
-            tabId: "tab:explorer"
+            tabId: "document:reference"
         })
         const next = workspaceReducer(empty, { type: "focus", group: "secondary" })
         expect(next.activeGroup).toBe("secondary")
@@ -254,9 +272,9 @@ describe("closing workspace tabs", () => {
         const state = workspaceReducer(withJobs("secondary"), {
             type: "select",
             group: "secondary",
-            tabId: "tab:explorer"
+            tabId: "document:reference"
         })
-        const next = workspaceReducer(state, { type: "close", group: "secondary", tabId: "tab:explorer" })
+        const next = workspaceReducer(state, { type: "close", group: "secondary", tabId: "document:reference" })
         expect(next.groups.secondary.activeId).toBe("job:a")
     })
 
@@ -271,15 +289,16 @@ describe("closing workspace tabs", () => {
         expect(state.groups.primary.tabs).toHaveLength(4)
     })
 
-    test("closing the only secondary tab leaves an empty group without stealing focus", () => {
+    test("closing the only secondary tab returns focus to primary", () => {
         const state = workspaceReducer(createWorkspaceState(), { type: "focus", group: "secondary" })
-        const next = workspaceReducer(state, { type: "close", group: "secondary", tabId: "tab:explorer" })
+        const next = workspaceReducer(state, { type: "close", group: "secondary", tabId: "document:reference" })
         expect(next.groups.secondary).toEqual({ tabs: [], activeId: null })
-        expect(next.activeGroup).toBe("secondary")
+        expect(next.activeGroup).toBe("primary")
         expect(next.groups.primary).toBe(state.groups.primary)
         expectInvariants(next)
         const reopened = workspaceReducer(next, { type: "open", tab: jobTab("a") })
-        expect(reopened.groups.secondary).toEqual({ tabs: [jobTab("a")], activeId: "job:a" })
+        expect(reopened.activeGroup).toBe("primary")
+        expect(reopened.groups.primary.activeId).toBe("job:a")
     })
 
     test("the dashboard and other pinned tabs cannot close", () => {
@@ -334,17 +353,17 @@ describe("moving workspace tabs", () => {
         const next = workspaceReducer(createWorkspaceState(), {
             type: "move",
             group: "secondary",
-            tabId: "tab:explorer",
+            tabId: "document:reference",
             target: "primary"
         })
         expect(next.groups.secondary).toEqual({ tabs: [], activeId: null })
-        expect(next.groups.primary.tabs.map((tab) => tab.id)).toEqual(["tab:home", "tab:explorer"])
-        expect(next.groups.primary.activeId).toBe("tab:explorer")
+        expect(next.groups.primary.tabs.map((tab) => tab.id)).toEqual(["tab:home", "document:reference"])
+        expect(next.groups.primary.activeId).toBe("document:reference")
         expectInvariants(next)
     })
 
     test("moving to an empty secondary group selects the moved tab", () => {
-        const empty = workspaceReducer(withJobs(), { type: "close", group: "secondary", tabId: "tab:explorer" })
+        const empty = workspaceReducer(withJobs(), { type: "close", group: "secondary", tabId: "document:reference" })
         const next = workspaceReducer(empty, { type: "move", group: "primary", tabId: "job:a", target: "secondary" })
         expect(next.groups.secondary).toEqual({ tabs: [jobTab("a")], activeId: "job:a" })
         expectInvariants(next)
@@ -374,7 +393,7 @@ describe("moving workspace tabs", () => {
             ...state,
             groups: {
                 ...state.groups,
-                secondary: { tabs: [...state.groups.secondary.tabs, jobTab("a")], activeId: "tab:explorer" }
+                secondary: { tabs: [...state.groups.secondary.tabs, jobTab("a")], activeId: "document:reference" }
             }
         }
         expect(
@@ -405,7 +424,7 @@ describe("invalid actions and immutable updates", () => {
             { type: "move" },
             { type: "focus" },
             { type: "select", group: "primary", tabId: "missing" },
-            { type: "select", group: "primary", tabId: "tab:explorer" },
+            { type: "select", group: "primary", tabId: "document:reference" },
             { type: "close", group: "secondary", tabId: "job:a" },
             { type: "move", group: "primary", tabId: "missing", target: "secondary" },
             { type: "move", group: "primary", tabId: "job:a" },
@@ -464,7 +483,7 @@ describe("invalid actions and immutable updates", () => {
             { type: "select", group: "primary", tabId: "tab:home" },
             { type: "move", group: "primary", tabId: "job:a", target: "secondary" },
             { type: "focus", group: "primary" },
-            { type: "close", group: "secondary", tabId: "tab:explorer" },
+            { type: "close", group: "secondary", tabId: "document:reference" },
             { type: "close", group: "primary", tabId: "job:b" },
             { type: "close", group: "secondary", tabId: "job:a" },
             { type: "open", tab: jobTab("c"), target: "secondary" },

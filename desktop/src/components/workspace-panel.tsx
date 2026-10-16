@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react"
+import { useMemo } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { PanelRight, Sidebar } from "lucide-react"
 import { PanelPlugin } from "@/components/panel-plugin"
@@ -46,6 +46,7 @@ export function WorkspacePanel({ area }: { area: PanelPluginArea }) {
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <Accordion
+                    multiple
                     value={isOpen}
                     onValueChange={(ids) => dispatch({ type: "set-expanded", area, ids })}>
                     {plugins.map((placement, index) => {

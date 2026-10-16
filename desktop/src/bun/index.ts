@@ -59,9 +59,10 @@ try {
     const mainWindow = new BrowserWindow({
         title: "Corpora",
         titleBarStyle: "hiddenInset",
+        passthrough: false,
         allowedProtocols: { views: true, appData: true },
         url: await getMainViewUrl(),
-        trafficLightOffset: { x: 5, y: 5 },
+        trafficLightOffset: { x: 6, y: 6 },
         rpc,
         frame: { width: 900, height: 700 }
     })

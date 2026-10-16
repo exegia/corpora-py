@@ -15,12 +15,14 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
     workspaceReducer,
+    isTopNavigationTab,
     type WorkspaceAction,
     type WorkspaceType,
     type WorkspaceState,
     type WorkspaceTab,
     TWorkspaceGroupType
 } from "@/lib/workspace-tabs"
+import { cn } from "tailwind-variants"
 
 interface TabLayoutProps {
     group: TWorkspaceGroupType
@@ -32,7 +34,9 @@ interface TabLayoutProps {
 }
 
 export function TabLayout({ group, workspace, dispatch, renderTab, onRevealGroup, onNewConversion }: TabLayoutProps) {
-    const { tabs, activeId } = workspace.groups[group]
+    const { tabs: allTabs, activeId } = workspace.groups[group]
+    const tabs = allTabs.filter((tab) => !isTopNavigationTab(tab))
+    const navigationView = allTabs.find((tab) => tab.id === activeId && isTopNavigationTab(tab))
     const triggers = useRef<Record<string, HTMLButtonElement | null>>({})
     const menu = useRef<HTMLButtonElement | null>(null)
     const previous = useRef(activeId)
@@ -58,8 +62,10 @@ export function TabLayout({ group, workspace, dispatch, renderTab, onRevealGroup
         dispatch(action)
         requestAnimationFrame(() => {
             const nextId = next.groups[group].activeId
-            if (nextId) triggers.current[nextId]?.focus()
-            else menu.current?.focus()
+            if (next.groups.secondary.tabs.length === 0 && group === "secondary") {
+                document.querySelector<HTMLInputElement>('[data-top-navigation="tab:home"] input')?.focus()
+            } else if (nextId && triggers.current[nextId]) triggers.current[nextId]?.focus()
+            else document.querySelector<HTMLInputElement>('[data-top-navigation="tab:home"] input')?.focus()
         })
     }
 
@@ -122,68 +128,74 @@ export function TabLayout({ group, workspace, dispatch, renderTab, onRevealGroup
     )
 
     return (
-        <Tabs
-            value={activeId}
-            unmountOnExit={false}
-            lazyMount
-            onValueChange={({ value }) => {
-                if (value) dispatch({ type: "select", group, tabId: value })
-            }}
-            onFocusCapture={() => dispatch({ type: "focus", group })}
-            data-workspace-group={group}>
-            <div className="flex flex-1 gap-0.5 w-full items-center relative px-2 pt-1.5">
-                <TabsList
-                    variant="glass"
+        <>
+            {navigationView && (
+                <section className="@container h-full min-h-0 overflow-y-auto p-5">{renderTab(navigationView)}</section>
+            )}
+            <Tabs
+                value={navigationView ? null : activeId}
+                unmountOnExit={false}
+                lazyMount
+                onValueChange={({ value }) => {
+                    if (value) dispatch({ type: "select", group, tabId: value })
+                }}
+                onFocusCapture={() => dispatch({ type: "focus", group })}
+                className={navigationView ? "hidden" : "h-full min-h-0 min-w-0 gap-0"}
+                data-workspace-group={group}>
+                <div className="relative flex w-full shrink-0 items-center gap-0.5 px-2 pt-1.5 pr-10">
+                    <TabsList
+                        variant="glass"
+                        aria-label={`${group === "primary" ? "Primary" : "Secondary"} workspace tabs`}>
+                        {tabs.map((tab) => (
+                            <div
+                                key={tab.id}
+                                className="relative flex shrink-0 items-center">
+                                <TabsTrigger
+                                    value={tab.id}
+                                    title={tab.title}
+                                    data-workspace-tab-id={tab.id}
+                                    className={cn(tab.pinned ? "pr-4" : "pr-3", "py-3")}
+                                    ref={(node) => {
+                                        triggers.current[tab.id] = node
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Delete" && !tab.pinned) {
+                                            event.preventDefault()
+                                            close(tab.id)
+                                        }
+                                    }}>
+                                    <span className="max-w-44 min-h-16 truncate text-sm">{tab.title}</span>
+                                </TabsTrigger>
 
-                    aria-label={`${group === "primary" ? "Primary" : "Secondary"} workspace tabs`}>
-                    {tabs.map((tab, index) => (
-                        <TabsTrigger
-                            key={index}
-                            value={tab.id}
-                            title={tab.title}
-                            // asChild
-                            data-workspace-tab-id={tab.id}
-                            ref={(node) => {
-                                triggers.current[tab.id] = node
-                            }}
-
-                            onKeyDown={(event) => {
-                                if (event.key === "Delete" && !tab.pinned) {
-                                    event.preventDefault()
-                                    close(tab.id)
-                                }
-                            }}>
-                            <div className="relative min-h-0 min-w-0 flex flex-row items-center gap-1">
-                                <span className="truncate text-xs">{tab.title}</span>
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="icon-xs"
-                                    className="w-2.5 h-2.5 my-auto"
+                                    className="absolute right-1 z-20 size-4"
                                     aria-label={`Close ${tab.title}`}
                                     onClick={() => close(tab.id)}>
                                     <MorphIcon
                                         icon={tab.pinned ? Pin : X}
                                         aria-hidden="true"
-                                        className="size-2.5 shrink-0 text-secondary-foreground"
+                                        className="size-2.5 text-secondary-foreground"
                                     />
                                 </Button>
                             </div>
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
-                {renderTabsMenu()}
-            </div>
-            {tabs.length
-                ? tabs.map((tab) => (
-                      <TabsContent
-                          key={tab.id}
-                          value={tab.id}
-                          className="min-h-0 min-w-0 data-[state=inactive]:hidden">
-                          {renderTab(tab)}
-                      </TabsContent>
-                  ))
-                : null}
-        </Tabs>
+                        ))}
+                    </TabsList>
+                    {renderTabsMenu()}
+                </div>
+                {tabs.length
+                    ? tabs.map((tab) => (
+                          <TabsContent
+                              key={tab.id}
+                              value={tab.id}
+                              className="min-h-0 min-w-0 data-[state=inactive]:hidden">
+                              {renderTab(tab)}
+                          </TabsContent>
+                      ))
+                    : null}
+            </Tabs>
+        </>
     )
 }

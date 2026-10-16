@@ -41,14 +41,9 @@ export const workspaceActionAtom = named(
     atom(null, (get, set, action: WorkspaceAction) => {
         const next = workspaceReducer(get(workspaceAtom), action)
         set(workspaceAtom, next)
-        // An already-selected secondary tab still needs to reveal a folded editor.
-        if (
-            action.type === "open" &&
-            next.activeGroup === "secondary" &&
-            next.groups.secondary.tabs.some((tab) => tab.id === action.tab.id)
-        ) {
-            set(secondaryCollapsedAtom, false)
-        }
+        // Empty editors fold immediately; opening/selecting an existing secondary tab reveals it.
+        if (next.groups.secondary.tabs.length === 0) set(secondaryCollapsedAtom, true)
+        else if (next.activeGroup === "secondary") set(secondaryCollapsedAtom, false)
     }),
     "workspace.action"
 )
@@ -68,14 +63,15 @@ export const activeWorkspaceTabAtom = named(
     atom((get) => activeWorkspaceTab(get(workspaceAtom))),
     "workspace.activeView"
 )
-export const sidebarWidthAtom = named(atom(180), "panels.sidebar.width")
-export const inspectorWidthAtom = named(atom(200), "panels.inspector.width")
+export const PANEL_DEFAULT_WIDTH = 470
+export const sidebarWidthAtom = named(atom(PANEL_DEFAULT_WIDTH), "panels.sidebar.width")
+export const inspectorWidthAtom = named(atom(PANEL_DEFAULT_WIDTH), "panels.inspector.width")
 export const secondaryWidthAtom = named(atom<Size>("45%"), "panels.secondary.width")
 export const dockHeightAtom = named(atom(210), "panels.dock.height")
 export const sidebarCollapsedAtom = named(atom(false), "panels.sidebar.collapsed")
 export const inspectorCollapsedAtom = named(atom(false), "panels.inspector.collapsed")
-export const dockCollapsedAtom = named(atom(false), "panels.dock.collapsed")
-export const secondaryCollapsedAtom = named(atom(false), "panels.secondary.collapsed")
+export const dockCollapsedAtom = named(atom(true), "panels.dock.collapsed")
+export const secondaryCollapsedAtom = named(atom(true), "panels.secondary.collapsed")
 export const titlebarPopoverOpenAtom = named(atom(false), "titlebar.menu.open")
 export const panelCollapsedAtoms = {
     sidebar: sidebarCollapsedAtom,
@@ -382,8 +378,11 @@ export const resetConversionViewsAtom = named(
         const primary = withoutJobTabs(workspace.groups.primary)
         const secondary = withoutJobTabs(workspace.groups.secondary)
         if (primary !== workspace.groups.primary || secondary !== workspace.groups.secondary) {
-            set(workspaceAtom, { ...workspace, groups: { primary, secondary } })
+            set(workspaceAtom, { ...workspace, groups: { primary, secondary },
+                activeGroup: workspace.activeGroup === "secondary" && secondary.tabs.length === 0 ? "primary" : workspace.activeGroup
+            })
         }
+        if (secondary.tabs.length === 0) set(secondaryCollapsedAtom, true)
         set(jobsCreatingAtom, null)
         set(jobsSelectedIdAtom, null)
         set(inspectedJobIdAtom, null)
@@ -413,13 +412,13 @@ export const applyRequestTokenAtom = named(
 export const resetWorkspaceAtom = named(
     atom(null, (_get, set) => {
         set(workspaceAtom, createWorkspaceState())
-        set(sidebarWidthAtom, 256)
-        set(inspectorWidthAtom, 256)
+        set(sidebarWidthAtom, PANEL_DEFAULT_WIDTH)
+        set(inspectorWidthAtom, PANEL_DEFAULT_WIDTH)
         set(secondaryWidthAtom, "45%")
         set(dockHeightAtom, 210)
         set(sidebarCollapsedAtom, false)
         set(inspectorCollapsedAtom, false)
-        set(secondaryCollapsedAtom, false)
+        set(secondaryCollapsedAtom, true)
         set(dockCollapsedAtom, true)
         set(pluginPlacementsAtom, defaultPluginPlacements())
         set(titlebarPopoverOpenAtom, false)

@@ -6,9 +6,8 @@ import { RefreshSidecarButton } from "@/components/refresh-sidecar-button"
 import { Button } from "@/components/ui/button"
 import { panelPluginRegistry, type IPanelPluginProps } from "@/lib/panel"
 import { jobWorkspaceTab } from "@/lib/workspace-tabs"
-import { destinations, navigationTab } from "@/shared/navigation"
+import { navigationTab } from "@/shared/navigation"
 import {
-    activeWorkspaceTabAtom,
     backendAtom,
     backendControllerAtom,
     backendEventsAtom,
@@ -22,25 +21,11 @@ import {
 } from "@/shared/store"
 
 function NavigationPlugin() {
-    const current = useAtomValue(activeWorkspaceTabAtom)
     const dispatch = useSetAtom(workspaceActionAtom)
     return (
         <nav
             className="flex flex-col gap-1"
-            aria-label="Workspace navigation">
-            {destinations.map(({ id, label, icon: Icon }) => (
-                <Button
-                    key={id}
-                    type="button"
-                    variant={current?.id === id ? "secondary" : "ghost"}
-                    size="sm"
-                    className="justify-start"
-                    aria-current={current?.id === id ? "page" : undefined}
-                    onClick={() => dispatch({ type: "open", target: "primary", tab: navigationTab(id) })}>
-                    <Icon aria-hidden="true" />
-                    {label}
-                </Button>
-            ))}
+            aria-label="Workspace tools">
             <Button
                 type="button"
                 variant="ghost"

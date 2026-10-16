@@ -6,7 +6,16 @@ import { SettingsButton } from "./settings-button"
 import { Button } from "./ui/shark-button"
 import { Popover, PopoverDescription, PopoverPopup, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { SegmentGroup, SegmentGroupItem, SegmentGroupItemText } from "@/components/ui/segment-group"
-import { activeTabAtom, resetWorkspaceAtom, tabItemsAtom, titlebarPopoverOpenAtom } from "@/shared/store"
+import {
+    activeTabAtom,
+    resetWorkspaceAtom,
+    workspaceAtom,
+    titlebarPopoverOpenAtom,
+    workspaceActionAtom
+} from "@/shared/store"
+
+import { destinations, navigationTab } from "@/shared/navigation"
+import { isTopNavigationTab } from "@/lib/workspace-tabs"
 
 export interface TitleBarProps {
     onOpenSettings: () => void
@@ -15,8 +24,14 @@ export interface TitleBarProps {
 
 export function TitleBar({ onOpenSettings, children }: TitleBarProps) {
     const [menuOpen, setMenuOpen] = useAtom(titlebarPopoverOpenAtom)
-    const items = useAtomValue(tabItemsAtom)
-    const [activeId, setActiveId] = useAtom(activeTabAtom)
+    const workspace = useAtomValue(workspaceAtom)
+    const editorTabs = Object.values(workspace.groups).flatMap((group) => group.tabs)
+    const items = [
+        ...destinations.map((item) => ({ id: item.id, title: item.label })),
+        ...editorTabs.filter((tab) => !isTopNavigationTab(tab))
+    ]
+    const dispatch = useSetAtom(workspaceActionAtom)
+    const activeId = useAtomValue(activeTabAtom)
     const resetWorkspace = useSetAtom(resetWorkspaceAtom)
 
     const renderAppPicker = () => (
@@ -63,16 +78,24 @@ export function TitleBar({ onOpenSettings, children }: TitleBarProps) {
     )
 
     return (
-        <header className="desktop-titlebar electrobun-webkit-app-region-drag flex h-11 shrink-0 select-auto cursor-grabbing items-center justify-between gap-3 pr-3">
+        <header className="desktop-titlebar electrobun-webkit-app-region-drag flex h-11 shrink-0 cursor-grabbing items-center justify-between gap-3 pr-3">
             {renderAppPicker()}
             <div className="electrobun-webkit-app-region-no-drag flex min-w-0 flex-1 items-center overflow-x-auto">
                 {items.length > 0 && (
                     <SegmentGroup
                         value={activeId}
                         onValueChange={({ value }) => {
-                            if (value) setActiveId(value)
+                            const destination = destinations.find((item) => item.id === value)
+                            if (destination)
+                                dispatch({ type: "open", target: "primary", tab: navigationTab(destination.id) })
+                            else if (value) {
+                                const group = workspace.groups.primary.tabs.some((tab) => tab.id === value)
+                                    ? "primary"
+                                    : "secondary"
+                                dispatch({ type: "select", group, tabId: value })
+                            }
                         }}
-                        aria-label="Active editor tabs"
+                        aria-label="Workspace navigation"
                         variant="underline"
                         className="shrink-0">
                         {items.map((item) => (
@@ -80,6 +103,7 @@ export function TitleBar({ onOpenSettings, children }: TitleBarProps) {
                                 className="px-2 py-1.5 text-sm"
                                 key={item.id}
                                 value={item.id}
+                                data-top-navigation={item.id}
                                 title={item.title}>
                                 <SegmentGroupItemText className="block max-w-44 truncate">
                                     {item.title}
