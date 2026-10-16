@@ -1,6 +1,7 @@
 import Electrobun, { BrowserView, BrowserWindow, BuildConfig, PATHS, Utils } from "electrobun/main"
 import type { DesktopRPC } from "../shared/rpc"
 import { PythonSidecar } from "./sidecar"
+import { DESKTOP_DEFAULT_FRAME, enforceMinimumWindowWidth } from "./window-layout"
 
 // Injected by the Electrobun build; never used to locate Python in a packaged app.
 declare const CORPORA_WORKSPACE_ROOT: string
@@ -64,8 +65,9 @@ try {
         url: await getMainViewUrl(),
         trafficLightOffset: { x: 6, y: 6 },
         rpc,
-        frame: { width: 900, height: 700 }
+        frame: DESKTOP_DEFAULT_FRAME
     })
+    enforceMinimumWindowWidth(mainWindow)
     if (process.platform === "darwin") {
         // Electrobun 2.0.2 uses absolute left/top insets, not deltas. Native
         // buttons are 14pt tall: a 15pt top inset centers them in our 44pt bar.

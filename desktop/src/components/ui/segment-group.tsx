@@ -3,7 +3,7 @@
 import { SegmentGroup as ArkSegmentGroup, useSegmentGroupContext } from "@ark-ui/react/segment-group"
 import type React from "react"
 import { cn } from "@/lib/utils"
-import { Glass } from "@samasante/liquid-glass"
+import { Glass, type GlassOptics } from "@samasante/liquid-glass"
 
 export const useSegmentGroup = useSegmentGroupContext
 
@@ -16,15 +16,16 @@ interface SegmentGroupProps extends React.ComponentProps<typeof ArkSegmentGroup.
      * @default "default"
      */
     variant?: SegmentGroupVariant
+    glassOptics?: Partial<GlassOptics>
 }
 
 export const SegmentGroup = (props: SegmentGroupProps) => {
-    const { orientation = "horizontal", variant = "default", className, children, ...rest } = props
+    const { orientation = "horizontal", variant = "default", className, children, glassOptics, ...rest } = props
 
     return (
         <ArkSegmentGroup.Root
             className={cn(
-                "group/segment-group relative",
+                "group/segment-group relative rounded-lg",
                 "flex gap-2",
                 "isolate",
                 "data-[orientation=vertical]:flex-col",
@@ -38,7 +39,7 @@ export const SegmentGroup = (props: SegmentGroupProps) => {
             data-variant={variant}
             orientation={orientation}
             {...rest}>
-            <SegmentGroupIndicator />
+            <SegmentGroupIndicator optics={glassOptics} />
 
             {children}
         </ArkSegmentGroup.Root>
@@ -81,16 +82,21 @@ export const SegmentGroupItemText = (props: React.ComponentProps<typeof ArkSegme
     )
 }
 
-export const SegmentGroupIndicator = (props: React.ComponentProps<typeof ArkSegmentGroup.Indicator>) => {
-    const { className, ...rest } = props
+interface SegmentGroupIndicatorProps extends React.ComponentProps<typeof ArkSegmentGroup.Indicator> {
+    optics?: Partial<GlassOptics>
+}
+
+export const SegmentGroupIndicator = (props: SegmentGroupIndicatorProps) => {
+    const { className, optics, ...rest } = props
 
     return (
         <ArkSegmentGroup.Indicator
             className={cn(
-                "absolute top-(--top) left-(--left) z-0",
+                "pointer-events-none absolute top-(--top) left-(--left) z-0",
                 "h-(--height) w-(--width)",
                 "rounded-[inherit]",
-                "bg-input",
+                "bg-white/15 dark:bg-input",
+                "shadow-[0_1px_2px_rgb(15_23_42/0.1),inset_0_-1px_0_rgb(15_23_42/0.12)] dark:shadow-none",
                 "transition-[width,height,left,top] duration-150 ease-out",
                 "[transition-property:var(--transition-property,width,height,left,top)]",
                 "group-data-[variant=underline]/segment-group:bg-primary",
@@ -105,8 +111,9 @@ export const SegmentGroupIndicator = (props: React.ComponentProps<typeof ArkSegm
             data-slot="segment-group-indicator"
             {...rest}>
             <Glass
-                className="absolute inset-0 size-full min-h-5 rounded-[inherit]"
-                radius={6}
+                className="absolute inset-0 size-full rounded-[inherit]"
+                radius={8}
+                optics={optics}
                 aria-hidden="true">
                 <span aria-hidden="true" />
             </Glass>

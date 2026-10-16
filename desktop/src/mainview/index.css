@@ -160,3 +160,11 @@
     --warning: var(--color-amber-500);
     --warning-foreground: var(--color-amber-400);
 }
+
+/* A one-pixel reflection along the workspace edge, without a broad glow. */
+.workspace-surface {
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--foreground) 14%, transparent),
+        inset 1px 0 0 color-mix(in srgb, var(--foreground) 6%, transparent),
+        inset 0 -1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+}

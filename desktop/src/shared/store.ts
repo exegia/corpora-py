@@ -70,7 +70,22 @@ export const inspectorWidthAtom = named(atom(PANEL_DEFAULT_WIDTH), "panels.inspe
 export const secondaryWidthAtom = named(atom<Size>("45%"), "panels.secondary.width")
 export const dockHeightAtom = named(atom(210), "panels.dock.height")
 export const sidebarCollapsedAtom = named(atom(false), "panels.sidebar.collapsed")
-export const inspectorCollapsedAtom = named(atom(false), "panels.inspector.collapsed")
+export const SIDEBAR_RAIL_WIDTH = 56
+// A collapsed sidebar stays in the layout as a rail. Preserve its expanded width.
+export const sidebarPanelWidthAtom = named(
+    atom(
+        (get) => get(sidebarCollapsedAtom) ? SIDEBAR_RAIL_WIDTH : get(sidebarWidthAtom),
+        (_get, set, width: number) => {
+            if (width <= SIDEBAR_RAIL_WIDTH) set(sidebarCollapsedAtom, true)
+            else {
+                set(sidebarWidthAtom, Math.max(PANEL_MIN_WIDTH, width))
+                set(sidebarCollapsedAtom, false)
+            }
+        }
+    ),
+    "panels.sidebar.extent"
+)
+export const inspectorCollapsedAtom = named(atom(true), "panels.inspector.collapsed")
 export const dockCollapsedAtom = named(atom(true), "panels.dock.collapsed")
 export const secondaryCollapsedAtom = named(atom(true), "panels.secondary.collapsed")
 export const titlebarPopoverOpenAtom = named(atom(false), "titlebar.menu.open")
@@ -423,7 +438,7 @@ export const resetWorkspaceAtom = named(
         set(secondaryWidthAtom, "45%")
         set(dockHeightAtom, 210)
         set(sidebarCollapsedAtom, false)
-        set(inspectorCollapsedAtom, false)
+        set(inspectorCollapsedAtom, true)
         set(secondaryCollapsedAtom, true)
         set(dockCollapsedAtom, true)
         set(pluginPlacementsAtom, defaultPluginPlacements())

@@ -17,13 +17,44 @@ function editor(workspace = createWorkspaceState()) {
             workspace={workspace}
             dispatch={noOp}
             renderTab={(tab) => <p>{tab.title} content</p>}
-            onRevealGroup={noOp}
-            onNewConversion={noOp}
         />
     )
 }
 
 describe("top navigation and editor tabs", () => {
+    test("includes secondary tabs in the titlebar and leaves a draggable spacer", () => {
+        const store = createStore()
+        store.set(atoms.workspaceActionAtom, { type: "open", tab: navigationTab("settings"), target: "secondary" })
+        const markup = renderToStaticMarkup(<Provider store={store}><TitleBar onOpenSettings={noOp} /></Provider>)
+        expect(markup).toContain('data-workspace-tab-id="settings"')
+        expect(markup).toContain('data-titlebar-drag-space="true"')
+        expect(markup.match(/aria-label="Close Settings"/g)).toHaveLength(1)
+    })
+
+    test("sidebar collapses to a 56px rail and restores its remembered width", () => {
+        const store = createStore()
+        store.set(atoms.sidebarWidthAtom, 320)
+        store.set(atoms.panelActionAtom, { type: "set-open", area: "sidebar", open: false })
+        expect(store.get(atoms.sidebarPanelWidthAtom)).toBe(56)
+        expect(store.get(atoms.sidebarWidthAtom)).toBe(320)
+        store.set(atoms.panelActionAtom, { type: "toggle", area: "sidebar" })
+        expect(store.get(atoms.sidebarPanelWidthAtom)).toBe(320)
+        store.set(atoms.sidebarPanelWidthAtom, 56)
+        expect(store.get(atoms.sidebarCollapsedAtom)).toBe(true)
+        store.set(atoms.sidebarPanelWidthAtom, 280)
+        expect(store.get(atoms.sidebarCollapsedAtom)).toBe(false)
+        expect(store.get(atoms.sidebarPanelWidthAtom)).toBe(280)
+    })
+
+    test("the inspector starts collapsed and layout reset keeps the startup default", () => {
+        const store = createStore()
+        expect(store.get(atoms.inspectorCollapsedAtom)).toBe(true)
+        store.set(atoms.panelActionAtom, { type: "set-open", area: "inspector", open: true })
+        expect(store.get(atoms.inspectorCollapsedAtom)).toBe(false)
+        store.set(atoms.resetWorkspaceAtom)
+        expect(store.get(atoms.inspectorCollapsedAtom)).toBe(true)
+    })
+
     test("always offers Home and Explorer in top navigation without duplicating editor triggers", () => {
         const store = createStore()
         const titlebar = renderToStaticMarkup(
@@ -50,7 +81,11 @@ describe("top navigation and editor tabs", () => {
 
     test("retains real close buttons beside tab triggers instead of nesting buttons", async () => {
         const workspace = workspaceReducer(createWorkspaceState(), { type: "open", tab: navigationTab("settings") })
-        const markup = editor(workspace)
+        const store = createStore()
+        store.set(atoms.workspaceAtom, workspace)
+        const markup = renderToStaticMarkup(<Provider store={store}><TitleBar onOpenSettings={noOp} /></Provider>)
+        expect(editor(workspace)).not.toContain('data-workspace-tab-id=')
+        expect(editor(workspace)).not.toContain('tabs menu')
         expect(markup).toContain('aria-label="Close Settings"')
         expect(markup).toContain('data-workspace-tab-id="settings"')
         let nestedButtons = 0
@@ -64,6 +99,10 @@ describe("top navigation and editor tabs", () => {
             .text()
         expect(nestedButtons).toBe(0)
         expect(markup).not.toContain('data-workspace-tab-id="tab:home"')
+        expect(markup).toContain('data-liquid-glass="material"')
+        let nestedLabels = 0
+        await new HTMLRewriter().on("label button", { element() { nestedLabels++ } }).transform(new Response(markup)).text()
+        expect(nestedLabels).toBe(0)
     })
 
     test("keeps top-level destinations immovable and restores fixed widths with an empty secondary", () => {
@@ -79,8 +118,8 @@ describe("top navigation and editor tabs", () => {
         store.set(atoms.sidebarWidthAtom, 320)
         store.set(atoms.inspectorWidthAtom, 380)
         store.set(atoms.resetWorkspaceAtom)
-        expect(store.get(atoms.sidebarWidthAtom)).toBe(470)
-        expect(store.get(atoms.inspectorWidthAtom)).toBe(470)
+        expect(store.get(atoms.sidebarWidthAtom)).toBe(atoms.PANEL_DEFAULT_WIDTH)
+        expect(store.get(atoms.inspectorWidthAtom)).toBe(atoms.PANEL_DEFAULT_WIDTH)
         expect(store.get(atoms.secondaryCollapsedAtom)).toBe(true)
         expect(store.get(atoms.workspaceAtom).groups.secondary.tabs).toEqual([])
     })

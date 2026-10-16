@@ -206,18 +206,18 @@ function withRevocationSpy(run: (revoke: ReturnType<typeof revocationSpy>) => vo
 }
 
 describe("store workspace and shared tab derivations", () => {
-    test("starts on unsplit Home with fixed 470px side panels", () => {
+    test("starts on unsplit Home with a fixed sidebar and collapsed inspector", () => {
         const store = createStore()
         expect(store.get(atoms.workspaceAtom)).toEqual(createWorkspaceState())
         expect(store.get(atoms.activeTabAtom)).toBe("tab:home")
         expect(store.get(atoms.activeWorkspaceTabAtom)?.view).toBe(HomeTab)
         expect(panelState(store)).toEqual({
-            leftWidth: 470,
-            rightWidth: 470,
+            leftWidth: atoms.PANEL_DEFAULT_WIDTH,
+            rightWidth: atoms.PANEL_DEFAULT_WIDTH,
             secondaryWidth: "45%",
             bottomHeight: 210,
             leftCollapsed: false,
-            rightCollapsed: false,
+            rightCollapsed: true,
             secondaryCollapsed: true,
             dockCollapsed: true,
             plugins: defaultPluginPlacements(),
