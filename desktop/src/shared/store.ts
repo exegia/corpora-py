@@ -63,7 +63,8 @@ export const activeWorkspaceTabAtom = named(
     atom((get) => activeWorkspaceTab(get(workspaceAtom))),
     "workspace.activeView"
 )
-export const PANEL_DEFAULT_WIDTH = 470
+export const PANEL_DEFAULT_WIDTH = 360
+export const PANEL_MIN_WIDTH = 218
 export const sidebarWidthAtom = named(atom(PANEL_DEFAULT_WIDTH), "panels.sidebar.width")
 export const inspectorWidthAtom = named(atom(PANEL_DEFAULT_WIDTH), "panels.inspector.width")
 export const secondaryWidthAtom = named(atom<Size>("45%"), "panels.secondary.width")
@@ -378,8 +379,13 @@ export const resetConversionViewsAtom = named(
         const primary = withoutJobTabs(workspace.groups.primary)
         const secondary = withoutJobTabs(workspace.groups.secondary)
         if (primary !== workspace.groups.primary || secondary !== workspace.groups.secondary) {
-            set(workspaceAtom, { ...workspace, groups: { primary, secondary },
-                activeGroup: workspace.activeGroup === "secondary" && secondary.tabs.length === 0 ? "primary" : workspace.activeGroup
+            set(workspaceAtom, {
+                ...workspace,
+                groups: { primary, secondary },
+                activeGroup:
+                    workspace.activeGroup === "secondary" && secondary.tabs.length === 0
+                        ? "primary"
+                        : workspace.activeGroup
             })
         }
         if (secondary.tabs.length === 0) set(secondaryCollapsedAtom, true)

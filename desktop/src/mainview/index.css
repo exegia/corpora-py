@@ -1,6 +1,7 @@
 /* Vite's root is mainview; include sibling components when scanning utilities. */
 /*@import "tailwindcss" source("../"); <-- DO NOT RESTORE */
 @import "tailwindcss";
+@import "tailwind-animations";
 @import "../css/globals.css";
 @import "../css/theme.css";
 

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, type Dispatch, type ReactNode } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Group, Panel, Separator } from "motion-panels/react"
-import { Columns2, PanelBottom, PanelLeft, PanelRight } from "lucide-react"
+import { Columns2 } from "lucide-react"
 import { TitleBar } from "@/components/title-bar"
 import { Button } from "@/components/ui/button"
 import { WorkspacePanel } from "@/components/workspace-panel"
@@ -26,7 +26,8 @@ import {
     inspectorCollapsedAtom,
     dockCollapsedAtom,
     secondaryCollapsedAtom,
-    panelActionAtom
+    panelActionAtom,
+    PANEL_MIN_WIDTH
 } from "@/shared/store"
 
 interface WorkspaceLayoutProps {
@@ -97,7 +98,7 @@ export function WorkspaceLayout({ workspace, dispatch, renderTab, onNavigate }: 
     }
     const titleBarActions = () => (
         <div className="flex gap-2">
-            {(
+            {/*{(
                 [
                     ["sidebar", sidebarCollapsed, PanelLeft],
                     ["inspector", inspectorCollapsed, PanelRight],
@@ -116,7 +117,7 @@ export function WorkspaceLayout({ workspace, dispatch, renderTab, onNavigate }: 
                     onClick={() => panelAction({ type: "toggle", area })}>
                     <Icon aria-hidden="true" />
                 </Button>
-            ))}
+            ))}*/}
             <Button
                 ref={secondaryToggle}
                 type="button"
@@ -132,139 +133,149 @@ export function WorkspaceLayout({ workspace, dispatch, renderTab, onNavigate }: 
             </Button>
         </div>
     )
-    return (
-        <Group
-            id="sidebar-workspace--inspector"
-            className="min-h-0 flex-1">
-            <Panel
-                pin
-                id="sidebar-workspaces">
-                <div className="flex h-full min-h-0 flex-col">
-                    <TitleBar onOpenSettings={() => onNavigate("settings")}>{titleBarActions()}</TitleBar>
-                    <div className="min-h-0 flex-1">
-                        <Group
-                            id="sidebar--workspace"
-                            orientation="horizontal">
-                            <Panel
-                                id="sidebar"
-                                size={sidebarWidth}
-                                defaultSize={PANEL_DEFAULT_WIDTH}
-                                minSize={200}
-                                maxSize={640}
-                                style={{ padding: 3 }}
-                                animate={{ scale: 1 }}
-                                initial={{ scale: 0.9 }}
-                                onSizeChange={setSidebarWidth}
-                                collapsed={sidebarCollapsed}
-                                onCollapsedChange={(collapsed) =>
-                                    panelAction({ type: "set-open", area: "sidebar", open: !collapsed })
-                                }
-                                keepMounted>
-                                <PanelVisibility
-                                    area="sidebar"
-                                    collapsed={sidebarCollapsed}
-                                />
-                            </Panel>
-                            <Separator
-                                aria-label="Resize sidebar"
-                                className={SEPARATOR}
-                            />
-                            <Panel
-                                pin
-                                id="workspace"
-                                style={{ padding: 3 }}
-                                className="rounded-xl bg-background">
-                                <Group orientation="vertical">
-                                    <Panel pin>
-                                        <Group
-                                            id="workspace-split"
-                                            orientation="horizontal">
-                                            <Panel
-                                                pin
-                                                id="workspace-primary">
-                                                <section
-                                                    aria-label="Primary editor group"
-                                                    className="h-full min-h-0 min-w-0">
-                                                    {editor("primary")}
-                                                </section>
-                                            </Panel>
-                                            <Separator
-                                                aria-label="Resize secondary editor"
-                                                className={SEPARATOR}
-                                            />
-                                            <Panel
-                                                id="workspace-secondary"
-                                                size={secondaryWidth}
-                                                defaultSize="45%"
-                                                minSize={160}
-                                                maxSize="70%"
-                                                onSizeChange={setSecondaryWidth}
-                                                collapsed={secondaryHidden}
-                                                onCollapsedChange={(collapsed) => {
-                                                    if (!secondaryEmpty && !navigationActive)
-                                                        setSecondaryCollapsed(collapsed)
-                                                }}
-                                                keepMounted>
-                                                <section
-                                                    ref={secondaryPanel}
-                                                    inert={secondaryHidden}
-                                                    aria-label="Secondary editor group"
-                                                    className="h-full min-h-0 min-w-0">
-                                                    {editor("secondary")}
-                                                </section>
-                                            </Panel>
-                                        </Group>
-                                    </Panel>
-                                    <Separator
-                                        aria-label="Resize dock"
-                                        className={SEPARATOR}
-                                    />
-                                    <Panel
-                                        id="workspace-dock-container"
-                                        size={dockHeight}
-                                        defaultSize={210}
-                                        minSize={110}
-                                        maxSize="65%"
-                                        onSizeChange={setDockHeight}
-                                        collapsed={dockCollapsed}
-                                        onCollapsedChange={(collapsed) =>
-                                            panelAction({ type: "set-open", area: "dock", open: !collapsed })
-                                        }
-                                        keepMounted>
-                                        <PanelVisibility
-                                            area="dock"
-                                            collapsed={dockCollapsed}
-                                        />
-                                    </Panel>
-                                </Group>
-                            </Panel>
-                        </Group>
-                    </div>
-                </div>
-            </Panel>
-            <Separator
-                aria-label="Resize inspector"
-                className={SEPARATOR}
+
+    const renderTitleNavigation = () => (
+        <TitleBar onOpenSettings={() => onNavigate("settings")}>{titleBarActions()}</TitleBar>
+    )
+
+    const renderSidebar = () => (
+        <Panel
+            id="sidebar"
+            size={sidebarWidth}
+            defaultSize={PANEL_DEFAULT_WIDTH}
+            minSize={PANEL_MIN_WIDTH}
+            maxSize={PANEL_DEFAULT_WIDTH}
+            style={{ padding: 2 }}
+            animate={{ scale: 1 }}
+
+            initial={{ scale: 0.95 }}
+            onSizeChange={setSidebarWidth}
+            //    collapsed={sidebarCollapsed}
+            onCollapsedChange={(collapsed) => panelAction({ type: "set-open", area: "sidebar", open: !collapsed })}
+            keepMounted>
+            <PanelVisibility
+                area="sidebar"
+                collapsed={sidebarCollapsed}
             />
-            <Panel
-                id="inspector"
-                size={inspectorWidth}
-                defaultSize={PANEL_DEFAULT_WIDTH}
-                minSize={200}
-                maxSize={640}
-                animate={{ scale: 1 }}
-                initial={{ scale: 0.9 }}
-                onSizeChange={setInspectorWidth}
-                collapsed={inspectorCollapsed}
-                onCollapsedChange={(collapsed) =>
-                    panelAction({ type: "set-open", area: "inspector", open: !collapsed })
-                }
-                keepMounted>
-                <PanelVisibility
-                    area="inspector"
-                    collapsed={inspectorCollapsed}
+        </Panel>
+    )
+
+    return (
+        <div className="flex h-full flex-1 min-h-0 flex-col">
+            {renderTitleNavigation()}
+            <Group
+                id="sidebar-workspace-inspector"
+                className="min-h-0 flex-1 size-full">
+                {renderSidebar()}
+                <Panel
+                    pin
+                    id="sidebar-workspaces">
+                    <div className="flex h-full min-h-0 flex-col">
+                        <div className="min-h-0 flex-1">
+                            <Group
+                                id="sidebar--workspace"
+                                orientation="horizontal">
+                                <Separator
+                                    aria-label="Resize sidebar"
+                                    className={SEPARATOR}
+                                />
+                                <Panel
+                                    pin
+                                    id="workspace"
+                                    style={{ padding: 3 }}
+                                    className="rounded-xl bg-background">
+                                    <Group orientation="vertical">
+                                        <Panel pin>
+                                            <Group
+                                                id="workspace-split"
+                                                orientation="horizontal">
+                                                <Panel
+                                                    pin
+                                                    id="workspace-primary">
+                                                    <section
+                                                        aria-label="Primary editor group"
+                                                        className="h-full min-h-0 min-w-0">
+                                                        {editor("primary")}
+                                                    </section>
+                                                </Panel>
+                                                <Separator
+                                                    aria-label="Resize secondary editor"
+                                                    className={SEPARATOR}
+                                                />
+                                                <Panel
+                                                    id="workspace-secondary"
+                                                    size={secondaryWidth}
+                                                    defaultSize="45%"
+                                                    minSize={160}
+                                                    maxSize="70%"
+                                                    onSizeChange={setSecondaryWidth}
+                                                    collapsed={secondaryHidden}
+                                                    onCollapsedChange={(collapsed) => {
+                                                        if (!secondaryEmpty && !navigationActive)
+                                                            setSecondaryCollapsed(collapsed)
+                                                    }}
+                                                    keepMounted>
+                                                    <section
+                                                        ref={secondaryPanel}
+                                                        inert={secondaryHidden}
+                                                        aria-label="Secondary editor group"
+                                                        className="h-full min-h-0 min-w-0">
+                                                        {editor("secondary")}
+                                                    </section>
+                                                </Panel>
+                                            </Group>
+                                        </Panel>
+                                        <Separator
+                                            aria-label="Resize dock"
+                                            className={SEPARATOR}
+                                        />
+                                        <Panel
+                                            id="workspace-dock-container"
+                                            size={dockHeight}
+                                            defaultSize={210}
+                                            minSize={110}
+                                            maxSize="65%"
+                                            onSizeChange={setDockHeight}
+                                            collapsed={dockCollapsed}
+                                            onCollapsedChange={(collapsed) =>
+                                                panelAction({ type: "set-open", area: "dock", open: !collapsed })
+                                            }
+                                            keepMounted>
+                                            <PanelVisibility
+                                                area="dock"
+                                                collapsed={dockCollapsed}
+                                            />
+                                        </Panel>
+                                    </Group>
+                                </Panel>
+                            </Group>
+                        </div>
+                    </div>
+                </Panel>
+                <Separator
+                    aria-label="Resize inspector"
+                    className={SEPARATOR}
                 />
-            </Panel>
-        </Group>
+                <Panel
+                    id="inspector"
+                    size={inspectorWidth}
+                    defaultSize={PANEL_DEFAULT_WIDTH}
+                    minSize={200}
+                    maxSize={640}
+                    animate={{ scale: 1 }}
+                    initial={{ scale: 0.9 }}
+                    onSizeChange={setInspectorWidth}
+                    collapsed={inspectorCollapsed}
+                    onCollapsedChange={(collapsed) =>
+                        panelAction({ type: "set-open", area: "inspector", open: !collapsed })
+                    }
+                    keepMounted>
+                    <PanelVisibility
+                        area="inspector"
+                        collapsed={inspectorCollapsed}
+                    />
+                </Panel>
+            </Group>
+        </div>
     )
 }

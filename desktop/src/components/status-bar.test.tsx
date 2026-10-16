@@ -32,7 +32,7 @@ describe("sidecar polling status", () => {
             backend: { state: "ready", url: "http://127.0.0.1:8001", error: null, authRequired: false },
             isPolling: false
         })
-        expect(markup).toContain("Backend online")
+        expect(markup).toContain(">online</span>")
         expect(markup).toContain("Online · idle")
         expect(markup).toContain("Automatic checks stop while the backend is online.")
         expect(markup).toContain("RPC 12 ms")
@@ -75,5 +75,28 @@ describe("sidecar polling status", () => {
         expect(markup).toContain('aria-busy="true"')
         expect(markup).toContain('disabled=""')
         expect(markup).not.toContain("Offline · auto-check")
+    })
+
+    test("an online manual check keeps the idle explanation even with auto disabled", () => {
+        const markup = render({
+            backend: { ...props.backend, state: "ready", url: "http://127.0.0.1:8001" },
+            isPolling: false,
+            isAutoEnabled: false,
+            isChecking: true
+        })
+        expect(markup).toContain("Checking sidecar…")
+        expect(markup).toContain("Automatic checks stop while the backend is online.")
+        expect(markup).not.toContain("paused by your preference")
+    })
+
+    test("a backend failure exposes its error while automatic recovery checks continue", () => {
+        const markup = render({
+            backend: { ...props.backend, state: "failed", error: "Python is unavailable" }
+        })
+        expect(markup).toContain(">unavailable</span>")
+        expect(markup).toContain('title="Python is unavailable"')
+        expect(markup).toContain("Offline · auto-check")
+        expect(markup).toContain("No active endpoint")
+        expect(markup).not.toContain("animate-ping")
     })
 })

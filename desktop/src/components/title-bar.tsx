@@ -15,7 +15,7 @@ import {
 } from "@/shared/store"
 
 import { destinations, navigationTab } from "@/shared/navigation"
-import { isTopNavigationTab } from "@/lib/workspace-tabs"
+import { MorphIcon } from "morphicons/react"
 
 export interface TitleBarProps {
     onOpenSettings: () => void
@@ -25,11 +25,8 @@ export interface TitleBarProps {
 export function TitleBar({ onOpenSettings, children }: TitleBarProps) {
     const [menuOpen, setMenuOpen] = useAtom(titlebarPopoverOpenAtom)
     const workspace = useAtomValue(workspaceAtom)
-    const editorTabs = Object.values(workspace.groups).flatMap((group) => group.tabs)
-    const items = [
-        ...destinations.map((item) => ({ id: item.id, title: item.label })),
-        ...editorTabs.filter((tab) => !isTopNavigationTab(tab))
-    ]
+    // const editorTabs = Object.values(workspace.groups).flatMap((group) => group.tabs)
+    const items = [...destinations.map((item) => ({ id: item.id, title: item.label, icon: item.icon }))]
     const dispatch = useSetAtom(workspaceActionAtom)
     const activeId = useAtomValue(activeTabAtom)
     const resetWorkspace = useSetAtom(resetWorkspaceAtom)
@@ -40,11 +37,12 @@ export function TitleBar({ onOpenSettings, children }: TitleBarProps) {
             onOpenChange={setMenuOpen}>
             <PopoverTrigger
                 className="electrobun-webkit-app-region-no-drag"
+
                 render={
                     <Button
                         type="button"
                         size="sm"
-                        variant="ghost"
+                        variant="secondary"
                         aria-label="Open workspace menu"
                     />
                 }>
@@ -78,9 +76,9 @@ export function TitleBar({ onOpenSettings, children }: TitleBarProps) {
     )
 
     return (
-        <header className="desktop-titlebar electrobun-webkit-app-region-drag flex h-11 shrink-0 cursor-grabbing items-center justify-between gap-3 pr-3">
+        <header className="desktop-titlebar electrobun-webkit-app-region-drag flex h-11 shrink-0 items-center justify-items-start gap-2 pr-3">
             {renderAppPicker()}
-            <div className="electrobun-webkit-app-region-no-drag flex min-w-0 flex-1 items-center overflow-x-auto">
+            <div className="electrobun-webkit-app-region-no-drag flex justify-start min-w-0 flex-1 items-center overflow-x-auto">
                 {items.length > 0 && (
                     <SegmentGroup
                         value={activeId}
@@ -96,15 +94,18 @@ export function TitleBar({ onOpenSettings, children }: TitleBarProps) {
                             }
                         }}
                         aria-label="Workspace navigation"
-                        variant="underline"
                         className="shrink-0">
                         {items.map((item) => (
                             <SegmentGroupItem
-                                className="px-2 py-1.5 text-sm"
+                                className="px-2 py-1 text-xs font-medium flex gap-x-1 flex-row items-center"
                                 key={item.id}
                                 value={item.id}
                                 data-top-navigation={item.id}
                                 title={item.title}>
+                                <MorphIcon
+                                    icon={item.icon}
+                                    size={14}
+                                />
                                 <SegmentGroupItemText className="block max-w-44 truncate">
                                     {item.title}
                                 </SegmentGroupItemText>

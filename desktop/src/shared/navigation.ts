@@ -2,11 +2,11 @@ import { ExploreTab } from "@/mainview/views/explore-tab"
 import { HomeTab } from "@/mainview/views/home-tab"
 import { JobTab } from "@/mainview/views/jobs-tab"
 import { SettingsTab } from "@/mainview/views/settings-tab"
-import { BookSearch, House, type LucideIcon } from "lucide-react"
+import { BookSearch, House, type IconNode } from "lucide"
 import type { WorkspaceTab } from "@/lib/workspace-tabs"
 
 export type TabID = "tab:home" | "tab:explorer" | "jobs" | "settings"
-export type TTabItem = { id: TabID; label: string; icon: LucideIcon; content: WorkspaceTab["view"] }
+export type TTabItem = { id: TabID; label: string; icon: IconNode; content: WorkspaceTab["view"] }
 
 export const destinations: TTabItem[] = [
     { id: "tab:home", label: "Home", content: HomeTab, icon: House },
